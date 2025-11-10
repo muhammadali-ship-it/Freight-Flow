@@ -1,0 +1,14 @@
+# ============================================
+# CREATE A FILE NAMED ".env" IN THIS DIRECTORY
+# AND PASTE THE CONTENT BELOW:
+# ============================================
+
+VITE_API_URL=http://localhost:5000
+
+
+# ============================================
+# NOTE:
+# ============================================
+# This points to your local server running on port 5000.
+# If you change the server port, update this value accordingly.
+

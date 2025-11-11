@@ -1,0 +1,6 @@
+*.ts
+!api/**
+services/*.ts
+webhooks/*.ts
+scripts/
+shared/*.ts

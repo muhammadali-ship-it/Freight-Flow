@@ -1,0 +1,7 @@
+index.ts
+index.js
+scripts/
+*.test.ts
+dist/
+node_modules/
+.env

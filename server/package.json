@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "tsx index.ts",
     "build": "esbuild index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
-    "vercel-build": "rm -f tsconfig.json && esbuild *.ts services/*.ts webhooks/*.ts --platform=node --packages=external --format=esm --outdir=. --out-extension:.js=.js",
+    "vercel-build": "esbuild *.ts services/*.ts webhooks/*.ts --platform=node --packages=external --format=esm --outdir=. --out-extension:.js=.js && find . -name '*.ts' -not -path './node_modules/*' -not -path './scripts/*' -delete",
     "start": "node dist/index.js",
     "check": "tsc --noEmit",
     "db:push": "drizzle-kit push",

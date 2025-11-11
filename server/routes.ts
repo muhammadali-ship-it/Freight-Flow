@@ -572,18 +572,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/shipments/:shipmentId/users", async (req, res) => {
     try {
-      const shipmentUsers = await storage.getShipmentUsers(req.params.shipmentId);
-      res.json(shipmentUsers);
+      const shipmentId = req.params.shipmentId;
+      
+      // Check if it's a Cargoes Flow shipment
+      const cargoesFlowShipment = await storage.getCargoesFlowShipmentById(shipmentId);
+      
+      if (cargoesFlowShipment) {
+        const shipmentUsers = await storage.getCargoesFlowShipmentUsers(shipmentId);
+        res.json(shipmentUsers);
+      } else {
+        const shipmentUsers = await storage.getShipmentUsers(shipmentId);
+        res.json(shipmentUsers);
+      }
     } catch (error) {
-      console.error("Error fetching shipment users:", error);
-      res.status(500).json({ error: "Failed to fetch shipment users" });
+      console.error("Error getting shipment users:", error);
+      res.status(500).json({ error: "Failed to get shipment users" });
     }
   });
 
   app.post("/api/shipments/:shipmentId/users", async (req, res) => {
     try {
       const { userIds } = req.body;
-      await storage.setShipmentUsers(req.params.shipmentId, userIds);
+      const shipmentId = req.params.shipmentId;
+      
+      // Check if it's a Cargoes Flow shipment
+      const cargoesFlowShipment = await storage.getCargoesFlowShipmentById(shipmentId);
+      
+      if (cargoesFlowShipment) {
+        await storage.setCargoesFlowShipmentUsers(shipmentId, userIds);
+      } else {
+        await storage.setShipmentUsers(shipmentId, userIds);
+      }
+      
       res.status(200).json({ success: true });
     } catch (error) {
       console.error("Error setting shipment users:", error);

@@ -206,21 +206,25 @@ async function processAndStoreShipmentsWithStats(shipments: CargoesFlowShipmentD
       // Collect terminal and rail data from ALL shipments with same MBL (not just one)
       if (mblNumber && allMblShipments.length > 0) {
         // Merge terminal info from all MBL shipments (terminal info is usually at shipment level)
+        // CRITICAL: Always preserve manually added terminal data (prioritize existing over API)
         for (const mblShipment of allMblShipments) {
           if (mblShipment.rawData) {
             const mblRawData = mblShipment.rawData as any;
-            // Preserve terminal info from any shipment that has it
-            if (mblRawData.terminalName && !mergedRawData.terminalName) mergedRawData.terminalName = mblRawData.terminalName;
-            if (mblRawData.terminalPort && !mergedRawData.terminalPort) mergedRawData.terminalPort = mblRawData.terminalPort;
-            if (mblRawData.terminalYardLocation && !mergedRawData.terminalYardLocation) mergedRawData.terminalYardLocation = mblRawData.terminalYardLocation;
-            if (mblRawData.terminalPickupChassis && !mergedRawData.terminalPickupChassis) mergedRawData.terminalPickupChassis = mblRawData.terminalPickupChassis;
-            if (mblRawData.terminalFullOut && !mergedRawData.terminalFullOut) mergedRawData.terminalFullOut = mblRawData.terminalFullOut;
-            if (mblRawData.terminalPickupAppointment && !mergedRawData.terminalPickupAppointment) mergedRawData.terminalPickupAppointment = mblRawData.terminalPickupAppointment;
-            if (mblRawData.terminalEmptyReturned && !mergedRawData.terminalEmptyReturned) mergedRawData.terminalEmptyReturned = mblRawData.terminalEmptyReturned;
-            if (mblRawData.terminalAvailableForPickup !== undefined && mergedRawData.terminalAvailableForPickup === undefined) mergedRawData.terminalAvailableForPickup = mblRawData.terminalAvailableForPickup;
-            if (mblRawData.demurrage && !mergedRawData.demurrage) mergedRawData.demurrage = mblRawData.demurrage;
-            if (mblRawData.detention && !mergedRawData.detention) mergedRawData.detention = mblRawData.detention;
-            if (mblRawData.lastFreeDay && !mergedRawData.lastFreeDay) mergedRawData.lastFreeDay = mblRawData.lastFreeDay;
+            // Preserve terminal info from any shipment that has it - ALWAYS keep manual data
+            if (mblRawData.terminalName) mergedRawData.terminalName = mblRawData.terminalName;
+            if (mblRawData.terminalPort) mergedRawData.terminalPort = mblRawData.terminalPort;
+            if (mblRawData.terminalYardLocation) mergedRawData.terminalYardLocation = mblRawData.terminalYardLocation;
+            if (mblRawData.terminalPickupChassis) mergedRawData.terminalPickupChassis = mblRawData.terminalPickupChassis;
+            if (mblRawData.terminalFullOut) mergedRawData.terminalFullOut = mblRawData.terminalFullOut;
+            if (mblRawData.terminalOnRail) mergedRawData.terminalOnRail = mblRawData.terminalOnRail;
+            if (mblRawData.terminalPickupAppointment) mergedRawData.terminalPickupAppointment = mblRawData.terminalPickupAppointment;
+            if (mblRawData.terminalEmptyReturned) mergedRawData.terminalEmptyReturned = mblRawData.terminalEmptyReturned;
+            if (mblRawData.terminalAvailableForPickup !== undefined) mergedRawData.terminalAvailableForPickup = mblRawData.terminalAvailableForPickup;
+            if (mblRawData.demurrage) mergedRawData.demurrage = mblRawData.demurrage;
+            if (mblRawData.detention) mergedRawData.detention = mblRawData.detention;
+            if (mblRawData.lastFreeDay) mergedRawData.lastFreeDay = mblRawData.lastFreeDay;
+            if (mblRawData.terminalLastFreeDay) mergedRawData.terminalLastFreeDay = mblRawData.terminalLastFreeDay;
+            if (mblRawData.terminalDemurrage) mergedRawData.terminalDemurrage = mblRawData.terminalDemurrage;
           }
         }
         
@@ -274,10 +278,11 @@ async function processAndStoreShipmentsWithStats(shipments: CargoesFlowShipmentD
             
             if (existingIndex >= 0) {
               // Container exists - update with API data but preserve rawData (rail)
+              const existingRawData = mergedContainers[existingIndex].rawData;
               mergedContainers[existingIndex] = {
                 ...mergedContainers[existingIndex], // Keep existing data including rawData
                 ...apiContainer, // Update with API data
-                rawData: mergedContainers[existingIndex].rawData || apiContainer.rawData, // Preserve rail data
+                rawData: existingRawData || mergedContainers[existingIndex].rawData || apiContainer.rawData, // Always preserve existing rail data
               };
             } else if (apiContainer.containerNumber) {
               // New container from API - add it
@@ -300,12 +305,15 @@ async function processAndStoreShipmentsWithStats(shipments: CargoesFlowShipmentD
         if (existingRawData.terminalYardLocation) mergedRawData.terminalYardLocation = existingRawData.terminalYardLocation;
         if (existingRawData.terminalPickupChassis) mergedRawData.terminalPickupChassis = existingRawData.terminalPickupChassis;
         if (existingRawData.terminalFullOut) mergedRawData.terminalFullOut = existingRawData.terminalFullOut;
+        if (existingRawData.terminalOnRail) mergedRawData.terminalOnRail = existingRawData.terminalOnRail;
         if (existingRawData.terminalPickupAppointment) mergedRawData.terminalPickupAppointment = existingRawData.terminalPickupAppointment;
         if (existingRawData.terminalEmptyReturned) mergedRawData.terminalEmptyReturned = existingRawData.terminalEmptyReturned;
         if (existingRawData.terminalAvailableForPickup !== undefined) mergedRawData.terminalAvailableForPickup = existingRawData.terminalAvailableForPickup;
         if (existingRawData.demurrage) mergedRawData.demurrage = existingRawData.demurrage;
         if (existingRawData.detention) mergedRawData.detention = existingRawData.detention;
         if (existingRawData.lastFreeDay) mergedRawData.lastFreeDay = existingRawData.lastFreeDay;
+        if (existingRawData.terminalLastFreeDay) mergedRawData.terminalLastFreeDay = existingRawData.terminalLastFreeDay;
+        if (existingRawData.terminalDemurrage) mergedRawData.terminalDemurrage = existingRawData.terminalDemurrage;
         
         // Preserve manually added containers array with rail data
         if (existingRawData.containers && Array.isArray(existingRawData.containers)) {

@@ -599,6 +599,33 @@ export const insertCargoesFlowShipmentSchema = createInsertSchema(cargoesFlowShi
 export type InsertCargoesFlowShipment = z.infer<typeof insertCargoesFlowShipmentSchema>;
 export type CargoesFlowShipment = typeof cargoesFlowShipments.$inferSelect;
 
+// Cargoes Flow Shipment Users - user assignments for Cargoes Flow shipments
+export const cargoesFlowShipmentUsers = pgTable("cargoes_flow_shipment_users", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  shipmentId: varchar("shipment_id").notNull().references(() => cargoesFlowShipments.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const cargoesFlowShipmentUsersRelations = relations(cargoesFlowShipmentUsers, ({ one }) => ({
+  shipment: one(cargoesFlowShipments, {
+    fields: [cargoesFlowShipmentUsers.shipmentId],
+    references: [cargoesFlowShipments.id],
+  }),
+  user: one(users, {
+    fields: [cargoesFlowShipmentUsers.userId],
+    references: [users.id],
+  }),
+}));
+
+export const insertCargoesFlowShipmentUserSchema = createInsertSchema(cargoesFlowShipmentUsers).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertCargoesFlowShipmentUser = z.infer<typeof insertCargoesFlowShipmentUserSchema>;
+export type CargoesFlowShipmentUser = typeof cargoesFlowShipmentUsers.$inferSelect;
+
 // Cargoes Flow Sync Logs - tracks each polling attempt
 export const cargoesFlowSyncLogs = pgTable("cargoes_flow_sync_logs", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),

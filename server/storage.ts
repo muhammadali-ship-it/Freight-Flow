@@ -41,6 +41,8 @@ import {
   type InsertMissingMblShipment,
   type CargoesFlowShipment,
   type InsertCargoesFlowShipment,
+  type CargoesFlowShipmentUser,
+  type InsertCargoesFlowShipmentUser,
   type CargoesFlowSyncLog,
   type InsertCargoesFlowSyncLog,
   type CargoesFlowUpdateLog,
@@ -74,6 +76,7 @@ import {
   cargoesFlowPosts,
   missingMblShipments,
   cargoesFlowShipments,
+  cargoesFlowShipmentUsers,
   cargoesFlowSyncLogs,
   cargoesFlowUpdateLogs,
   cargoesFlowMapLogs,
@@ -288,6 +291,9 @@ export interface IStorage {
   updateCargoesFlowShipment(id: string, shipment: Partial<InsertCargoesFlowShipment>): Promise<CargoesFlowShipment | undefined>;
   getTaiShipmentIdByMbl(mblNumber: string): Promise<string | null>;
   deleteCargoesFlowShipment(id: string): Promise<boolean>;
+  
+  getCargoesFlowShipmentUsers(shipmentId: string): Promise<CargoesFlowShipmentUser[]>;
+  setCargoesFlowShipmentUsers(shipmentId: string, userIds: string[]): Promise<void>;
   
   getContainers(shipmentId: string): Promise<Container[]>;
 
@@ -1856,6 +1862,21 @@ export class DbStorage implements IStorage {
       .where(eq(cargoesFlowShipments.id, id))
       .returning();
     return result.length > 0;
+  }
+
+  async getCargoesFlowShipmentUsers(shipmentId: string): Promise<CargoesFlowShipmentUser[]> {
+    return await db.select().from(cargoesFlowShipmentUsers)
+      .where(eq(cargoesFlowShipmentUsers.shipmentId, shipmentId))
+      .orderBy(asc(cargoesFlowShipmentUsers.createdAt));
+  }
+
+  async setCargoesFlowShipmentUsers(shipmentId: string, userIds: string[]): Promise<void> {
+    await db.delete(cargoesFlowShipmentUsers).where(eq(cargoesFlowShipmentUsers.shipmentId, shipmentId));
+    
+    if (userIds.length > 0) {
+      const values = userIds.map(userId => ({ shipmentId, userId }));
+      await db.insert(cargoesFlowShipmentUsers).values(values);
+    }
   }
 
   async getContainers(shipmentId: string): Promise<Container[]> {

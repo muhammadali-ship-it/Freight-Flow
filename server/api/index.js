@@ -1,12 +1,25 @@
 // Vercel serverless function wrapper
-// This file is in JavaScript to avoid TypeScript compilation issues
+import express from "express";
+import { registerRoutes } from "../routes.js";
 
-// Import the built Express app
-import('../dist/index.js').then(module => {
-  // The module should export the Express app
-  if (module.default) {
-    module.exports = module.default;
+const app = express();
+app.use(express.json());
+app.use(express.urlencoded({ extended: false }));
+
+// Initialize routes
+let routesInitialized = false;
+let server;
+
+async function initializeApp() {
+  if (!routesInitialized) {
+    server = await registerRoutes(app);
+    routesInitialized = true;
   }
-}).catch(err => {
-  console.error('Failed to load Express app:', err);
-});
+  return app;
+}
+
+// Export for Vercel
+export default async function handler(req, res) {
+  const app = await initializeApp();
+  return app(req, res);
+}

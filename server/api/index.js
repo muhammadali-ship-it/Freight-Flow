@@ -1,7 +1,14 @@
 // Vercel serverless function wrapper
 import express from "express";
-import { registerRoutes } from "../routes.js";
-import { setupAuth } from "../auth.js";
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// Import from parent directory (server root)
+const { registerRoutes } = await import(join(__dirname, '..', 'routes.js'));
+const { setupAuth } = await import(join(__dirname, '..', 'auth.js'));
 
 let app = null;
 

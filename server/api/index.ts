@@ -56,12 +56,12 @@ app.use((req, res, next) => {
   // Skip Vite setup when running separately (client runs independently)
   // Only serve static files in production if built client exists
   // In development, client runs separately on its own port
-  if (app.get("env") === "production") {
-    serveStatic(app);
-  } else {
-    // In development, just serve API - client runs separately
-    log("Running in development mode - client should be running separately on port 5173", "express");
-  }
+  // if (app.get("env") === "production") {
+  //   serveStatic(app);
+  // } else {
+  //   // In development, just serve API - client runs separately
+  //   log("Running in development mode - client should be running separately on port 5173", "express");
+  // }
 
   // ALWAYS serve the app on the port specified in the environment variable PORT
   // Other ports are firewalled. Default to 5000 if not specified.

@@ -1,6 +1,6 @@
 import { storage } from "../storage.js";
 import { createShippingLineAdapter, type ShippingLineData } from "./shipping-line-adapter.js";
-import type { IntegrationConfig } from "@shared/schema.js";
+import type { IntegrationConfig } from "shared/schema.js";
 import { riskAssessmentService } from "../services/risk-assessment-service.js";
 
 export class IntegrationOrchestrator {

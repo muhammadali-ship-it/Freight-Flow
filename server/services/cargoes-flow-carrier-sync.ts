@@ -4,7 +4,7 @@
  */
 
 import { db } from '../storage.js';
-import { cargoesFlowCarriers, cargoesFlowCarrierSyncLogs } from '@shared/schema.js';
+import { cargoesFlowCarriers, cargoesFlowCarrierSyncLogs } from 'shared/schema.js';
 import { eq } from 'drizzle-orm';
 
 const CARGOES_FLOW_API_URL = 'https://connect.cargoes.com/flow/api/public_tracking/v1';

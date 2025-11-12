@@ -1,4 +1,4 @@
-import type { IntegrationConfig, CarrierUpdate, InsertCarrierUpdate } from "@shared/schema.js";
+import type { IntegrationConfig, CarrierUpdate, InsertCarrierUpdate } from "shared/schema.js";
 
 export interface ShippingLineData {
   containerNumber: string;

@@ -29,6 +29,10 @@ export async function comparePasswords(supplied: string, stored: string) {
 }
 
 export function setupAuth(app: Express) {
+  // Debug session configuration
+  console.log('[Auth] Environment:', process.env.NODE_ENV);
+  console.log('[Auth] Session secret exists:', !!process.env.SESSION_SECRET);
+  
   const sessionSettings: session.SessionOptions = {
     secret: process.env.SESSION_SECRET!,
     resave: false,
@@ -39,10 +43,16 @@ export function setupAuth(app: Express) {
       httpOnly: true, // Prevent XSS attacks
       maxAge: 24 * 60 * 60 * 1000, // 24 hours
       sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // Allow cross-origin in production
-      domain: process.env.NODE_ENV === 'production' ? '.vercel.app' : undefined, // Set domain for production
+      // Don't set domain for Vercel - let it default to the request domain
     },
     name: 'freight-flow-session', // Custom session name
   };
+  
+  console.log('[Auth] Cookie settings:', {
+    secure: sessionSettings.cookie?.secure,
+    sameSite: sessionSettings.cookie?.sameSite,
+    httpOnly: sessionSettings.cookie?.httpOnly
+  });
 
   app.set("trust proxy", 1);
   app.use(session(sessionSettings));

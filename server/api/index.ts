@@ -23,6 +23,22 @@ app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
+// Debug middleware for session issues
+app.use((req, res, next) => {
+  if (req.path.includes('/api/user') || req.path.includes('/login')) {
+    console.log('[Session Debug]', {
+      path: req.path,
+      method: req.method,
+      sessionID: req.sessionID,
+      isAuthenticated: req.isAuthenticated ? req.isAuthenticated() : false,
+      user: req.user ? { id: req.user.id, username: req.user.username } : null,
+      cookies: req.headers.cookie,
+      origin: req.headers.origin
+    });
+  }
+  next();
+});
+
 
 app.get("/", (_req, res) => {
   res.json({ message: "FreightFlow backend is running 🚀" });

@@ -1535,7 +1535,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ===== TMS WEBHOOK ROUTES =====
-  const { handleTmsWebhook, sendTestWebhook } = await import("./webhooks/tms-webhook");
+  const { handleTmsWebhook, sendTestWebhook } = await import("./webhooks/tms-webhook.js");
 
   app.post("/api/webhooks/tms", handleTmsWebhook);
   

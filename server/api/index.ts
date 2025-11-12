@@ -1,7 +1,7 @@
 import express, { type Request, type Response, type NextFunction } from "express";
-import { registerRoutes } from "../routes";
-import { ensureAdminExists } from "../ensure-admin";
-import { log } from "../vite";
+import { registerRoutes } from "../routes.js";
+import { ensureAdminExists } from "../ensure-admin.js";
+import { log } from "../vite.js";
 
 const app = express();
 app.use(express.json());

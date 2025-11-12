@@ -1,5 +1,5 @@
-import { db } from "../db";
-import { containers, notifications } from "@shared/schema";
+import { db } from "../db.js";
+import { containers, notifications } from "@shared/schema.js";
 import { eq, and, sql, isNotNull } from "drizzle-orm";
 
 interface DemurrageResult {

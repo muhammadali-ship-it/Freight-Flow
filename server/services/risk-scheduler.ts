@@ -1,5 +1,5 @@
-import { riskAssessmentService } from "./risk-assessment-service";
-import { demurrageCalculator } from "./demurrage-calculator";
+import { riskAssessmentService } from "./risk-assessment-service.js";
+import { demurrageCalculator } from "./demurrage-calculator.js";
 
 export class RiskScheduler {
   private intervalId: NodeJS.Timeout | null = null;

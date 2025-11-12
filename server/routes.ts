@@ -1,13 +1,13 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-import { storage, db } from "./storage";
+import { storage, db } from "./storage.js";
 import { sql } from "drizzle-orm";
 import { insertContainerSchema, insertExceptionSchema, insertVesselPositionSchema, insertRailSegmentSchema, insertTimelineEventSchema, insertSavedViewSchema, insertIntegrationConfigSchema, insertUserSchema, insertShipmentSchema, insertMilestoneSchema, insertCustomEntrySchema, cargoesFlowCarriers, cargoesFlowCarrierSyncLogs, type Milestone, type User, type Shipment } from "@shared/schema";
-import { integrationOrchestrator } from "./integrations/integration-orchestrator";
-import { riskScheduler } from "./services/risk-scheduler";
-import { startPolling as startCargoesFlowPolling } from "./services/cargoes-flow-poller";
-import { setupAuth, hashPassword } from "./auth";
-import { sendShipmentToCargoesFlow, trackCargoesFlowPost } from "./services/cargoes-flow";
+import { integrationOrchestrator } from "./integrations/integration-orchestrator.js";
+import { riskScheduler } from "./services/risk-scheduler.js";
+import { startPolling as startCargoesFlowPolling } from "./services/cargoes-flow-poller.js";
+import { setupAuth, hashPassword } from "./auth.js";
+import { sendShipmentToCargoesFlow, trackCargoesFlowPost } from "./services/cargoes-flow.js";
 
 function calculateShipmentStatus(milestones: Milestone[]): string {
   if (!milestones || milestones.length === 0) {

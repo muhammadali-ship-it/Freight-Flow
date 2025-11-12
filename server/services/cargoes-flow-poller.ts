@@ -1,5 +1,5 @@
-import { storage } from "../storage";
-import { CargoesFlowRiskAssessmentService } from "./cargoes-flow-risk-assessment";
+import { storage } from "../storage.js";
+import { CargoesFlowRiskAssessmentService } from "./cargoes-flow-risk-assessment.js";
 
 const CARGOES_FLOW_API_URL = "https://connect.cargoes.com/flow/api/public_tracking/v1/shipments";
 const CARGOES_FLOW_API_KEY = "dL6SngaHRXZfvzGA716lioRD7ZsRC9hs";

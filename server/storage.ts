@@ -83,8 +83,8 @@ import {
   shipmentDocuments,
   cargoesFlowDocumentUploads,
   cargoesFlowDocumentUploadLogs,
-} from "@shared/schema";
-import { db, pool } from "./db";
+} from "@shared/schema.js";
+import { db, pool } from "./db.js";
 import { eq, or, like, desc, asc, sql, SQL, and, inArray } from "drizzle-orm";
 import session from "express-session";
 import connectPg from "connect-pg-simple";

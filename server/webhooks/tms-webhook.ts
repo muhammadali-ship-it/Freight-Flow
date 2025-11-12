@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
-import { storage } from "../storage";
-import { sendShipmentToCargoesFlow, trackCargoesFlowPost, sendUpdateToCargoesFlow, trackCargoesFlowUpdate } from "../services/cargoes-flow";
+import { storage } from "../storage.js";
+import { sendShipmentToCargoesFlow, trackCargoesFlowPost, sendUpdateToCargoesFlow, trackCargoesFlowUpdate } from "../services/cargoes-flow.js";
 
 export async function handleTmsWebhook(req: Request, res: Response) {
   try {

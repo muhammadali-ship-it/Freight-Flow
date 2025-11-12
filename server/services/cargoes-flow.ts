@@ -1,4 +1,4 @@
-import { storage } from "../storage";
+import { storage } from "../storage.js";
 
 const CARGOES_FLOW_CREATE_API_URL = "https://connect.cargoes.com/flow/api/public_tracking/v1/createShipments";
 const CARGOES_FLOW_UPDATE_API_URL = "https://connect.cargoes.com/flow/api/public_tracking/v1/updateShipments";

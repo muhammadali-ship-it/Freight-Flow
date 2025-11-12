@@ -1,5 +1,5 @@
-import type { IStorage } from "../storage";
-import type { CargoesFlowShipment } from "@shared/schema";
+import type { IStorage } from "../storage.js";
+import type { CargoesFlowShipment } from "@shared/schema.js";
 
 interface RiskAssessment {
   riskLevel: "low" | "medium" | "high" | "critical";

@@ -1,5 +1,5 @@
-import { Container, InsertException, InsertNotification } from "@shared/schema";
-import { storage } from "../storage";
+import { Container, InsertException, InsertNotification } from "@shared/schema.js";
+import { storage } from "../storage.js";
 
 export interface RiskAssessment {
   riskLevel: "low" | "medium" | "high" | "critical";

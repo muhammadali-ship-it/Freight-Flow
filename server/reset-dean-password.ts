@@ -1,5 +1,5 @@
-import { storage } from "./storage";
-import { hashPassword } from "./auth";
+import { storage } from "./storage.js";
+import { hashPassword } from "./auth.js";
 
 async function resetPassword() {
   try {

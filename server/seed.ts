@@ -1,4 +1,4 @@
-import { storage } from "./storage";
+import { storage } from "./storage.js";
 
 async function seed() {
   console.log("Seeding database with one test container...");

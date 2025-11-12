@@ -83,7 +83,7 @@ import {
   shipmentDocuments,
   cargoesFlowDocumentUploads,
   cargoesFlowDocumentUploadLogs,
-} from "shared/schema.js";
+} from "./shared/schema.js";
 import { db, pool } from "./db.js";
 import { eq, or, like, desc, asc, sql, SQL, and, inArray } from "drizzle-orm";
 import session from "express-session";

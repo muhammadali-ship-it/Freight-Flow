@@ -8,7 +8,7 @@ import {
   milestones,
   shipmentUsers,
   shipments,
-} from "shared/schema";
+} from "./shared/schema";
 import { exec } from "child_process";
 import { promisify } from "util";
 

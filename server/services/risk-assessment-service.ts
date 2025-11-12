@@ -1,4 +1,4 @@
-import { Container, InsertException, InsertNotification } from "shared/schema.js";
+import { Container, InsertException, InsertNotification } from "../shared/schema.js";
 import { storage } from "../storage.js";
 
 export interface RiskAssessment {

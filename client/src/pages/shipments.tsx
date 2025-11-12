@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { buildApiUrl } from "@/lib/env";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
 import { Plus, Eye, Pencil, Trash2, Ship, ArrowRight, Search, X, RefreshCw, Clock, CheckCircle2, XCircle, FileText } from "lucide-react";
@@ -233,7 +234,9 @@ export default function Shipments() {
       if (user?.id) params.append("userId", user.id);
       if (user?.role) params.append("userRole", user.role);
 
-      const response = await fetch(`/api/shipments?${params}`);
+      const response = await fetch(`${buildApiUrl("/api/shipments")}?${params}`, {
+        credentials: "include",
+      });
       if (!response.ok) throw new Error("Failed to fetch shipments");
       return response.json();
     },

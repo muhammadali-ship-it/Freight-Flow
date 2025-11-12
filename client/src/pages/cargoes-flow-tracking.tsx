@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { buildApiUrl } from "@/lib/env";
 import { formatDistanceToNow } from "date-fns";
 import {
   Card,
@@ -96,7 +97,7 @@ export default function CargoesFlowTracking() {
     if (search.trim()) {
       params.append('search', search.trim());
     }
-    return `/api/cargoes-flow/posts?${params.toString()}`;
+    return `${buildApiUrl("/api/cargoes-flow/posts")}?${params.toString()}`;
   };
 
   const buildMissingQueryUrl = () => {
@@ -106,13 +107,15 @@ export default function CargoesFlowTracking() {
     if (missingSearch.trim()) {
       params.append('search', missingSearch.trim());
     }
-    return `/api/cargoes-flow/missing-mbl?${params.toString()}`;
+    return `${buildApiUrl("/api/cargoes-flow/missing-mbl")}?${params.toString()}`;
   };
 
   const { data, isLoading, refetch } = useQuery<PostsResponse>({
     queryKey: [buildPostsQueryUrl()],
     queryFn: async () => {
-      const response = await fetch(buildPostsQueryUrl());
+      const response = await fetch(buildPostsQueryUrl(), {
+        credentials: "include",
+      });
       if (!response.ok) throw new Error("Failed to fetch posts");
       return response.json();
     },
@@ -121,7 +124,9 @@ export default function CargoesFlowTracking() {
   const { data: missingData, isLoading: missingLoading } = useQuery<MissingMblResponse>({
     queryKey: [buildMissingQueryUrl()],
     queryFn: async () => {
-      const response = await fetch(buildMissingQueryUrl());
+      const response = await fetch(buildMissingQueryUrl(), {
+        credentials: "include",
+      });
       if (!response.ok) throw new Error("Failed to fetch missing MBL shipments");
       return response.json();
     },
@@ -129,13 +134,7 @@ export default function CargoesFlowTracking() {
 
   const retryMutation = useMutation({
     mutationFn: async (postId: string) => {
-      const response = await fetch(`/api/cargoes-flow/retry/${postId}`, {
-        method: "POST",
-      });
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Failed to retry");
-      }
+      const response = await apiRequest("POST", `/api/cargoes-flow/retry/${postId}`);
       return response.json();
     },
     onSuccess: () => {
@@ -156,13 +155,7 @@ export default function CargoesFlowTracking() {
 
   const deleteMissingMutation = useMutation({
     mutationFn: async (id: string) => {
-      const response = await fetch(`/api/cargoes-flow/missing-mbl/${id}`, {
-        method: "DELETE",
-      });
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Failed to delete");
-      }
+      const response = await apiRequest("DELETE", `/api/cargoes-flow/missing-mbl/${id}`);
       return response.json();
     },
     onSuccess: () => {
@@ -183,13 +176,7 @@ export default function CargoesFlowTracking() {
 
   const batchProcessMutation = useMutation({
     mutationFn: async () => {
-      const response = await fetch("/api/cargoes-flow/batch-process", {
-        method: "POST",
-      });
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Failed to batch process");
-      }
+      const response = await apiRequest("POST", "/api/cargoes-flow/batch-process");
       return response.json();
     },
     onSuccess: (data) => {

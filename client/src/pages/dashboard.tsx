@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
+import { buildApiUrl } from "@/lib/env";
 import { Package, TrendingUp, Ship, AlertTriangle, Plus, Download, ArrowUpDown, ArrowUp, ArrowDown, AlertCircle, Clock, CheckCircle, RotateCcw } from "lucide-react";
 import { StatsCard } from "@/components/stats-card";
 import { SearchBar } from "@/components/search-bar";
@@ -112,7 +113,7 @@ export default function Dashboard() {
     pagination: { page: number; pageSize: number; total: number; totalPages: number };
   }>({
     queryKey: ["/api/shipments", { page, pageSize, search: searchQuery, filters, userId: user?.id, userRole: user?.role }],
-    queryFn: async () => {
+    queryFn: async ({ queryKey }) => {
       const params = new URLSearchParams({
         page: page.toString(),
         pageSize: pageSize.toString(),
@@ -128,7 +129,9 @@ export default function Dashboard() {
       if (user?.id) params.append("userId", user.id);
       if (user?.role) params.append("userRole", user.role);
 
-      const response = await fetch(`/api/shipments?${params}`);
+      const response = await fetch(`${buildApiUrl("/api/shipments")}?${params}`, {
+        credentials: "include",
+      });
       if (!response.ok) throw new Error("Failed to fetch shipments");
       return response.json();
     },

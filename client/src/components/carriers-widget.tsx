@@ -28,10 +28,7 @@ export function CarriersWidget() {
 
   const syncMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch("/api/cargoes-flow/carriers/sync", {
-        method: "POST",
-      });
-      if (!res.ok) throw new Error("Failed to sync carriers");
+      const res = await apiRequest("POST", "/api/cargoes-flow/carriers/sync");
       return await res.json();
     },
     onSuccess: (data: any) => {

@@ -520,12 +520,7 @@ export default function ShipmentForm() {
         status: data.status,
       };
 
-      const shipmentResponse = await fetch("/api/shipments", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(shipmentData),
-      });
-      if (!shipmentResponse.ok) throw new Error("Failed to create shipment");
+      const shipmentResponse = await apiRequest("POST", "/api/shipments", shipmentData);
       const shipment = await shipmentResponse.json();
 
       // Step 2: Create milestones if any
@@ -541,13 +536,7 @@ export default function ShipmentForm() {
               status: milestoneInfo.actualTimestamp ? "completed" : "pending",
             };
 
-            const milestoneResponse = await fetch("/api/milestones", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              credentials: "include",
-              body: JSON.stringify(milestoneData),
-            });
-            if (!milestoneResponse.ok) throw new Error("Failed to create milestone");
+            await apiRequest("POST", "/api/milestones", milestoneData);
           }
         }
       }
@@ -599,13 +588,7 @@ export default function ShipmentForm() {
             rawData: Object.keys(railData).length > 0 ? railData : undefined,
           };
 
-          const containerResponse = await fetch("/api/containers", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            credentials: "include",
-            body: JSON.stringify({ container: containerData }),
-          });
-          if (!containerResponse.ok) throw new Error("Failed to create container");
+          await apiRequest("POST", "/api/containers", { container: containerData });
         }
       }
 
@@ -627,13 +610,8 @@ export default function ShipmentForm() {
         if (container.terminalAvailableForPickup !== undefined) terminalInfo.terminalAvailableForPickup = container.terminalAvailableForPickup;
         
         if (Object.keys(terminalInfo).length > 0) {
-          await fetch(`/api/shipments/${shipment.id}`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            credentials: "include",
-            body: JSON.stringify({ 
-              rawData: { ...shipment.rawData, ...terminalInfo }
-            }),
+          await apiRequest("PATCH", `/api/shipments/${shipment.id}`, { 
+            rawData: { ...shipment.rawData, ...terminalInfo }
           });
         }
       }

@@ -25,7 +25,12 @@ export const env = {
 // Helper function to build API URLs
 export function buildApiUrl(endpoint: string): string {
   // Remove leading slash if present
-  const cleanEndpoint = endpoint.startsWith('/') ? endpoint.slice(1) : endpoint;
+  let cleanEndpoint = endpoint.startsWith('/') ? endpoint.slice(1) : endpoint;
+  
+  // Remove /api prefix if present (to avoid double /api)
+  if (cleanEndpoint.startsWith('api/')) {
+    cleanEndpoint = cleanEndpoint.slice(4);
+  }
   
   // If VITE_API_BASE_URL is explicitly set, always use it
   if (import.meta.env.VITE_API_BASE_URL) {

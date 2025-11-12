@@ -2420,6 +2420,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Database diagnostic endpoint
+  app.get("/api/debug/database-status", async (req, res) => {
+    try {
+      console.log("[Debug] Checking database status...");
+      
+      // Test basic database connection
+      const testQuery = await db.execute(sql`SELECT 1 as test`);
+      console.log("[Debug] Basic DB connection:", testQuery);
+      
+      // Test missing MBL shipments table
+      try {
+        const mblCount = await db.select({ count: sql<number>`count(*)` }).from(missingMblShipments);
+        console.log("[Debug] Missing MBL shipments count:", mblCount);
+      } catch (mblError) {
+        console.error("[Debug] Missing MBL table error:", mblError);
+        return res.status(500).json({ 
+          error: "Missing MBL table not found", 
+          details: mblError instanceof Error ? mblError.message : String(mblError)
+        });
+      }
+      
+      // Test webhook logs table
+      try {
+        const webhookCount = await db.select({ count: sql<number>`count(*)` }).from(webhookLogs);
+        console.log("[Debug] Webhook logs count:", webhookCount);
+      } catch (webhookError) {
+        console.error("[Debug] Webhook logs table error:", webhookError);
+        return res.status(500).json({ 
+          error: "Webhook logs table not found", 
+          details: webhookError instanceof Error ? webhookError.message : String(webhookError)
+        });
+      }
+      
+      res.json({ 
+        status: "OK", 
+        message: "Database connection successful",
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error("[Debug] Database status check failed:", error);
+      res.status(500).json({ 
+        error: "Database connection failed", 
+        details: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
   // Missing MBL Shipments routes
   app.get("/api/cargoes-flow/missing-mbl", async (req, res) => {
     try {

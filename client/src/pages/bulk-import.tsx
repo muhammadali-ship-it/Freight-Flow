@@ -29,11 +29,7 @@ export default function BulkImport() {
 
   const processImportMutation = useMutation({
     mutationFn: async (formData: FormData) => {
-      const response = await fetch("/api/containers/bulk-import", {
-        method: "POST",
-        body: formData,
-        credentials: "include",
-      });
+      const response = await apiRequest("POST", "/api/containers/bulk-import", formData);
       
       if (!response.ok) {
         const error = await response.text();

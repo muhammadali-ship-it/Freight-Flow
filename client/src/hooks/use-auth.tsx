@@ -33,7 +33,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   } = useQuery<SelectUser | null, Error>({
     queryKey: ["/api/user"],
     queryFn: async () => {
-      const response = await fetch(buildApiUrl("/user"));
+      const response = await fetch(buildApiUrl("/user"), {
+        credentials: "include",
+      });
       if (response.status === 401) {
         return null;
       }

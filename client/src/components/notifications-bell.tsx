@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient } from "@/lib/queryClient";
+import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 import { Bell, Check, CheckCheck, X, AlertCircle, Package, Ship, Clock, AlertTriangle, TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -132,11 +132,7 @@ export function NotificationsBell() {
   // Mark all as read mutation
   const markAllAsReadMutation = useMutation({
     mutationFn: async () => {
-      const response = await fetch("/api/notifications/read-all", {
-        method: "PATCH",
-        credentials: "include",
-      });
-      if (!response.ok) throw new Error("Failed to mark all as read");
+      const response = await apiRequest("PATCH", "/api/notifications/read-all");
       return response.json();
     },
     onSuccess: () => {

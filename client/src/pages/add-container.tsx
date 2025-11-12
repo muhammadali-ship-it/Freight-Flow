@@ -201,17 +201,7 @@ export default function AddContainer() {
         isOverdue: false,
       };
 
-      const response = await fetch("/api/containers", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ container: containerData }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to create container");
-      }
-
+      const response = await apiRequest("POST", "/api/containers", { container: containerData });
       return response.json();
     },
     onSuccess: () => {

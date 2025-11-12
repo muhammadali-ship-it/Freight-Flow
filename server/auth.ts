@@ -39,7 +39,9 @@ export function setupAuth(app: Express) {
       httpOnly: true, // Prevent XSS attacks
       maxAge: 24 * 60 * 60 * 1000, // 24 hours
       sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // Allow cross-origin in production
+      domain: process.env.NODE_ENV === 'production' ? '.vercel.app' : undefined, // Set domain for production
     },
+    name: 'freight-flow-session', // Custom session name
   };
 
   app.set("trust proxy", 1);

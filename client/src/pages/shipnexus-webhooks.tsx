@@ -130,10 +130,7 @@ export default function ShipNexusWebhooks() {
 
   const importMutation = useMutation({
     mutationFn: async () => {
-      const response = await fetch("/api/shipnexus/import-shipments", {
-        method: "POST",
-      });
-      if (!response.ok) throw new Error("Failed to import shipments");
+      const response = await apiRequest("POST", "/api/shipnexus/import-shipments");
       return response.json();
     },
     onSuccess: (data: any) => {

@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage, db } from "./storage.js";
 import { sql } from "drizzle-orm";
-import { insertContainerSchema, insertExceptionSchema, insertVesselPositionSchema, insertRailSegmentSchema, insertTimelineEventSchema, insertSavedViewSchema, insertIntegrationConfigSchema, insertUserSchema, insertShipmentSchema, insertMilestoneSchema, insertCustomEntrySchema, cargoesFlowCarriers, cargoesFlowCarrierSyncLogs, type Milestone, type User, type Shipment } from "@shared/schema";
+import { insertContainerSchema, insertExceptionSchema, insertVesselPositionSchema, insertRailSegmentSchema, insertTimelineEventSchema, insertSavedViewSchema, insertIntegrationConfigSchema, insertUserSchema, insertShipmentSchema, insertMilestoneSchema, insertCustomEntrySchema, cargoesFlowCarriers, cargoesFlowCarrierSyncLogs, type Milestone, type User, type Shipment } from "@shared/schema.js";
 import { integrationOrchestrator } from "./integrations/integration-orchestrator.js";
 import { riskScheduler } from "./services/risk-scheduler.js";
 import { startPolling as startCargoesFlowPolling } from "./services/cargoes-flow-poller.js";

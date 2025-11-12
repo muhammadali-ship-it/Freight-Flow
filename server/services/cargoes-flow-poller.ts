@@ -177,6 +177,11 @@ async function processAndStoreShipmentsWithStats(shipments: CargoesFlowShipmentD
         existing = await storage.getCargoesFlowShipmentByContainer(shipment.containerNumber);
       }
       
+      // Debug: Log first few shipments to see what's happening
+      if (newCount + updatedCount < 5) {
+        console.log(`[Cargoes Flow Poller] Shipment ${shipmentRef}: existing=${!!existing ? 'YES' : 'NO'}, container=${shipment.containerNumber}`);
+      }
+      
       // For MBL-grouped shipments, collect ALL shipments with same MBL to merge their data
       let allMblShipments: any[] = [];
       if (mblNumber) {
@@ -421,8 +426,7 @@ async function processAndStoreShipmentsWithStats(shipments: CargoesFlowShipmentD
     }
   }
 
-  console.log(`[Cargoes Flow Poller] Processing complete - New: ${newCount}, Updated: ${updatedCount}, Errors: ${errorCount}`);
-  
+  console.log(`[Cargoes Flow Poller] 📈 Final stats: ${newCount} new, ${updatedCount} updated, ${errorCount} errors`);
   return { newCount, updatedCount, errorCount };
 }
 

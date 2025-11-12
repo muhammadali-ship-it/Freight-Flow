@@ -7,6 +7,11 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
+
+app.get("/", (_req, res) => {
+  res.json({ message: "FreightFlow backend is running 🚀" });
+});
+
 // Request logging
 app.use((req, res, next) => {
   const start = Date.now();

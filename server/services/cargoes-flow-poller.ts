@@ -67,6 +67,8 @@ async function fetchShipmentsFromCargoesFlow(): Promise<CargoesFlowShipmentData[
       const timestamp = Date.now();
       const url = `${CARGOES_FLOW_API_URL}?shipmentType=INTERMODAL_SHIPMENT&status=ACTIVE&_page=${page}&_limit=${limit}&_t=${timestamp}`;
 
+      console.log(`[Cargoes Flow Poller] Fetching page ${page}: ${url}`);
+      
       const response = await fetch(url, {
         method: 'GET',
         headers: {
@@ -77,6 +79,8 @@ async function fetchShipmentsFromCargoesFlow(): Promise<CargoesFlowShipmentData[
         },
       });
 
+      console.log(`[Cargoes Flow Poller] Response status: ${response.status}`);
+
       if (!response.ok) {
         const errorText = await response.text();
         console.error(`[Cargoes Flow Poller] API error on page ${page} (${response.status}):`, errorText);
@@ -85,7 +89,10 @@ async function fetchShipmentsFromCargoesFlow(): Promise<CargoesFlowShipmentData[
 
       const data: CargoesFlowApiResponse = await response.json();
       
+      console.log(`[Cargoes Flow Poller] Received ${Array.isArray(data) ? data.length : 'non-array'} shipments on page ${page}`);
+      
       if (!Array.isArray(data) || data.length === 0) {
+        console.log(`[Cargoes Flow Poller] No more data on page ${page}, stopping pagination`);
         hasMorePages = false;
         break;
       }
@@ -431,15 +438,22 @@ async function pollShipments() {
   let syncLog;
   
   try {
+    console.log('[Cargoes Flow Poller] 🚀 Starting sync...');
     const shipments = await fetchShipmentsFromCargoesFlow();
+    
+    console.log(`[Cargoes Flow Poller] 📦 Fetched ${shipments.length} shipments from API`);
     
     let newCount = 0;
     let updatedCount = 0;
     
     if (shipments.length > 0) {
+      console.log('[Cargoes Flow Poller] 💾 Processing and storing shipments...');
       const stats = await processAndStoreShipmentsWithStats(shipments);
       newCount = stats.newCount;
       updatedCount = stats.updatedCount;
+      console.log(`[Cargoes Flow Poller] 📊 Processing complete: ${newCount} new, ${updatedCount} updated`);
+    } else {
+      console.log('[Cargoes Flow Poller] ⚠️ No shipments received from API');
     }
 
     const syncDuration = Date.now() - startTime;

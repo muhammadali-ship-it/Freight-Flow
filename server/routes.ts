@@ -5,9 +5,12 @@ import { sql } from "drizzle-orm";
 import { insertContainerSchema, insertExceptionSchema, insertVesselPositionSchema, insertRailSegmentSchema, insertTimelineEventSchema, insertSavedViewSchema, insertIntegrationConfigSchema, insertUserSchema, insertShipmentSchema, insertMilestoneSchema, insertCustomEntrySchema, cargoesFlowCarriers, cargoesFlowCarrierSyncLogs, type Milestone, type User, type Shipment } from "./shared/schema.js";
 import { integrationOrchestrator } from "./integrations/integration-orchestrator.js";
 import { riskScheduler } from "./services/risk-scheduler.js";
-import { startPolling as startCargoesFlowPolling } from "./services/cargoes-flow-poller.js";
+import { startPolling as startCargoesFlowPolling, triggerManualPoll } from "./services/cargoes-flow-poller.js";
 import { setupAuth, hashPassword } from "./auth.js";
-import { sendShipmentToCargoesFlow, trackCargoesFlowPost } from "./services/cargoes-flow.js";
+import { sendShipmentToCargoesFlow, trackCargoesFlowPost, uploadDocumentsToCargoesFlow } from "./services/cargoes-flow.js";
+import { handleTmsWebhook, sendTestWebhook, retryWebhook } from "./webhooks/tms-webhook.js";
+import { getPollingStatus } from "./polling-scheduler.js";
+import { syncCarriersFromCargoesFlow } from "./services/cargoes-flow-carrier-sync.js";
 
 function calculateShipmentStatus(milestones: Milestone[]): string {
   if (!milestones || milestones.length === 0) {
@@ -1535,7 +1538,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ===== TMS WEBHOOK ROUTES =====
-  const { handleTmsWebhook, sendTestWebhook } = await import("./webhooks/tms-webhook.js");
 
   app.post("/api/webhooks/tms", handleTmsWebhook);
   
@@ -1583,7 +1585,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log(`[Webhook Retry] Retrying webhook ${log.id}...`);
       
-      const { retryWebhook } = await import("./webhooks/tms-webhook");
       await retryWebhook(log.id, log.rawPayload);
       
       console.log(`[Webhook Retry] ✅ Successfully retried webhook ${log.id}`);
@@ -2098,7 +2099,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/shipnexus/polling-status", async (req, res) => {
     try {
-      const { getPollingStatus } = await import("./polling-scheduler");
       const status = getPollingStatus();
       res.json(status);
     } catch (error) {
@@ -2523,7 +2523,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/cargoes-flow/trigger-sync", async (req, res) => {
     try {
-      const { triggerManualPoll } = await import("./services/cargoes-flow-poller");
       console.log("[API] Manual sync triggered");
       
       const syncLog = await triggerManualPoll();
@@ -2717,7 +2716,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Trigger manual carrier sync
   app.post("/api/cargoes-flow/carriers/sync", async (req, res) => {
     try {
-      const { syncCarriersFromCargoesFlow } = await import("./services/cargoes-flow-carrier-sync");
       const result = await syncCarriersFromCargoesFlow();
       res.json(result);
     } catch (error: any) {
@@ -3421,7 +3419,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         apiRequest: JSON.stringify({ shipmentNumber, fileCount: files.length }),
       });
 
-      const { uploadDocumentsToCargoesFlow } = await import("./services/cargoes-flow");
       const result = await uploadDocumentsToCargoesFlow(shipmentNumber, files);
 
       let successCount = 0;
@@ -3516,8 +3513,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "mblNumber is required" });
       }
 
-      const { sendShipmentToCargoesFlow } = await import("./services/cargoes-flow");
-      
       const result = await sendShipmentToCargoesFlow(
         `TEST-${Date.now()}`,
         mblNumber,

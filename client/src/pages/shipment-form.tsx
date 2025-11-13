@@ -8,11 +8,12 @@ import { useToast } from "@/hooks/use-toast";
 import { insertShipmentSchema } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, Ship, Package, AlertTriangle, FileText, Users, MapPin, Check, ChevronsUpDown } from "lucide-react";
+import { ArrowLeft, Ship, Package, AlertTriangle, FileText, Users, MapPin, Check, ChevronsUpDown, Truck } from "lucide-react";
 import { useState, useEffect } from "react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
@@ -264,9 +265,7 @@ export default function ShipmentForm() {
     queryKey: ["/api/shipments", shipmentId],
     queryFn: async () => {
       if (!shipmentId) return null;
-      const response = await fetch(`/api/shipments/${shipmentId}`);
-      if (!response.ok) throw new Error("Failed to fetch shipment");
-      return response.json();
+      return await apiRequest(`/api/shipments/${shipmentId}`);
     },
     enabled: isEditMode,
   });
@@ -520,8 +519,11 @@ export default function ShipmentForm() {
         status: data.status,
       };
 
-      const shipmentResponse = await apiRequest("POST", "/api/shipments", shipmentData);
-      const shipment = await shipmentResponse.json();
+      const shipment = await apiRequest("/api/shipments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(shipmentData),
+      });
 
       // Step 2: Create milestones if any
       if (data.milestones && data.milestones.length > 0) {
@@ -536,7 +538,11 @@ export default function ShipmentForm() {
               status: milestoneInfo.actualTimestamp ? "completed" : "pending",
             };
 
-            await apiRequest("POST", "/api/milestones", milestoneData);
+            await apiRequest("/api/milestones", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(milestoneData),
+            });
           }
         }
       }
@@ -645,7 +651,7 @@ export default function ShipmentForm() {
 
   const updateMutation = useMutation({
     mutationFn: async (data: FormData) => {
-      const response = await fetch(`/api/shipments/${shipmentId}`, {
+      return await apiRequest(`/api/shipments/${shipmentId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -667,12 +673,12 @@ export default function ShipmentForm() {
           status: data.status,
         }),
       });
-      if (!response.ok) throw new Error("Failed to update shipment");
-      return response.json();
     },
     onSuccess: async (shipment: any) => {
-      await apiRequest("POST", `/api/shipments/${shipmentId}/users`, {
-        userIds: assignedUserIds,
+      await apiRequest(`/api/shipments/${shipmentId}/users`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userIds: assignedUserIds }),
       });
 
       queryClient.invalidateQueries({ queryKey: ["/api/shipments"] });

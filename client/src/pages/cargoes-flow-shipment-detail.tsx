@@ -174,6 +174,18 @@ interface CargoesFlowPost {
 function TrackingTimeline({ shipmentReference }: { shipmentReference: string }) {
   const { data: post, isLoading } = useQuery<CargoesFlowPost>({
     queryKey: ["/api/cargoes-flow/posts/by-reference", shipmentReference],
+    queryFn: async () => {
+      try {
+        return await apiRequest(`/api/cargoes-flow/posts/by-reference/${shipmentReference}`);
+      } catch (error: any) {
+        // Silently return null for 404s - this is expected when shipment hasn't been posted
+        if (error?.status === 404) {
+          return null;
+        }
+        throw error;
+      }
+    },
+    retry: false, // Don't retry since we handle 404s gracefully
   });
 
   const { data: shipment } = useQuery<CargoesFlowShipment>({
@@ -426,22 +438,43 @@ export default function CargoesFlowShipmentDetail() {
   // Check if shipment has tracking post data (user-created shipments)
   const { data: trackingPost } = useQuery<CargoesFlowPost>({
     queryKey: ["/api/cargoes-flow/posts/by-reference", shipment?.shipmentReference],
+    queryFn: async () => {
+      if (!shipment?.shipmentReference) return null;
+      try {
+        return await apiRequest(`/api/cargoes-flow/posts/by-reference/${shipment.shipmentReference}`);
+      } catch (error: any) {
+        // Silently return null for 404s - this is expected when shipment hasn't been posted
+        if (error?.status === 404) {
+          return null;
+        }
+        throw error;
+      }
+    },
     enabled: !!shipment?.shipmentReference,
+    retry: false, // Don't retry since we handle 404s gracefully
   });
 
   const isUserCreatedShipment = !!trackingPost;
 
   const assignUsersMutation = useMutation({
     mutationFn: async (userIds: string[]) => {
-      await apiRequest("POST", `/api/shipments/${shipmentId}/users`, { userIds });
+      await apiRequest(`/api/shipments/${shipmentId}/users`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userIds }),
+      });
     },
     onSuccess: () => {
+      console.log("User assignment successful, invalidating queries for shipmentId:", shipmentId);
       queryClient.invalidateQueries({ queryKey: ["/api/shipments", shipmentId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/shipments"] });
+      
       toast({
         title: "Users assigned",
         description: "The users have been successfully assigned to this shipment.",
       });
       setAssignUsersDialogOpen(false);
+      setSelectedUserIds([]); // Reset selected users
     },
     onError: () => {
       toast({
@@ -980,13 +1013,13 @@ export default function CargoesFlowShipmentDetail() {
                 {rawData.terminalAvailableForPickup !== undefined && (
                   <div>
                     <p className="text-xs text-muted-foreground">Available For Pickup</p>
-                    <p className="text-sm font-medium">
+                    <div className="text-sm font-medium">
                       {rawData.terminalAvailableForPickup ? (
                         <Badge variant="default" className="bg-green-500 text-xs">Yes</Badge>
                       ) : (
                         <Badge variant="outline" className="text-xs">No</Badge>
                       )}
-                    </p>
+                    </div>
                   </div>
                 )}
               </CardContent>

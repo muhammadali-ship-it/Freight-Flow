@@ -266,10 +266,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       if (shipment) {
         // This is a user-created shipment, fetch related data
-        const [milestones, containers] = await Promise.all([
+        const [milestones, containers, shipmentUsers] = await Promise.all([
           storage.getMilestones(req.params.id),
           storage.getContainers(req.params.id),
+          storage.getShipmentUsers(req.params.id),
         ]);
+        
+        // Get user details for assigned users
+        const assignedUsers = await Promise.all(
+          shipmentUsers.map(async (su) => {
+            const user = await storage.getUser(su.userId);
+            return user;
+          })
+        );
         
         return res.json({
           ...shipment,
@@ -277,6 +286,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           isUserCreated: true,
           milestones,
           containers,
+          assignedUsers: assignedUsers.filter(Boolean), // Filter out any null users
         });
       }
       
@@ -333,6 +343,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const rawData = cargoesFlowShipment.rawData as any || {};
       const milestones = rawData.milestones || [];
       
+      // Get assigned users for Cargoes Flow shipment
+      const cargoesFlowShipmentUsers = await storage.getCargoesFlowShipmentUsers(req.params.id);
+      const assignedUsers = await Promise.all(
+        cargoesFlowShipmentUsers.map(async (su) => {
+          const user = await storage.getUser(su.userId);
+          return user;
+        })
+      );
+      
       // If no containers from MBL grouping, use containers from rawData.containers
       if (allContainers.length === 0 && rawData.containers && Array.isArray(rawData.containers)) {
         allContainers = rawData.containers.map((container: any, index: number) => ({
@@ -360,6 +379,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ...cargoesFlowShipment,
         containers: allContainers,
         milestones,
+        assignedUsers: assignedUsers.filter(Boolean), // Filter out any null users
         source: 'api',
         isUserCreated: false,
       });

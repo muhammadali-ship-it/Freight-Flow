@@ -9,21 +9,46 @@ async function throwIfResNotOk(res: Response) {
 }
 
 export async function apiRequest(
-  method: string,
-  url: string,
+  urlOrMethod: string,
+  urlOrOptions?: string | RequestInit,
   data?: unknown | undefined,
-): Promise<Response> {
+): Promise<any> {
+  let url: string;
+  let options: RequestInit;
+
+  // Handle both old and new calling patterns
+  if (typeof urlOrOptions === 'string') {
+    // Old pattern: apiRequest(method, url, data)
+    const method = urlOrMethod;
+    url = urlOrOptions;
+    options = {
+      method,
+      headers: data ? { "Content-Type": "application/json" } : {},
+      body: data ? JSON.stringify(data) : undefined,
+      credentials: "include",
+    };
+  } else {
+    // New pattern: apiRequest(url, options)
+    url = urlOrMethod;
+    options = {
+      credentials: "include",
+      ...urlOrOptions,
+    };
+  }
+
   // Build the full API URL using environment configuration
   const apiUrl = url.startsWith('http') ? url : buildApiUrl(url);
   
-  const res = await fetch(apiUrl, {
-    method,
-    headers: data ? { "Content-Type": "application/json" } : {},
-    body: data ? JSON.stringify(data) : undefined,
-    credentials: "include",
-  });
+  const res = await fetch(apiUrl, options);
 
   await throwIfResNotOk(res);
+  
+  // Return parsed JSON for successful responses
+  const contentType = res.headers.get('content-type');
+  if (contentType && contentType.includes('application/json')) {
+    return await res.json();
+  }
+  
   return res;
 }
 

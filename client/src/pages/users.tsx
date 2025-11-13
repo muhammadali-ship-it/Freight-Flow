@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -71,9 +71,41 @@ export default function Users() {
     },
   });
 
+  // Ensure form is populated when editing user
+  useEffect(() => {
+    if (editingUser && dialogOpen) {
+      console.log("Setting form values for user:", editingUser);
+      console.log("User role:", editingUser.role);
+      
+      // Ensure role is valid, fallback to "User" if invalid
+      const validRole = ["Admin", "Manager", "User"].includes(editingUser.role) 
+        ? editingUser.role as "Admin" | "Manager" | "User"
+        : "User";
+      
+      form.reset({
+        username: editingUser.username || "",
+        name: editingUser.name,
+        email: editingUser.email,
+        role: validRole,
+        office: (editingUser.office || "Logistics Sales-Domestic Operations") as typeof OFFICE_OPTIONS[number],
+        password: "",
+      });
+      
+      // Force set the role value to ensure it's properly set
+      form.setValue("role", validRole);
+      
+      // Clear any existing form errors
+      form.clearErrors();
+    }
+  }, [editingUser, dialogOpen, form]);
+
   const createMutation = useMutation({
     mutationFn: async (data: UserFormValues) => {
-      return await apiRequest("POST", "/api/users", data);
+      return await apiRequest("/api/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/users"] });
@@ -88,7 +120,11 @@ export default function Users() {
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: Partial<UserFormValues> }) => {
-      return await apiRequest("PATCH", `/api/users/${id}`, data);
+      return await apiRequest(`/api/users/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/users"] });
@@ -104,7 +140,9 @@ export default function Users() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      return await apiRequest("DELETE", `/api/users/${id}`);
+      return await apiRequest(`/api/users/${id}`, {
+        method: "DELETE",
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/users"] });
@@ -130,14 +168,6 @@ export default function Users() {
 
   const openEditDialog = (user: Omit<User, "password">) => {
     setEditingUser(user);
-    form.reset({
-      username: user.username || "",
-      name: user.name,
-      email: user.email,
-      role: user.role as "Admin" | "Manager" | "User",
-      office: (user.office || "Logistics Sales-Domestic Operations") as typeof OFFICE_OPTIONS[number],
-      password: "",
-    });
     setDialogOpen(true);
   };
 
@@ -248,7 +278,13 @@ export default function Users() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Role</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value} disabled={!isAdmin}>
+                      <Select 
+                        onValueChange={field.onChange} 
+                        value={field.value} 
+                        defaultValue={field.value} 
+                        disabled={!isAdmin}
+                        key={editingUser?.id || 'new'}
+                      >
                         <FormControl>
                           <SelectTrigger data-testid="select-role">
                             <SelectValue placeholder="Select role" />

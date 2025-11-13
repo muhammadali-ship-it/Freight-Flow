@@ -260,12 +260,16 @@ export default function ShipmentDetail() {
       await apiRequest("POST", `/api/shipments/${shipmentId}/users`, { userIds });
     },
     onSuccess: () => {
+      console.log("User assignment successful, invalidating queries for shipmentId:", shipmentId);
       queryClient.invalidateQueries({ queryKey: ["/api/shipments", shipmentId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/shipments"] });
+      
       toast({
         title: "Users assigned",
         description: "The users have been successfully assigned to this shipment.",
       });
       setAssignUsersDialogOpen(false);
+      setSelectedUserIds([]); // Reset selected users
     },
     onError: () => {
       toast({

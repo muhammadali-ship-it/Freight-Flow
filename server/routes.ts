@@ -192,17 +192,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Get current user and apply filters based on role
       const user = req.user as User | undefined;
-      let userFilter: { userName?: string; userOffice?: string; userRole?: string } = {};
+      let userFilter: { userName?: string; userOffice?: string; userRole?: string; userId?: string } = {};
 
       if (user) {
         if (user.role === 'User') {
-          // User role: filter by name matching salesRepNames array
+          // User role: filter by name matching salesRepNames array AND assigned users
           userFilter.userName = user.name;
           userFilter.userRole = 'User';
+          userFilter.userId = user.id; // Add assigned user filtering
         } else if (user.role === 'Manager') {
-          // Manager role: filter by office matching officeName
+          // Manager role: filter by office matching officeName AND assigned users
           userFilter.userOffice = user.office;
           userFilter.userRole = 'Manager';
+          userFilter.userId = user.id; // Add assigned user filtering
         }
         // Admin users: no filtering (userFilter remains empty)
       }

@@ -272,13 +272,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
           storage.getShipmentUsers(req.params.id),
         ]);
         
-        // Get user details for assigned users
-        const assignedUsers = await Promise.all(
-          shipmentUsers.map(async (su) => {
-            const user = await storage.getUser(su.userId);
-            return user;
-          })
-        );
+        // Get assigned users from salesRepNames
+        const salesRepNames = shipment.salesRepNames || [];
+        const allUsers = await storage.getAllUsers();
+        const assignedUsers = allUsers.filter(user => {
+          // Try exact match first
+          if (salesRepNames.includes(user.name)) {
+            return true;
+          }
+          
+          // Try case-insensitive match
+          const userNameLower = user.name.toLowerCase().trim();
+          return salesRepNames.some(repName => 
+            repName.toLowerCase().trim() === userNameLower
+          );
+        });
         
         return res.json({
           ...shipment,
@@ -343,14 +351,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const rawData = cargoesFlowShipment.rawData as any || {};
       const milestones = rawData.milestones || [];
       
-      // Get assigned users for Cargoes Flow shipment
-      const cargoesFlowShipmentUsers = await storage.getCargoesFlowShipmentUsers(req.params.id);
-      const assignedUsers = await Promise.all(
-        cargoesFlowShipmentUsers.map(async (su) => {
-          const user = await storage.getUser(su.userId);
-          return user;
-        })
-      );
+      // Get assigned users from salesRepNames for Cargoes Flow shipment
+      const salesRepNames = cargoesFlowShipment.salesRepNames || [];
+      const allUsers = await storage.getAllUsers();
+      const assignedUsers = allUsers.filter(user => {
+        // Try exact match first
+        if (salesRepNames.includes(user.name)) {
+          return true;
+        }
+        
+        // Try case-insensitive match
+        const userNameLower = user.name.toLowerCase().trim();
+        return salesRepNames.some(repName => 
+          repName.toLowerCase().trim() === userNameLower
+        );
+      });
       
       // If no containers from MBL grouping, use containers from rawData.containers
       if (allContainers.length === 0 && rawData.containers && Array.isArray(rawData.containers)) {

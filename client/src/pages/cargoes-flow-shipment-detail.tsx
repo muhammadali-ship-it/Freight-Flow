@@ -796,24 +796,6 @@ export default function CargoesFlowShipmentDetail() {
                 </div>
               </div>
             )}
-            {shipment.assignedUsers && (shipment.assignedUsers as any[]).length > 0 && (
-              <div>
-                <p className="text-xs text-muted-foreground mb-2">Assigned Users</p>
-                <div className="flex flex-wrap gap-1.5" data-testid="container-parties-assigned-users">
-                  {(shipment.assignedUsers as any[]).map((user: any) => (
-                    <Badge
-                      key={user.id}
-                      variant="outline"
-                      className="text-xs font-normal gap-1"
-                      data-testid={`badge-parties-user-${user.id}`}
-                    >
-                      <User className="h-3 w-3" />
-                      {user.username}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-            )}
           </CardContent>
         </Card>
 

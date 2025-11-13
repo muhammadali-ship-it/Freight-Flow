@@ -281,7 +281,7 @@ export interface IStorage {
   // Cargoes Flow Shipments (fetched from API)
   upsertCargoesFlowShipment(shipment: InsertCargoesFlowShipment): Promise<CargoesFlowShipment>;
   getCargoesFlowShipments(params?: PaginationParams, filters?: ShipmentFilters & { search?: string; userName?: string; userOffice?: string; userRole?: string }): Promise<PaginatedResult<CargoesFlowShipment>>;
-  getGroupedCargoesFlowShipments(params?: PaginationParams, filters?: ShipmentFilters & { search?: string; userName?: string; userOffice?: string; userRole?: string; userId?: string }): Promise<PaginatedResult<any>>;
+  getGroupedCargoesFlowShipments(params?: PaginationParams, filters?: ShipmentFilters & { search?: string; userName?: string; userOffice?: string; userRole?: string }): Promise<PaginatedResult<any>>;
   getCargoesFlowShipmentById(id: string): Promise<CargoesFlowShipment | undefined>;
   getCargoesFlowShipmentByReference(shipmentReference: string): Promise<CargoesFlowShipment | undefined>;
   getCargoesFlowShipmentByContainer(containerNumber: string): Promise<CargoesFlowShipment | undefined>;
@@ -1678,7 +1678,7 @@ export class DbStorage implements IStorage {
 
   async getGroupedCargoesFlowShipments(
     params?: PaginationParams,
-    filters?: ShipmentFilters & { search?: string; userName?: string; userOffice?: string; userRole?: string; userId?: string }
+    filters?: ShipmentFilters & { search?: string; userName?: string; userOffice?: string; userRole?: string }
   ): Promise<PaginatedResult<any>> {
     const conditions: SQL[] = [];
 
@@ -1710,36 +1710,10 @@ export class DbStorage implements IStorage {
       conditions.push(like(sql`LOWER(${cargoesFlowShipments.destinationPort})`, `%${filters.destinationPort.toLowerCase()}%`));
     }
 
-    // Role-based filtering with assigned user access
-    if (filters?.userRole === 'User' && filters?.userName && filters?.userId) {
-      // User role: show shipments where user is in salesRepNames OR assigned to the shipment
-      const assignedShipmentIds = db.select({ shipmentId: cargoesFlowShipmentUsers.shipmentId })
-        .from(cargoesFlowShipmentUsers)
-        .where(eq(cargoesFlowShipmentUsers.userId, filters.userId));
-      
-      conditions.push(
-        or(
-          sql`${filters.userName} = ANY(${cargoesFlowShipments.salesRepNames})`,
-          inArray(cargoesFlowShipments.id, assignedShipmentIds)
-        )!
-      );
-    } else if (filters?.userRole === 'Manager' && filters?.userOffice && filters?.userId) {
-      // Manager role: show shipments from their office OR assigned to them
-      const assignedShipmentIds = db.select({ shipmentId: cargoesFlowShipmentUsers.shipmentId })
-        .from(cargoesFlowShipmentUsers)
-        .where(eq(cargoesFlowShipmentUsers.userId, filters.userId));
-      
-      conditions.push(
-        or(
-          eq(cargoesFlowShipments.office, filters.userOffice),
-          inArray(cargoesFlowShipments.id, assignedShipmentIds)
-        )!
-      );
-    } else if (filters?.userRole === 'User' && filters?.userName) {
-      // Fallback for User role without userId
+    // Role-based filtering
+    if (filters?.userRole === 'User' && filters?.userName) {
       conditions.push(sql`${filters.userName} = ANY(${cargoesFlowShipments.salesRepNames})`);
     } else if (filters?.userRole === 'Manager' && filters?.userOffice) {
-      // Fallback for Manager role without userId
       conditions.push(eq(cargoesFlowShipments.office, filters.userOffice));
     }
 

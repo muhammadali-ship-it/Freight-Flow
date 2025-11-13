@@ -681,24 +681,6 @@ export default function ShipmentDetail() {
                 </div>
               </div>
             )}
-            {shipment.assignedUsers && shipment.assignedUsers.length > 0 && (
-              <div className="col-span-1 xs:col-span-2 md:col-span-3">
-                <p className="text-xs text-muted-foreground mb-2">Assigned Users</p>
-                <div className="flex flex-wrap gap-2" data-testid="container-parties-assigned-users">
-                  {shipment.assignedUsers.map((user) => (
-                    <Badge
-                      key={user.id}
-                      variant="outline"
-                      className="font-normal gap-1"
-                      data-testid={`badge-parties-user-${user.id}`}
-                    >
-                      <User className="h-3 w-3" />
-                      {user.username}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
 
           <Separator />

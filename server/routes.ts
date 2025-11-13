@@ -192,19 +192,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Get current user and apply filters based on role
       const user = req.user as User | undefined;
-      let userFilter: { userName?: string; userOffice?: string; userRole?: string; userId?: string } = {};
+      let userFilter: { userName?: string; userOffice?: string; userRole?: string } = {};
 
       if (user) {
         if (user.role === 'User') {
-          // User role: filter by name matching salesRepNames array AND assigned users
+          // User role: filter by name matching salesRepNames array
           userFilter.userName = user.name;
           userFilter.userRole = 'User';
-          userFilter.userId = user.id; // Add assigned user filtering
         } else if (user.role === 'Manager') {
-          // Manager role: filter by office matching officeName AND assigned users
+          // Manager role: filter by office matching officeName
           userFilter.userOffice = user.office;
           userFilter.userRole = 'Manager';
-          userFilter.userId = user.id; // Add assigned user filtering
         }
         // Admin users: no filtering (userFilter remains empty)
       }
@@ -603,11 +601,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const cargoesFlowShipment = await storage.getCargoesFlowShipmentById(shipmentId);
       
       if (cargoesFlowShipment) {
-        const shipmentUsers = await storage.getCargoesFlowShipmentUsers(shipmentId);
-        res.json(shipmentUsers);
+        // Get users whose names match the salesRepNames
+        const salesRepNames = cargoesFlowShipment.salesRepNames || [];
+        const allUsers = await storage.getAllUsers();
+        const matchingUsers = allUsers.filter(user => 
+          salesRepNames.includes(user.name)
+        );
+        res.json(matchingUsers);
       } else {
-        const shipmentUsers = await storage.getShipmentUsers(shipmentId);
-        res.json(shipmentUsers);
+        // Get regular shipment
+        const shipment = await storage.getShipmentById(shipmentId);
+        if (shipment) {
+          const salesRepNames = shipment.salesRepNames || [];
+          const allUsers = await storage.getAllUsers();
+          const matchingUsers = allUsers.filter(user => 
+            salesRepNames.includes(user.name)
+          );
+          res.json(matchingUsers);
+        } else {
+          res.json([]);
+        }
       }
     } catch (error) {
       console.error("Error getting shipment users:", error);
@@ -620,13 +633,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { userIds } = req.body;
       const shipmentId = req.params.shipmentId;
       
+      // Get user names from user IDs
+      const users = await Promise.all(
+        userIds.map(async (userId: string) => {
+          const user = await storage.getUser(userId);
+          return user?.name;
+        })
+      );
+      const userNames = users.filter(Boolean) as string[];
+      
       // Check if it's a Cargoes Flow shipment
       const cargoesFlowShipment = await storage.getCargoesFlowShipmentById(shipmentId);
       
       if (cargoesFlowShipment) {
-        await storage.setCargoesFlowShipmentUsers(shipmentId, userIds);
+        // Update salesRepNames field for Cargoes Flow shipment
+        await storage.updateCargoesFlowShipment(shipmentId, {
+          salesRepNames: userNames
+        });
       } else {
-        await storage.setShipmentUsers(shipmentId, userIds);
+        // Update salesRepNames field for regular shipment
+        await storage.updateShipment(shipmentId, {
+          salesRepNames: userNames
+        });
       }
       
       res.status(200).json({ success: true });

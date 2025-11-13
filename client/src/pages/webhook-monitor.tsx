@@ -193,7 +193,7 @@ export default function WebhookMonitor() {
     },
   });
 
-  const webhookUrl = `${window.location.origin}/api/webhooks/tms`;
+  const webhookUrl = `${import.meta.env.VITE_API_URL || 'https://freight-flow-steel.vercel.app'}/api/webhooks/tms`;
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);

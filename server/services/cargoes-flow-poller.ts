@@ -132,14 +132,27 @@ async function processAndStoreShipmentsWithStats(shipments: CargoesFlowShipmentD
   let newCount = 0;
   let updatedCount = 0;
   let errorCount = 0;
+  let skippedCount = 0;
 
-  for (const shipment of shipments) {
+  console.log(`[Cargoes Flow Poller] 🔄 Processing ${shipments.length} shipments...`);
+
+  for (let i = 0; i < shipments.length; i++) {
+    const shipment = shipments[i];
     try {
+      if (i < 3) { // Log first 3 shipments for debugging
+        console.log(`[Cargoes Flow Poller] Processing shipment ${i + 1}:`, {
+          shipmentNumber: shipment.shipmentNumber,
+          referenceNumber: shipment.referenceNumber,
+          mblNumber: shipment.mblNumber,
+          containerNumber: shipment.containerNumber
+        });
+      }
       // Use shipmentNumber as the primary reference (convert to string if number)
       const shipmentRef = String(shipment.shipmentNumber || shipment.referenceNumber || '');
       
       if (!shipmentRef) {
         console.warn('[Cargoes Flow Poller] Skipping shipment without shipmentNumber or referenceNumber:', shipment);
+        skippedCount++;
         continue;
       }
 
@@ -178,7 +191,7 @@ async function processAndStoreShipmentsWithStats(shipments: CargoesFlowShipmentD
       }
       
       // Debug: Log first few shipments to see what's happening
-      if (newCount + updatedCount < 5) {
+      if (i < 3) {
         console.log(`[Cargoes Flow Poller] Shipment ${shipmentRef}: existing=${!!existing ? 'YES' : 'NO'}, container=${shipment.containerNumber}`);
       }
       
@@ -394,9 +407,15 @@ async function processAndStoreShipmentsWithStats(shipments: CargoesFlowShipmentD
           }
         }
         
+        if (i < 3) {
+          console.log(`[Cargoes Flow Poller] ✅ Updated shipment ${shipmentRef}`);
+        }
         updatedCount++;
       } else {
         // Create new shipment
+        if (i < 3) {
+          console.log(`[Cargoes Flow Poller] ➕ Creating new shipment ${shipmentRef}`);
+        }
         await storage.upsertCargoesFlowShipment({
           shipmentReference: shipmentRef,
           taiShipmentId,
@@ -418,15 +437,22 @@ async function processAndStoreShipmentsWithStats(shipments: CargoesFlowShipmentD
           salesRepNames,
           rawData: mergedRawData,
         });
+        if (i < 3) {
+          console.log(`[Cargoes Flow Poller] ✅ Created new shipment ${shipmentRef}`);
+        }
         newCount++;
       }
     } catch (error: any) {
-      console.error(`[Cargoes Flow Poller] Error processing shipment ${shipment.shipmentNumber || shipment.referenceNumber}:`, error.message);
+      console.error(`[Cargoes Flow Poller] ❌ Error processing shipment ${shipment.shipmentNumber || shipment.referenceNumber}:`, error.message);
+      if (i < 3) {
+        console.error(`[Cargoes Flow Poller] Error details:`, error);
+      }
       errorCount++;
     }
   }
 
-  console.log(`[Cargoes Flow Poller] 📈 Final stats: ${newCount} new, ${updatedCount} updated, ${errorCount} errors`);
+  console.log(`[Cargoes Flow Poller] 📈 Final stats: ${newCount} new, ${updatedCount} updated, ${errorCount} errors, ${skippedCount} skipped`);
+  console.log(`[Cargoes Flow Poller] 📊 Total processed: ${newCount + updatedCount} out of ${shipments.length} shipments`);
   return { newCount, updatedCount, errorCount };
 }
 

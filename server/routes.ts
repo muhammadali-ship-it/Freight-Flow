@@ -640,21 +640,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return user?.name;
         })
       );
-      const userNames = users.filter(Boolean) as string[];
+      const selectedUserNames = users.filter(Boolean) as string[];
       
       // Check if it's a Cargoes Flow shipment
       const cargoesFlowShipment = await storage.getCargoesFlowShipmentById(shipmentId);
       
       if (cargoesFlowShipment) {
-        // Update salesRepNames field for Cargoes Flow shipment
+        // Get current salesRepNames and all users to determine which are user-based vs manual
+        const currentSalesRepNames = cargoesFlowShipment.salesRepNames || [];
+        const allUsers = await storage.getAllUsers();
+        const allUserNames = allUsers.map(user => user.name);
+        
+        // Separate manual entries (not matching any user) from user-based entries
+        const manualSalesRepNames = currentSalesRepNames.filter(name => 
+          !allUserNames.includes(name)
+        );
+        
+        // Combine manual entries with selected user names
+        const newSalesRepNames = [...manualSalesRepNames, ...selectedUserNames];
+        
         await storage.updateCargoesFlowShipment(shipmentId, {
-          salesRepNames: userNames
+          salesRepNames: newSalesRepNames
         });
       } else {
-        // Update salesRepNames field for regular shipment
-        await storage.updateShipment(shipmentId, {
-          salesRepNames: userNames
-        });
+        // Same logic for regular shipments
+        const shipment = await storage.getShipmentById(shipmentId);
+        if (shipment) {
+          const currentSalesRepNames = shipment.salesRepNames || [];
+          const allUsers = await storage.getAllUsers();
+          const allUserNames = allUsers.map(user => user.name);
+          
+          const manualSalesRepNames = currentSalesRepNames.filter(name => 
+            !allUserNames.includes(name)
+          );
+          
+          const newSalesRepNames = [...manualSalesRepNames, ...selectedUserNames];
+          
+          await storage.updateShipment(shipmentId, {
+            salesRepNames: newSalesRepNames
+          });
+        }
       }
       
       res.status(200).json({ success: true });

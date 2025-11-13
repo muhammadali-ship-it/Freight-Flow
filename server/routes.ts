@@ -604,9 +604,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Get users whose names match the salesRepNames
         const salesRepNames = cargoesFlowShipment.salesRepNames || [];
         const allUsers = await storage.getAllUsers();
-        const matchingUsers = allUsers.filter(user => 
-          salesRepNames.includes(user.name)
-        );
+        
+        console.log("Cargoes Flow - Sales Rep Names:", salesRepNames);
+        console.log("All User Names:", allUsers.map(u => u.name));
+        
+        const matchingUsers = allUsers.filter(user => {
+          // Try exact match first
+          if (salesRepNames.includes(user.name)) {
+            return true;
+          }
+          
+          // Try case-insensitive match
+          const userNameLower = user.name.toLowerCase().trim();
+          return salesRepNames.some(repName => 
+            repName.toLowerCase().trim() === userNameLower
+          );
+        });
+        
+        console.log("Matching Users:", matchingUsers.map(u => u.name));
         res.json(matchingUsers);
       } else {
         // Get regular shipment
@@ -614,9 +629,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (shipment) {
           const salesRepNames = shipment.salesRepNames || [];
           const allUsers = await storage.getAllUsers();
-          const matchingUsers = allUsers.filter(user => 
-            salesRepNames.includes(user.name)
-          );
+          
+          console.log("Regular Shipment - Sales Rep Names:", salesRepNames);
+          console.log("All User Names:", allUsers.map(u => u.name));
+          
+          const matchingUsers = allUsers.filter(user => {
+            // Try exact match first
+            if (salesRepNames.includes(user.name)) {
+              return true;
+            }
+            
+            // Try case-insensitive match
+            const userNameLower = user.name.toLowerCase().trim();
+            return salesRepNames.some(repName => 
+              repName.toLowerCase().trim() === userNameLower
+            );
+          });
+          
+          console.log("Matching Users:", matchingUsers.map(u => u.name));
           res.json(matchingUsers);
         } else {
           res.json([]);
@@ -652,9 +682,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const allUserNames = allUsers.map(user => user.name);
         
         // Separate manual entries (not matching any user) from user-based entries
-        const manualSalesRepNames = currentSalesRepNames.filter(name => 
-          !allUserNames.includes(name)
-        );
+        const manualSalesRepNames = currentSalesRepNames.filter(repName => {
+          // Check if this sales rep name matches any user (case-insensitive, trimmed)
+          const repNameLower = repName.toLowerCase().trim();
+          return !allUserNames.some(userName => 
+            userName.toLowerCase().trim() === repNameLower
+          );
+        });
         
         // Combine manual entries with selected user names
         const newSalesRepNames = [...manualSalesRepNames, ...selectedUserNames];
@@ -670,9 +704,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const allUsers = await storage.getAllUsers();
           const allUserNames = allUsers.map(user => user.name);
           
-          const manualSalesRepNames = currentSalesRepNames.filter(name => 
-            !allUserNames.includes(name)
-          );
+          const manualSalesRepNames = currentSalesRepNames.filter(repName => {
+            // Check if this sales rep name matches any user (case-insensitive, trimmed)
+            const repNameLower = repName.toLowerCase().trim();
+            return !allUserNames.some(userName => 
+              userName.toLowerCase().trim() === repNameLower
+            );
+          });
           
           const newSalesRepNames = [...manualSalesRepNames, ...selectedUserNames];
           

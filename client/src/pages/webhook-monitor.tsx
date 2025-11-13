@@ -60,7 +60,7 @@ export default function WebhookMonitor() {
 
   const testWebhookMutation = useMutation({
     mutationFn: async () => {
-      const response = await fetch('/api/test/webhook', {
+      return await apiRequest('/api/test/webhook', {
         method: 'POST',
         body: JSON.stringify({
           referenceNumber: `TEST-${Date.now()}`,
@@ -81,10 +81,6 @@ export default function WebhookMonitor() {
           'Content-Type': 'application/json',
         },
       });
-      if (!response.ok) {
-        throw new Error('Failed to send test webhook');
-      }
-      return response.json();
     },
     onSuccess: () => {
       refetch();
@@ -104,14 +100,9 @@ export default function WebhookMonitor() {
 
   const retryWebhookMutation = useMutation({
     mutationFn: async (webhookId: string) => {
-      const response = await fetch(`/api/webhooks/tms/retry/${webhookId}`, {
+      return await apiRequest(`/api/webhooks/tms/retry/${webhookId}`, {
         method: 'POST',
       });
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to retry webhook');
-      }
-      return response.json();
     },
     onSuccess: () => {
       refetch();
@@ -139,17 +130,13 @@ export default function WebhookMonitor() {
         '999999999',
         'UNKNOWN',
       ];
-      const response = await fetch('/api/webhooks/tms/logs/bulk-delete', {
+      return await apiRequest('/api/webhooks/tms/logs/bulk-delete', {
         method: 'POST',
         body: JSON.stringify({ shipmentIds: testShipmentIds }),
         headers: {
           'Content-Type': 'application/json',
         },
       });
-      if (!response.ok) {
-        throw new Error('Failed to clean test data');
-      }
-      return response.json();
     },
     onSuccess: (data: any) => {
       refetch();
@@ -169,13 +156,9 @@ export default function WebhookMonitor() {
 
   const deleteAllWebhooksMutation = useMutation({
     mutationFn: async () => {
-      const response = await fetch('/api/webhooks/tms/logs/all', {
+      return await apiRequest('/api/webhooks/tms/logs/all', {
         method: 'DELETE',
       });
-      if (!response.ok) {
-        throw new Error('Failed to delete all webhooks');
-      }
-      return response.json();
     },
     onSuccess: (data: any) => {
       refetch();

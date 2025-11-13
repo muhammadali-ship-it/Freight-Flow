@@ -23,6 +23,7 @@ const OFFICE_OPTIONS = [
   "Logistics Sales-Mark",
   "Logistics Sales-Sarah",
   "Logistics-Sales-Alan",
+  "LDP Logistics, Inc.",
 ] as const;
 
 const userFormSchema = z.object({
@@ -36,6 +37,7 @@ const userFormSchema = z.object({
     "Logistics Sales-Mark",
     "Logistics Sales-Sarah",
     "Logistics-Sales-Alan",
+    "LDP Logistics, Inc.",
   ]),
   password: z.string().min(8, "Password must be at least 8 characters").optional(),
 });

@@ -115,8 +115,9 @@ export default function Shipments() {
 
   const triggerSyncMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest("POST", "/api/cargoes-flow/trigger-sync");
-      const data = await response.json();
+      const data = await apiRequest("/api/cargoes-flow/trigger-sync", {
+        method: "POST",
+      });
       return data;
     },
     onSuccess: async (data) => {

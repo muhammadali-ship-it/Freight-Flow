@@ -525,20 +525,14 @@ export default function CargoesFlowShipmentDetail() {
     mutationFn: async (data: { containerId: string; containerNumber?: string; rail: any }) => {
       // For Cargoes Flow shipments, use the shipment ID (which might be the same as containerId)
       // The server endpoint will handle finding the correct container within the shipment
-      const response = await fetch(`/api/containers/${data.containerId}`, {
+      return await apiRequest(`/api/containers/${data.containerId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        credentials: "include",
         body: JSON.stringify({ 
           rawData: { rail: data.rail },
           containerNumber: data.containerNumber,
         }),
       });
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `Failed to update rail information: ${response.status}`);
-      }
-      return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/shipments", shipmentId] });

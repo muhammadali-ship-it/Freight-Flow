@@ -5,7 +5,7 @@ import { sql } from "drizzle-orm";
 import { insertContainerSchema, insertExceptionSchema, insertVesselPositionSchema, insertRailSegmentSchema, insertTimelineEventSchema, insertSavedViewSchema, insertIntegrationConfigSchema, insertUserSchema, insertShipmentSchema, insertMilestoneSchema, insertCustomEntrySchema, cargoesFlowCarriers, cargoesFlowCarrierSyncLogs, type Milestone, type User, type Shipment } from "./shared/schema.js";
 import { integrationOrchestrator } from "./integrations/integration-orchestrator.js";
 import { riskScheduler } from "./services/risk-scheduler.js";
-import { startPolling as startCargoesFlowPolling, triggerManualPoll } from "./services/cargoes-flow-poller.js";
+import { startPolling as startCargoesFlowPolling, triggerManualPoll, resetPollingState } from "./services/cargoes-flow-poller.js";
 import { setupAuth, hashPassword } from "./auth.js";
 import { sendShipmentToCargoesFlow, trackCargoesFlowPost, uploadDocumentsToCargoesFlow } from "./services/cargoes-flow.js";
 import { handleTmsWebhook, sendTestWebhook, retryWebhook } from "./webhooks/tms-webhook.js";
@@ -2576,6 +2576,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("Error triggering manual sync:", error);
       res.status(500).json({ error: error.message || "Failed to trigger sync" });
+    }
+  });
+
+  // Debug endpoint to reset polling state
+  app.post("/api/cargoes-flow/reset-polling", async (req, res) => {
+    try {
+      console.log("[API] Resetting polling state");
+      resetPollingState();
+      res.json({ 
+        success: true, 
+        message: "Polling state reset successfully" 
+      });
+    } catch (error: any) {
+      console.error("Error resetting polling state:", error);
+      res.status(500).json({ error: error.message || "Failed to reset polling state" });
     }
   });
 

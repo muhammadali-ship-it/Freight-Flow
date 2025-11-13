@@ -437,6 +437,7 @@ async function pollShipments() {
     return null;
   }
   
+  console.log('[Cargoes Flow Poller] 🔒 Setting isPolling = true');
   isPolling = true;
   const startTime = Date.now();
   let syncLog;
@@ -500,6 +501,7 @@ async function pollShipments() {
       },
     });
   } finally {
+    console.log('[Cargoes Flow Poller] 🔓 Setting isPolling = false');
     isPolling = false; // Release the lock
   }
   
@@ -587,6 +589,13 @@ function extractEtaFromLegs(shipmentLegs: any): string | null {
 // Manual trigger for testing
 export async function triggerManualPoll() {
   console.log('[Cargoes Flow Poller] Manual poll triggered');
+  console.log(`[Cargoes Flow Poller] Current isPolling state: ${isPolling}`);
   const syncLog = await pollShipments();
   return syncLog;
+}
+
+// Debug function to reset polling state
+export function resetPollingState() {
+  console.log('[Cargoes Flow Poller] 🔄 Manually resetting isPolling to false');
+  isPolling = false;
 }

@@ -2783,9 +2783,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const startTime = Date.now();
     
     try {
-      const CARGOES_FLOW_API_KEY = "dL6SngaHRXZfvzGA716lioRD7ZsRC9hs";
-      const CARGOES_FLOW_ORG_TOKEN = "V904eqatVp49P7FZuwEtoFg72TJDyFnb";
+      const CARGOES_FLOW_API_KEY = process.env.CARGOES_FLOW_API_KEY || "dL6SngaHRXZfvzGA716lioRD7ZsRC9hs";
+      const CARGOES_FLOW_ORG_TOKEN = process.env.CARGOES_FLOW_ORG_TOKEN || "V904eqatVp49P7FZuwEtoFg72TJDyFnb";
       const MAP_API_URL = "https://connect.cargoes.com/flow/api/public_tracking/v1/mapRoutes";
+
+      console.log(`[Cargoes Flow Map] Using API Key: ${CARGOES_FLOW_API_KEY ? 'SET' : 'MISSING'}`);
+      console.log(`[Cargoes Flow Map] Using Org Token: ${CARGOES_FLOW_ORG_TOKEN ? 'SET' : 'MISSING'}`);
 
       console.log(`[Cargoes Flow Map] Fetching map routes for shipment: ${shipmentNumber}`);
 

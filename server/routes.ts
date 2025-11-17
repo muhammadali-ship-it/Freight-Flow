@@ -597,10 +597,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.delete("/api/shipments/:id", async (req, res) => {
     try {
-      const deleted = await storage.deleteShipment(req.params.id);
+      // First try deleting from the user shipments table
+      let deleted = await storage.deleteShipment(req.params.id);
+      
+      // If not found, try deleting from the cargoes_flow_shipments table
+      if (!deleted) {
+        deleted = await storage.deleteCargoesFlowShipment(req.params.id);
+      }
+      
+      // Return 404 only if the shipment isn't found in either table
       if (!deleted) {
         return res.status(404).json({ error: "Shipment not found" });
       }
+      
       res.status(204).send();
     } catch (error) {
       console.error("Error deleting shipment:", error);

@@ -94,7 +94,7 @@ export type Organization = typeof organizations.$inferSelect;
 
 export const shipments = pgTable("shipments", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  referenceNumber: text("reference_number").notNull().unique(),
+  referenceNumber: text("reference_number").notNull(),
   bookingNumber: text("booking_number"),
   masterBillOfLading: text("master_bill_of_landing").notNull(),
   shipper: text("shipper"),
@@ -179,7 +179,7 @@ export const milestonesRelations = relations(milestones, ({ one }) => ({
 export const containers = pgTable("containers", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   shipmentId: varchar("shipment_id").notNull().references(() => shipments.id, { onDelete: "cascade" }),
-  containerNumber: text("container_number").notNull().unique(),
+  containerNumber: text("container_number").notNull(),
   containerType: text("container_type").notNull().default("40HC"),
   status: text("status").notNull(),
   origin: text("origin").notNull(),

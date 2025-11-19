@@ -118,6 +118,7 @@ interface CargoesFlowShipment {
   voyageNumber?: string;
   containerType?: string;
   office?: string;
+  officeName?: string; // For user-created shipments
   salesRepNames?: string[];
   rawData?: any;
   lastFetchedAt?: string;
@@ -847,10 +848,10 @@ export default function CargoesFlowShipmentDetail() {
                 <p className="text-sm">{shipment.consignee}</p>
               </div>
             )}
-            {shipment.office && (
+            {(shipment.office || shipment.officeName) && (
               <div>
                 <p className="text-xs text-muted-foreground">Office</p>
-                <p className="text-sm font-medium" data-testid="text-office-name">{shipment.office}</p>
+                <p className="text-sm font-medium" data-testid="text-office-name">{shipment.office || shipment.officeName}</p>
               </div>
             )}
             {shipment.salesRepNames && shipment.salesRepNames.length > 0 && (

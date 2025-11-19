@@ -292,6 +292,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         return res.json({
           ...shipment,
+          office: shipment.officeName, // Map officeName to office for consistency
           source: 'user',
           isUserCreated: true,
           milestones,

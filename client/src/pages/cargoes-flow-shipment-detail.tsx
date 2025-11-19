@@ -19,6 +19,86 @@ import { useState, useEffect } from "react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
+// Port to Terminals mapping for USA ports
+const PORT_TERMINALS: Record<string, string[]> = {
+  "Los Angeles, CA, USA": [
+    "APMT Los Angeles",
+    "Everport Terminal",
+    "TraPac Terminal",
+    "Yusen Terminal",
+    "ITS Terminal",
+    "West Basin Container Terminal",
+  ],
+  "Long Beach, CA, USA": [
+    "LBCT (Long Beach Container Terminal)",
+    "TTI Terminal",
+    "ITS Long Beach",
+    "PCT (Pier T)",
+    "SSA Terminals",
+  ],
+  "New York, NY, USA": [
+    "Maher Terminal",
+    "APM Terminal",
+    "GCT New York",
+    "Red Hook Terminal",
+  ],
+  "Newark, NJ, USA": [
+    "PNCT (Port Newark Container Terminal)",
+    "APM Terminals Elizabeth",
+    "Maher Terminals",
+    "GCT New York (Newark Bay)",
+  ],
+  "Elizabeth, NJ, USA": [
+    "APM Terminals Elizabeth",
+    "Maher Terminals Elizabeth",
+  ],
+  "Oakland, CA, USA": [
+    "SSA Oakland",
+    "LBCT Oakland",
+    "TraPac Oakland",
+    "Matson Oakland",
+  ],
+  "Seattle, WA, USA": [
+    "SSA Seattle",
+    "TOTE Terminal",
+    "Husky Terminal",
+    "Terminal 18",
+    "Terminal 5",
+  ],
+  "Tacoma, WA, USA": [
+    "Husky Terminal",
+    "Washington United Terminals (WUT)",
+    "Pierce County Terminal (PCT)",
+  ],
+  "Houston, TX, USA": [
+    "Barbours Cut Terminal",
+    "Bayport Container Terminal",
+  ],
+  "Miami, FL, USA": [
+    "PortMiami Seaboard Terminal",
+    "South Florida Container Terminal",
+  ],
+  "Savannah, GA, USA": [
+    "GPA Garden City Terminal",
+    "Ocean Terminal",
+    "Colonel's Island Terminal",
+  ],
+  "Charleston, SC, USA": [
+    "Wando Welch Terminal",
+    "North Charleston Terminal",
+    "Columbus Street Terminal",
+  ],
+  "Norfolk, VA, USA": [
+    "VIG (Virginia International Gateway)",
+    "NIT (Norfolk International Terminals)",
+    "Portsmouth Marine Terminal",
+  ],
+  "Baltimore, MD, USA": [
+    "Seagirt Marine Terminal",
+    "Dundalk Marine Terminal",
+  ],
+};
+
 interface CargoesFlowShipment {
   id: string;
   shipmentReference: string;
@@ -1914,24 +1994,50 @@ export default function CargoesFlowShipmentDetail() {
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="terminal-name">Terminal Name</Label>
-                <Input
-                  id="terminal-name"
-                  placeholder="e.g., APM Terminals Elizabeth"
-                  value={terminalForm.terminalName}
-                  onChange={(e) => setTerminalForm({ ...terminalForm, terminalName: e.target.value })}
-                  data-testid="input-terminal-name"
-                />
+                <Label htmlFor="terminal-port">Port</Label>
+                <Select 
+                  value={terminalForm.terminalPort} 
+                  onValueChange={(value) => setTerminalForm({ 
+                    ...terminalForm, 
+                    terminalPort: value,
+                    terminalName: "" // Reset terminal name when port changes
+                  })}
+                >
+                  <SelectTrigger data-testid="select-terminal-port">
+                    <SelectValue placeholder="Select a port" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.keys(PORT_TERMINALS).map((port) => (
+                      <SelectItem key={port} value={port}>
+                        {port}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div>
-                <Label htmlFor="terminal-port">Port</Label>
-                <Input
-                  id="terminal-port"
-                  placeholder="e.g., Los Angeles"
-                  value={terminalForm.terminalPort}
-                  onChange={(e) => setTerminalForm({ ...terminalForm, terminalPort: e.target.value })}
-                  data-testid="input-terminal-port"
-                />
+                <Label htmlFor="terminal-name">Terminal Name</Label>
+                <Select 
+                  value={terminalForm.terminalName} 
+                  onValueChange={(value) => setTerminalForm({ ...terminalForm, terminalName: value })}
+                  disabled={!terminalForm.terminalPort}
+                >
+                  <SelectTrigger data-testid="select-terminal-name">
+                    <SelectValue placeholder={
+                      terminalForm.terminalPort 
+                        ? "Select a terminal" 
+                        : "Select port first"
+                    } />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {terminalForm.terminalPort && 
+                     PORT_TERMINALS[terminalForm.terminalPort]?.map((terminal) => (
+                      <SelectItem key={terminal} value={terminal}>
+                        {terminal}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <Label htmlFor="terminal-yard">Yard Location</Label>

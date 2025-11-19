@@ -236,6 +236,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         vesselName: ship.vesselName,
         voyageNumber: ship.voyageNumber,
         containerType: ship.containerType,
+        office: ship.office,
+        salesRepNames: ship.salesRepNames,
         rawData: {
           ...ship.rawData,
           riskLevel: ship.highestRiskLevel,

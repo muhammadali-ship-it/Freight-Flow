@@ -8,6 +8,7 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CargoesFlowMap } from "@/components/cargoes-flow-map";
+import { SegmentsTrackingSection } from "@/components/segments-tracking-section";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ShipmentDocuments } from "@/components/shipment-documents";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -1265,6 +1266,128 @@ export default function CargoesFlowShipmentDetail() {
         </CardContent>
       </Card>
 
+      {/* Segments Tracking Section */}
+      {(() => {
+        // Try to find segments in different possible locations in rawData
+        let segments = null;
+        
+        // Debug: Log available data structure (only in development)
+        if (process.env.NODE_ENV === 'development') {
+          console.log('CargoesFlow Segments Debug:', {
+            'legs.portToPort': legs.portToPort,
+            'rawData.segments': rawData.segments,
+            'rawData.shipmentLegs': rawData.shipmentLegs
+          });
+        }
+        
+        // First try: rawData.shipmentLegs.portToPort.segments
+        if (legs.portToPort?.segments && Array.isArray(legs.portToPort.segments) && legs.portToPort.segments.length > 0) {
+          segments = legs.portToPort.segments;
+          console.log('Found segments in legs.portToPort.segments:', segments);
+        }
+        // Second try: rawData.segments (direct)
+        else if (rawData.segments && Array.isArray(rawData.segments) && rawData.segments.length > 0) {
+          segments = rawData.segments;
+          console.log('Found segments in rawData.segments:', segments);
+        }
+        // Third try: rawData.shipmentLegs.segments
+        else if (rawData.shipmentLegs?.segments && Array.isArray(rawData.shipmentLegs.segments) && rawData.shipmentLegs.segments.length > 0) {
+          segments = rawData.shipmentLegs.segments;
+          console.log('Found segments in rawData.shipmentLegs.segments:', segments);
+        }
+        
+        if (segments) {
+          const railSegments = segments.filter((s: any) => s.transportMode === 'RAIL');
+          console.log(`Displaying ${segments.length} segments (${railSegments.length} rail segments):`, segments);
+          
+          // Get container numbers from the shipment
+          const containerNumbers = shipment.containers 
+            ? (shipment.containers as any[]).map(c => c.containerNumber).filter(Boolean)
+            : [shipment.containerNumber].filter(Boolean);
+          
+          return (
+            <SegmentsTrackingSection 
+              segments={segments} 
+              containerNumbers={containerNumbers}
+              onUpdateSegment={async (segmentIndex, updates) => {
+                try {
+                  console.log('Updating segment:', segmentIndex, updates);
+                  
+                  // Find the container number for this segment
+                  const segment = segments[segmentIndex];
+                  const containerNumber = segment.containerNumber || shipment.containerNumber;
+                  
+                  if (!containerNumber) {
+                    toast({
+                      title: "Error",
+                      description: "Container number not found for this segment",
+                      variant: "destructive",
+                    });
+                    return;
+                  }
+
+                  try {
+                    // Try to update the segment data in the backend
+                    const response = await apiRequest(`/api/segments/${shipment.id}/${segmentIndex}`, {
+                      method: "PATCH",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        containerNumber,
+                        segmentData: updates,
+                        transportMode: segment.transportMode,
+                        origin: segment.origin,
+                        destination: segment.destination,
+                      }),
+                    });
+
+                    // Refresh the shipment data
+                    queryClient.invalidateQueries({ queryKey: ["/api/shipments", shipmentId] });
+                    
+                    toast({
+                      title: "Success",
+                      description: `${segment.transportMode} segment updated successfully`,
+                    });
+                    
+                  } catch (dbError: any) {
+                    // If database quota exceeded, save to local storage as fallback
+                    if (dbError?.message?.includes('data transfer quota') || dbError?.message?.includes('exceeded')) {
+                      const localKey = `segment_updates_${shipment.id}`;
+                      const existingUpdates = JSON.parse(localStorage.getItem(localKey) || '{}');
+                      existingUpdates[segmentIndex] = {
+                        ...updates,
+                        containerNumber,
+                        transportMode: segment.transportMode,
+                        origin: segment.origin,
+                        destination: segment.destination,
+                        timestamp: new Date().toISOString()
+                      };
+                      localStorage.setItem(localKey, JSON.stringify(existingUpdates));
+                      
+                      toast({
+                        title: "Saved Locally",
+                        description: "Database quota exceeded. Changes saved locally and will sync when quota resets.",
+                        variant: "default",
+                      });
+                    } else {
+                      throw dbError;
+                    }
+                  }
+                  
+                } catch (error: any) {
+                  console.error('Failed to update segment:', error);
+                  toast({
+                    title: "Error",
+                    description: error?.message || "Failed to update segment",
+                    variant: "destructive",
+                  });
+                }
+              }}
+            />
+          );
+        }
+        return null;
+      })()}
+
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className={`grid w-full ${isUserCreatedShipment ? 'grid-cols-6' : 'grid-cols-5'}`}>
           <TabsTrigger value="events">Events</TabsTrigger>
@@ -1715,33 +1838,12 @@ export default function CargoesFlowShipmentDetail() {
                                   <Button
                                     variant="outline"
                                     size="sm"
-                                    onClick={() => {
-                                      // Use container.id which is the shipment ID for this specific container
-                                      // For MBL-grouped containers, each container has its own shipment ID
-                                      setSelectedContainerId(container.id || shipment.id);
-                                      setSelectedContainerNumber(container.containerNumber);
-                                      const railData = containerData.rail || {};
-                                      setRailForm({
-                                        railNumber: railData.railNumber || "",
-                                        podRailCarrier: railData.podRailCarrier || "",
-                                        destinationRailCarrier: railData.destinationRailCarrier || "",
-                                        railLoaded: railData.railLoaded || "",
-                                        railDeparted: railData.railDeparted || "",
-                                        railArrived: railData.railArrived || "",
-                                        railUnloaded: railData.railUnloaded || "",
-                                        arrivedAtDestination: railData.arrivedAtDestination || "",
-                                        fullOut: railData.fullOut || "",
-                                        emptyReturned: railData.emptyReturned || "",
-                                        available: railData.available || false,
-                                        estimatedArrivalAtFinalDestination: railData.estimatedArrivalAtFinalDestination || "",
-                                        lfd: railData.lfd || "",
-                                      });
-                                      setAddRailDialogOpen(true);
-                                    }}
+                                    disabled
+                                    title="Rail information is now managed in Transport Segments above"
                                     data-testid={`button-add-rail-${container.id}`}
                                   >
                                     <Plus className="mr-2 h-3 w-3" />
-                                    {containerData.rail ? 'Edit Rail' : 'Add Rail'}
+                                    Use Transport Segments
                                   </Button>
                                 </div>
                                 {containerData.rail ? (
@@ -2166,7 +2268,8 @@ export default function CargoesFlowShipmentDetail() {
         </DialogContent>
       </Dialog>
 
-      {/* Add Rail Dialog */}
+      {/* Add Rail Dialog - Hidden since rail data is now handled in Transport Segments */}
+      {false && (
       <Dialog open={addRailDialogOpen} onOpenChange={setAddRailDialogOpen}>
         <DialogContent data-testid="dialog-add-rail" className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -2343,6 +2446,7 @@ export default function CargoesFlowShipmentDetail() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      )}
 
       {/* Add Milestone Dialog */}
       <Dialog open={addMilestoneDialogOpen} onOpenChange={setAddMilestoneDialogOpen}>

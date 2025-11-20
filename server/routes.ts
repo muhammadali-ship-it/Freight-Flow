@@ -1144,6 +1144,83 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // PATCH /api/segments/:shipmentId/:segmentIndex - Update segment information
+  app.patch("/api/segments/:shipmentId/:segmentIndex", async (req, res) => {
+    try {
+      const { shipmentId, segmentIndex } = req.params;
+      const { containerNumber, segmentData, transportMode, origin, destination } = req.body;
+      
+      console.log(`[Segment Update] Updating segment ${segmentIndex} for shipment ${shipmentId}`);
+      
+      // Get only the rawData to minimize data transfer
+      const cargoesFlowShipment = await storage.getCargoesFlowShipmentById(shipmentId);
+      if (!cargoesFlowShipment) {
+        return res.status(404).json({ error: "Shipment not found" });
+      }
+
+      // Get the current rawData (minimize data transfer)
+      const currentRawData = cargoesFlowShipment.rawData as any || {};
+      
+      // Find segments in the rawData
+      let segments = null;
+      let segmentsPath = '';
+      
+      if (currentRawData.shipmentLegs?.portToPort?.segments) {
+        segments = currentRawData.shipmentLegs.portToPort.segments;
+        segmentsPath = 'shipmentLegs.portToPort.segments';
+      } else if (currentRawData.segments) {
+        segments = currentRawData.segments;
+        segmentsPath = 'segments';
+      } else if (currentRawData.shipmentLegs?.segments) {
+        segments = currentRawData.shipmentLegs.segments;
+        segmentsPath = 'shipmentLegs.segments';
+      }
+
+      if (!segments || !Array.isArray(segments) || !segments[parseInt(segmentIndex)]) {
+        return res.status(404).json({ error: "Segment not found" });
+      }
+
+      // Update the specific segment with the new data
+      const updatedSegments = [...segments];
+      updatedSegments[parseInt(segmentIndex)] = {
+        ...updatedSegments[parseInt(segmentIndex)],
+        containerNumber: containerNumber,
+        ...segmentData
+      };
+
+      // Update the rawData with the modified segments
+      const updatedRawData = { ...currentRawData };
+      if (segmentsPath === 'shipmentLegs.portToPort.segments') {
+        updatedRawData.shipmentLegs.portToPort.segments = updatedSegments;
+      } else if (segmentsPath === 'segments') {
+        updatedRawData.segments = updatedSegments;
+      } else if (segmentsPath === 'shipmentLegs.segments') {
+        updatedRawData.shipmentLegs.segments = updatedSegments;
+      }
+
+      // Save only the updated rawData to minimize data transfer
+      await storage.updateCargoesFlowShipment(shipmentId, {
+        rawData: updatedRawData,
+      });
+
+      console.log(`[Segment Update] ✅ Successfully updated ${transportMode} segment: ${origin} → ${destination}`);
+      
+      res.json({
+        success: true,
+        message: `${transportMode} segment updated successfully`,
+        segmentIndex: parseInt(segmentIndex),
+        updatedData: segmentData
+      });
+
+    } catch (error: any) {
+      console.error("[Segment Update] Error:", error);
+      res.status(500).json({ 
+        error: "Failed to update segment", 
+        details: error.message 
+      });
+    }
+  });
+
   app.patch("/api/containers/:id", async (req, res) => {
     try {
       const containerId = req.params.id;

@@ -1786,6 +1786,11 @@ export class DbStorage implements IStorage {
     const stats = this.calculateStats(groupedArray);
     console.log(`[DEBUG] Calculated stats from ${groupedArray.length} shipment groups:`, stats);
     
+    // CRITICAL DEBUG: Let's see if we have ANY data at all
+    if (groupedArray.length === 0) {
+      console.log(`[DEBUG] NO SHIPMENTS FOUND! This explains why all counts are 0.`);
+    }
+    
     // Debug: Log some sample data
     if (groupedArray.length > 0) {
       const sample = groupedArray[0];

@@ -241,34 +241,26 @@ export default function Dashboard() {
     };
   });
 
-  // Calculate stats from shipments data using derived status and terminal/rail data
-  const stats = {
+  // Use backend-calculated stats (accurate for full filtered dataset, not just current page)
+  const stats = paginatedData?.stats || {
     total: paginatedData?.pagination.total || 0,
-    inTransit: containers.filter(c => getDerivedStatus(c.eta) === 'in-transit').length,
-    arrivingToday: containers.filter(c => getDerivedStatus(c.eta) === 'arriving-today').length,
-    delayed: containers.filter(c => getDerivedStatus(c.eta) === 'delayed').length,
-    urgent: containers.filter(c => isUrgent(c)).length,
-    highRisk: containers.filter(c => c.riskLevel === 'high' || c.riskLevel === 'critical').length,
-    hasExceptions: containers.filter(c => (c as any).hasExceptions).length,
-    overdue: containers.filter(c => isOverdue(c)).length,
-    podNeedsAttention: containers.filter(c => {
-      // Containers that need attention: have terminal info but not available for pickup and no full out
-      return c.terminalData?.terminalName && 
-             c.terminalData?.terminalAvailableForPickup === false && 
-             !c.terminalData?.terminalFullOut;
-    }).length,
-    podAwaitingFullOut: containers.filter(c => {
-      // Containers awaiting full out: have terminal info, not available, no full out yet
-      return c.terminalData?.terminalName && 
-             c.terminalData?.terminalAvailableForPickup === false && 
-             !c.terminalData?.terminalFullOut;
-    }).length,
-    podFullOut: containers.filter(c => {
-      // Containers with full out completed
-      return !!(c.terminalData?.terminalFullOut || c.railData?.fullOut);
-    }).length,
-    emptyReturned: containers.filter(c => c.emptyReturned).length,
+    inTransit: 0,
+    arrivingToday: 0,
+    delayed: 0,
+    urgent: 0,
+    highRisk: 0,
+    hasExceptions: 0,
+    overdue: 0,
+    podNeedsAttention: 0,
+    podAwaitingFullOut: 0,
+    podFullOut: 0,
+    emptyReturned: 0,
   };
+
+  // Debug logging
+  console.log('[Dashboard] Received stats from backend:', paginatedData?.stats);
+  console.log('[Dashboard] Current KPI filter:', kpiFilter);
+  console.log('[Dashboard] Final stats being used:', stats);
 
   const handleViewDetails = (containerId: string) => {
     // Navigate to Cargoes Flow shipment detail page

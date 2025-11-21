@@ -1783,10 +1783,14 @@ export class DbStorage implements IStorage {
     
     // Calculate statistics from ALL grouped shipments (before KPI filtering)
     const stats = this.calculateStats(groupedArray);
+    console.log(`[getGroupedCargoesFlowShipments] Stats calculated from ${groupedArray.length} shipments:`, stats);
     
     // Apply KPI filtering if specified
     if (filters?.kpiFilter && filters.kpiFilter !== 'total') {
+      console.log(`[getGroupedCargoesFlowShipments] Applying KPI filter: ${filters.kpiFilter}`);
+      const originalLength = groupedArray.length;
       groupedArray = this.applyKpiFilter(groupedArray, filters.kpiFilter);
+      console.log(`[getGroupedCargoesFlowShipments] After KPI filter: ${originalLength} -> ${groupedArray.length} shipments`);
     }
     
     const total = groupedArray.length;

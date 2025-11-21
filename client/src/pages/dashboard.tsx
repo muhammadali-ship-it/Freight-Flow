@@ -257,6 +257,10 @@ export default function Dashboard() {
     emptyReturned: 0,
   };
 
+  // Debug logging
+  console.log(`[DEBUG Frontend] KPI Filter: ${kpiFilter}, Stats:`, stats);
+  console.log(`[DEBUG Frontend] Containers count: ${containers.length}, Sample container:`, containers[0]);
+
   const handleViewDetails = (containerId: string) => {
     // Navigate to Cargoes Flow shipment detail page
     navigate(`/shipments/${containerId}`);

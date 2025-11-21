@@ -1783,6 +1783,21 @@ export class DbStorage implements IStorage {
     
     // Calculate statistics from ALL grouped shipments (before KPI filtering)
     const stats = this.calculateStats(groupedArray);
+    console.log(`[DEBUG] Calculated stats from ${groupedArray.length} shipment groups:`, stats);
+    
+    // Debug: Log some sample data
+    if (groupedArray.length > 0) {
+      const sample = groupedArray[0];
+      console.log(`[DEBUG] Sample shipment data:`, {
+        containerCount: sample.containerCount,
+        rawData: sample.rawData ? {
+          terminalName: sample.rawData.terminalName,
+          terminalAvailableForPickup: sample.rawData.terminalAvailableForPickup,
+          terminalFullOut: sample.rawData.terminalFullOut,
+          containers: sample.rawData.containers?.length || 0
+        } : null
+      });
+    }
     
     // Apply KPI filtering if specified
     if (filters?.kpiFilter && filters.kpiFilter !== 'total') {
@@ -1840,11 +1855,24 @@ export class DbStorage implements IStorage {
     let podAwaitingFullOut = 0;
     let podFullOut = 0;
     let emptyReturned = 0;
+    
+    let shipmentsWithTerminalData = 0;
 
     for (const shipment of shipments) {
       const rawData = shipment.rawData || {};
       const containerCount = shipment.containerCount || 1; // Number of containers in this grouped shipment
       totalContainers += containerCount;
+      
+      // Debug: Log every shipment's terminal data
+      if (rawData.terminalName) {
+        shipmentsWithTerminalData++;
+        console.log(`[DEBUG] Shipment ${shipment.id} terminal data:`, {
+          terminalName: rawData.terminalName,
+          terminalAvailableForPickup: rawData.terminalAvailableForPickup,
+          terminalFullOut: rawData.terminalFullOut,
+          containerCount
+        });
+      }
       
       // Derive status from ETA (matching frontend logic) - multiply by container count
       if (shipment.eta) {
@@ -1906,16 +1934,27 @@ export class DbStorage implements IStorage {
       const railData = firstContainer.rawData?.rail || {};
 
       // POD needs attention - multiply by container count
-      if (terminalData.terminalName && 
-          terminalData.terminalAvailableForPickup === false && 
-          !terminalData.terminalFullOut) {
+      // Handle both boolean and string values for terminalAvailableForPickup
+      const isAvailableForPickup = terminalData.terminalAvailableForPickup === true || 
+                                   terminalData.terminalAvailableForPickup === 'true';
+      const needsAttention = terminalData.terminalName && 
+                            !isAvailableForPickup && 
+                            !terminalData.terminalFullOut;
+      if (needsAttention) {
         podNeedsAttention += containerCount;
+        console.log(`[DEBUG] POD Needs Attention found: ${containerCount} containers`, {
+          terminalName: terminalData.terminalName,
+          terminalAvailableForPickup: terminalData.terminalAvailableForPickup,
+          terminalFullOut: terminalData.terminalFullOut,
+          isAvailableForPickup
+        });
       }
 
       // POD awaiting full out - multiply by container count
-      if (terminalData.terminalName && 
-          terminalData.terminalAvailableForPickup === false && 
-          !terminalData.terminalFullOut) {
+      const awaitingFullOut = terminalData.terminalName && 
+                             !isAvailableForPickup && 
+                             !terminalData.terminalFullOut;
+      if (awaitingFullOut) {
         podAwaitingFullOut += containerCount;
       }
 
@@ -1930,6 +1969,9 @@ export class DbStorage implements IStorage {
       }
     }
 
+    console.log(`[DEBUG] Statistics summary: ${shipmentsWithTerminalData}/${shipments.length} shipments have terminal data`);
+    console.log(`[DEBUG] POD stats: needsAttention=${podNeedsAttention}, awaitingFullOut=${podAwaitingFullOut}, fullOut=${podFullOut}`);
+    
     return {
       total: totalContainers,
       inTransit,
@@ -1977,14 +2019,18 @@ export class DbStorage implements IStorage {
         }
         
         case 'pod-needs-attention': {
+          const isAvailable = rawData.terminalAvailableForPickup === true || 
+                              rawData.terminalAvailableForPickup === 'true';
           return rawData.terminalName && 
-                 rawData.terminalAvailableForPickup === false && 
+                 !isAvailable && 
                  !rawData.terminalFullOut;
         }
         
         case 'pod-awaiting-full-out': {
+          const isAvailable = rawData.terminalAvailableForPickup === true || 
+                              rawData.terminalAvailableForPickup === 'true';
           return rawData.terminalName && 
-                 rawData.terminalAvailableForPickup === false && 
+                 !isAvailable && 
                  !rawData.terminalFullOut;
         }
         

@@ -112,6 +112,7 @@ export interface ShipmentFilters {
   originPort?: string;
   destinationPort?: string;
   dateRange?: { start: string; end: string };
+  kpiFilter?: string;
 }
 
 export interface PaginatedResult<T> {
@@ -1678,7 +1679,7 @@ export class DbStorage implements IStorage {
 
   async getGroupedCargoesFlowShipments(
     params?: PaginationParams,
-    filters?: ShipmentFilters & { search?: string; userName?: string; userOffice?: string; userRole?: string }
+    filters?: ShipmentFilters & { search?: string; userName?: string; userOffice?: string; userRole?: string; kpiFilter?: string }
   ): Promise<PaginatedResult<any>> {
     const conditions: SQL[] = [];
 
@@ -1778,13 +1779,19 @@ export class DbStorage implements IStorage {
     }
 
     // Convert map to array for statistics calculation
-    const groupedArray = Array.from(grouped.values());
-    const total = groupedArray.length;
+    let groupedArray = Array.from(grouped.values());
     
-    // Calculate statistics from ALL grouped shipments (not just current page)
+    // Calculate statistics from ALL grouped shipments (before KPI filtering)
     const stats = this.calculateStats(groupedArray);
     
-    // Apply pagination to the grouped data
+    // Apply KPI filtering if specified
+    if (filters?.kpiFilter && filters.kpiFilter !== 'total') {
+      groupedArray = this.applyKpiFilter(groupedArray, filters.kpiFilter);
+    }
+    
+    const total = groupedArray.length;
+    
+    // Apply pagination to the filtered data
     const page = params?.page || 1;
     const pageSize = params?.pageSize || 25;
     const offset = (page - 1) * pageSize;
@@ -1935,6 +1942,68 @@ export class DbStorage implements IStorage {
       podFullOut,
       emptyReturned,
     };
+  }
+
+  // Helper method to apply KPI filtering to shipments
+  private applyKpiFilter(shipments: any[], kpiFilter: string): any[] {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    return shipments.filter(shipment => {
+      const rawData = shipment.rawData || {};
+      
+      switch (kpiFilter) {
+        case 'in-transit': {
+          if (!shipment.eta) return true; // No ETA = in transit
+          const etaDate = new Date(shipment.eta);
+          etaDate.setHours(0, 0, 0, 0);
+          return etaDate > today;
+        }
+        
+        case 'arriving-today': {
+          if (!shipment.eta) return false;
+          const etaDate = new Date(shipment.eta);
+          etaDate.setHours(0, 0, 0, 0);
+          return etaDate.getTime() === today.getTime();
+        }
+        
+        case 'delayed': {
+          if (!shipment.eta) return false;
+          const etaDate = new Date(shipment.eta);
+          etaDate.setHours(0, 0, 0, 0);
+          return etaDate < today;
+        }
+        
+        case 'pod-needs-attention': {
+          return rawData.terminalName && 
+                 rawData.terminalAvailableForPickup === false && 
+                 !rawData.terminalFullOut;
+        }
+        
+        case 'pod-awaiting-full-out': {
+          return rawData.terminalName && 
+                 rawData.terminalAvailableForPickup === false && 
+                 !rawData.terminalFullOut;
+        }
+        
+        case 'pod-full-out': {
+          const containersArray = rawData.containers || [];
+          const firstContainer = containersArray[0] || {};
+          const railData = firstContainer.rawData?.rail || {};
+          return !!(rawData.terminalFullOut || railData.fullOut);
+        }
+        
+        case 'empty-returned': {
+          const containersArray = rawData.containers || [];
+          const firstContainer = containersArray[0] || {};
+          const railData = firstContainer.rawData?.rail || {};
+          return !!(rawData.terminalEmptyReturned || railData.emptyReturned);
+        }
+        
+        default:
+          return true;
+      }
+    });
   }
 
   async getCargoesFlowShipmentById(id: string): Promise<CargoesFlowShipment | undefined> {

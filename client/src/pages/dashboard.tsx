@@ -112,7 +112,7 @@ export default function Dashboard() {
     data: any[];
     pagination: { page: number; pageSize: number; total: number; totalPages: number };
   }>({
-    queryKey: ["/api/shipments", { page, pageSize, search: searchQuery, filters, userId: user?.id, userRole: user?.role }],
+    queryKey: ["/api/shipments", { page, pageSize, search: searchQuery, filters, userId: user?.id, userRole: user?.role, kpiFilter }],
     queryFn: async ({ queryKey }) => {
       const params = new URLSearchParams({
         page: page.toString(),
@@ -125,6 +125,7 @@ export default function Dashboard() {
       if (filters.origin && filters.origin !== "all") params.append("originPort", filters.origin);
       if (filters.etaFrom) params.append("dateFrom", filters.etaFrom);
       if (filters.etaTo) params.append("dateTo", filters.etaTo);
+      if (kpiFilter) params.append("kpiFilter", kpiFilter);
       
       if (user?.id) params.append("userId", user.id);
       if (user?.role) params.append("userRole", user.role);
@@ -379,7 +380,7 @@ export default function Dashboard() {
     document.body.removeChild(link);
   };
 
-  // Apply quick filters and KPI filters client-side (backend handles carrier, origin, search, sort)
+  // Apply quick filters client-side (KPI filters are now handled on backend)
   const filteredContainers = containers.filter((container) => {
     // Quick filter logic
     if (quickFilter) {
@@ -387,39 +388,6 @@ export default function Dashboard() {
       if (quickFilter === "high-risk" && container.riskLevel !== "high") return false;
       if (quickFilter === "exceptions" && !(container as any).hasExceptions) return false;
       if (quickFilter === "overdue" && !isOverdue(container)) return false;
-    }
-    
-    // KPI filter logic using derived status
-    if (kpiFilter) {
-      const derivedStatus = getDerivedStatus(container.eta);
-      
-      if (kpiFilter === "total") {
-        // Show all containers
-        return true;
-      }
-      if (kpiFilter === "in-transit" && derivedStatus !== "in-transit") return false;
-      if (kpiFilter === "arriving-today" && derivedStatus !== "arriving-today") return false;
-      if (kpiFilter === "delayed" && derivedStatus !== "delayed") return false;
-      if (kpiFilter === "pod-needs-attention") {
-        const needsAttention = (container as any).terminalData?.terminalName && 
-                               (container as any).terminalData?.terminalAvailableForPickup === false && 
-                               !(container as any).terminalData?.terminalFullOut;
-        if (!needsAttention) return false;
-      }
-      if (kpiFilter === "pod-awaiting-full-out") {
-        const awaitingFullOut = (container as any).terminalData?.terminalName && 
-                                (container as any).terminalData?.terminalAvailableForPickup === false && 
-                                !(container as any).terminalData?.terminalFullOut;
-        if (!awaitingFullOut) return false;
-      }
-      if (kpiFilter === "pod-full-out") {
-        const hasFullOut = !!(container as any).terminalData?.terminalFullOut || 
-                          !!(container as any).railData?.fullOut;
-        if (!hasFullOut) return false;
-      }
-      if (kpiFilter === "empty-returned") {
-        if (!(container as any).emptyReturned) return false;
-      }
     }
     
     return true;

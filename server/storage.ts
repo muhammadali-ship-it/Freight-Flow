@@ -1782,6 +1782,7 @@ export class DbStorage implements IStorage {
     let groupedArray = Array.from(grouped.values());
     
     // Calculate statistics from ALL grouped shipments (before KPI filtering)
+    // These stats should NEVER change regardless of KPI filter
     const stats = this.calculateStats(groupedArray);
     console.log(`[DEBUG] Calculated stats from ${groupedArray.length} shipment groups:`, stats);
     
@@ -1799,12 +1800,13 @@ export class DbStorage implements IStorage {
       });
     }
     
-    // Apply KPI filtering if specified
+    // Apply KPI filtering if specified (this only affects displayed containers, not stats)
     if (filters?.kpiFilter && filters.kpiFilter !== 'total') {
       groupedArray = this.applyKpiFilter(groupedArray, filters.kpiFilter);
     }
     
-    const total = groupedArray.length;
+    // This total is for pagination only - shows how many containers match the current filter
+    const filteredTotal = groupedArray.length;
     
     // Apply pagination to the filtered data
     const page = params?.page || 1;
@@ -1818,10 +1820,10 @@ export class DbStorage implements IStorage {
       pagination: {
         page,
         pageSize,
-        total,
-        totalPages: Math.ceil(total / pageSize),
+        total: filteredTotal, // For pagination - shows filtered count
+        totalPages: Math.ceil(filteredTotal / pageSize),
       },
-      stats,
+      stats, // Always contains full dataset statistics - NEVER changes with filters
     };
   }
 
@@ -1863,16 +1865,21 @@ export class DbStorage implements IStorage {
       const containerCount = shipment.containerCount || 1; // Number of containers in this grouped shipment
       totalContainers += containerCount;
       
-      // Debug: Log every shipment's terminal data
-      if (rawData.terminalName) {
-        shipmentsWithTerminalData++;
-        console.log(`[DEBUG] Shipment ${shipment.id} terminal data:`, {
-          terminalName: rawData.terminalName,
-          terminalAvailableForPickup: rawData.terminalAvailableForPickup,
-          terminalFullOut: rawData.terminalFullOut,
-          containerCount
-        });
-      }
+        // Debug: Log every shipment's terminal data
+        if (rawData.terminalName) {
+          shipmentsWithTerminalData++;
+          console.log(`[DEBUG] Shipment ${shipment.id} terminal data:`, {
+            terminalName: rawData.terminalName,
+            terminalAvailableForPickup: rawData.terminalAvailableForPickup,
+            terminalFullOut: rawData.terminalFullOut,
+            containerCount,
+            availableType: typeof rawData.terminalAvailableForPickup,
+            fullOutType: typeof rawData.terminalFullOut
+          });
+        } else {
+          // Also log shipments without terminal data to understand the data structure
+          console.log(`[DEBUG] Shipment ${shipment.id} has NO terminal data, rawData keys:`, Object.keys(rawData));
+        }
       
       // Derive status from ETA (matching frontend logic) - multiply by container count
       if (shipment.eta) {
@@ -1946,7 +1953,8 @@ export class DbStorage implements IStorage {
           terminalName: terminalData.terminalName,
           terminalAvailableForPickup: terminalData.terminalAvailableForPickup,
           terminalFullOut: terminalData.terminalFullOut,
-          isAvailableForPickup
+          isAvailableForPickup,
+          shipmentId: shipment.id
         });
       }
 
@@ -1961,6 +1969,11 @@ export class DbStorage implements IStorage {
       // POD full out - multiply by container count
       if (terminalData.terminalFullOut || railData.fullOut) {
         podFullOut += containerCount;
+        console.log(`[DEBUG] POD Full Out found: ${containerCount} containers`, {
+          terminalFullOut: terminalData.terminalFullOut,
+          railFullOut: railData.fullOut,
+          shipmentId: shipment.id
+        });
       }
 
       // Empty returned - multiply by container count

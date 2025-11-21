@@ -241,9 +241,9 @@ export default function Dashboard() {
     };
   });
 
-  // Use backend-calculated stats (accurate for full filtered dataset, not just current page)
+  // Use backend-calculated stats (from full dataset, NEVER changes with KPI filters)
   const stats = paginatedData?.stats || {
-    total: paginatedData?.pagination.total || 0,
+    total: 0, // Don't use pagination.total - it changes with filters
     inTransit: 0,
     arrivingToday: 0,
     delayed: 0,
@@ -258,8 +258,10 @@ export default function Dashboard() {
   };
 
   // Debug logging
-  console.log(`[DEBUG Frontend] KPI Filter: ${kpiFilter}, Stats:`, stats);
-  console.log(`[DEBUG Frontend] Containers count: ${containers.length}, Sample container:`, containers[0]);
+  console.log(`[DEBUG Frontend] KPI Filter: ${kpiFilter}`);
+  console.log(`[DEBUG Frontend] Backend Stats (should never change):`, paginatedData?.stats);
+  console.log(`[DEBUG Frontend] Pagination Total (changes with filter):`, paginatedData?.pagination.total);
+  console.log(`[DEBUG Frontend] Final Stats Used:`, stats);
 
   const handleViewDetails = (containerId: string) => {
     // Navigate to Cargoes Flow shipment detail page

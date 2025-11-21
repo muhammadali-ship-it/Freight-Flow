@@ -257,11 +257,6 @@ export default function Dashboard() {
     emptyReturned: 0,
   };
 
-  // Debug logging
-  console.log('[Dashboard] Received stats from backend:', paginatedData?.stats);
-  console.log('[Dashboard] Current KPI filter:', kpiFilter);
-  console.log('[Dashboard] Final stats being used:', stats);
-
   const handleViewDetails = (containerId: string) => {
     // Navigate to Cargoes Flow shipment detail page
     navigate(`/shipments/${containerId}`);

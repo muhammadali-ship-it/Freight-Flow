@@ -1783,14 +1783,10 @@ export class DbStorage implements IStorage {
     
     // Calculate statistics from ALL grouped shipments (before KPI filtering)
     const stats = this.calculateStats(groupedArray);
-    console.log(`[getGroupedCargoesFlowShipments] Stats calculated from ${groupedArray.length} shipments:`, stats);
     
     // Apply KPI filtering if specified
     if (filters?.kpiFilter && filters.kpiFilter !== 'total') {
-      console.log(`[getGroupedCargoesFlowShipments] Applying KPI filter: ${filters.kpiFilter}`);
-      const originalLength = groupedArray.length;
       groupedArray = this.applyKpiFilter(groupedArray, filters.kpiFilter);
-      console.log(`[getGroupedCargoesFlowShipments] After KPI filter: ${originalLength} -> ${groupedArray.length} shipments`);
     }
     
     const total = groupedArray.length;
@@ -1832,6 +1828,7 @@ export class DbStorage implements IStorage {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
+    let totalContainers = 0;
     let inTransit = 0;
     let arrivingToday = 0;
     let delayed = 0;
@@ -1846,46 +1843,48 @@ export class DbStorage implements IStorage {
 
     for (const shipment of shipments) {
       const rawData = shipment.rawData || {};
+      const containerCount = shipment.containerCount || 1; // Number of containers in this grouped shipment
+      totalContainers += containerCount;
       
-      // Derive status from ETA (matching frontend logic)
+      // Derive status from ETA (matching frontend logic) - multiply by container count
       if (shipment.eta) {
         const etaDate = new Date(shipment.eta);
         etaDate.setHours(0, 0, 0, 0);
         
         if (etaDate.getTime() === today.getTime()) {
-          arrivingToday++;
+          arrivingToday += containerCount;
         } else if (etaDate < today) {
-          delayed++;
+          delayed += containerCount;
         } else {
-          inTransit++;
+          inTransit += containerCount;
         }
       } else {
-        inTransit++;
+        inTransit += containerCount;
       }
 
-      // Check if urgent (lastFreeDay within 0-3 days)
+      // Check if urgent (lastFreeDay within 0-3 days) - multiply by container count
       const lastFreeDay = rawData.lastFreeDay;
       if (lastFreeDay) {
         const lfd = new Date(lastFreeDay);
         lfd.setHours(0, 0, 0, 0);
         const daysUntilLFD = Math.ceil((lfd.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
         if (daysUntilLFD >= 0 && daysUntilLFD <= 3) {
-          urgent++;
+          urgent += containerCount;
         }
         if (lfd < today) {
-          overdue++;
+          overdue += containerCount;
         }
       }
 
-      // Check risk level
+      // Check risk level - multiply by container count
       const riskLevel = rawData.riskLevel || 'low';
       if (riskLevel === 'high' || riskLevel === 'critical') {
-        highRisk++;
+        highRisk += containerCount;
       }
 
-      // Check for exceptions
+      // Check for exceptions - multiply by container count
       if (rawData.hasExceptions) {
-        hasExceptions++;
+        hasExceptions += containerCount;
       }
 
       // Terminal status checks - exactly matching frontend logic
@@ -1906,34 +1905,33 @@ export class DbStorage implements IStorage {
       const firstContainer = containersArray[0] || {};
       const railData = firstContainer.rawData?.rail || {};
 
-      // POD needs attention: have terminal info but not available for pickup and no full out
+      // POD needs attention - multiply by container count
       if (terminalData.terminalName && 
           terminalData.terminalAvailableForPickup === false && 
           !terminalData.terminalFullOut) {
-        podNeedsAttention++;
+        podNeedsAttention += containerCount;
       }
 
-      // POD awaiting full out: have terminal info, not available, no full out yet
-      // Note: This appears to be the same logic as podNeedsAttention in the original code
+      // POD awaiting full out - multiply by container count
       if (terminalData.terminalName && 
           terminalData.terminalAvailableForPickup === false && 
           !terminalData.terminalFullOut) {
-        podAwaitingFullOut++;
+        podAwaitingFullOut += containerCount;
       }
 
-      // POD full out: has full out completed (from terminal or rail)
+      // POD full out - multiply by container count
       if (terminalData.terminalFullOut || railData.fullOut) {
-        podFullOut++;
+        podFullOut += containerCount;
       }
 
-      // Empty returned (from terminal or rail)
+      // Empty returned - multiply by container count
       if (terminalData.terminalEmptyReturned || railData.emptyReturned) {
-        emptyReturned++;
+        emptyReturned += containerCount;
       }
     }
 
     return {
-      total: shipments.length,
+      total: totalContainers,
       inTransit,
       arrivingToday,
       delayed,

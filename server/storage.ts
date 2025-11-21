@@ -1870,63 +1870,24 @@ export class DbStorage implements IStorage {
       const containerCount = shipment.containerCount || 1; // Number of containers in this grouped shipment
       totalContainers += containerCount;
 
-      // Debug: Log every shipment's terminal data
-      if (rawData.terminalName) {
-        shipmentsWithTerminalData++;
-        console.log(`[DEBUG] Shipment ${shipment.id} terminal data:`, {
-          terminalName: rawData.terminalName,
-          terminalAvailableForPickup: rawData.terminalAvailableForPickup,
-          terminalFullOut: rawData.terminalFullOut,
-          containerCount,
-          availableType: typeof rawData.terminalAvailableForPickup,
-          fullOutType: typeof rawData.terminalFullOut
+      // Check for Empty Returned status based on last event
+      let isEmptyReturned = false;
+      const milestones = rawData.milestones || rawData.events || [];
+      if (Array.isArray(milestones) && milestones.length > 0) {
+        // Sort by actualTime descending to get the latest event
+        const sortedMilestones = [...milestones].sort((a, b) => {
+          const timeA = new Date(a.actualTime || 0).getTime();
+          const timeB = new Date(b.actualTime || 0).getTime();
+          return timeB - timeA;
         });
-      } else {
-        // Also log shipments without terminal data to understand the data structure
-        console.log(`[DEBUG] Shipment ${shipment.id} has NO terminal data, rawData keys:`, Object.keys(rawData));
-      }
 
-      // Derive status from ETA (matching frontend logic) - multiply by container count
-      if (shipment.eta) {
-        const etaDate = new Date(shipment.eta);
-        etaDate.setHours(0, 0, 0, 0);
-
-        if (etaDate.getTime() === today.getTime()) {
-          arrivingToday += containerCount;
-        } else if (etaDate < today) {
-          delayed += containerCount;
-        } else {
-          inTransit += containerCount;
-        }
-      } else {
-        inTransit += containerCount;
-      }
-
-      // Check if urgent (lastFreeDay within 0-3 days) - multiply by container count
-      const lastFreeDay = rawData.lastFreeDay;
-      if (lastFreeDay) {
-        const lfd = new Date(lastFreeDay);
-        lfd.setHours(0, 0, 0, 0);
-        const daysUntilLFD = Math.ceil((lfd.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-        if (daysUntilLFD >= 0 && daysUntilLFD <= 3) {
-          urgent += containerCount;
-        }
-        if (lfd < today) {
-          overdue += containerCount;
+        const lastEvent = sortedMilestones[0];
+        if (lastEvent && lastEvent.code === 'gateInWithContainerEmpty') {
+          isEmptyReturned = true;
         }
       }
 
-      // Check risk level - multiply by container count
-      const riskLevel = rawData.riskLevel || 'low';
-      if (riskLevel === 'high' || riskLevel === 'critical') {
-        highRisk += containerCount;
-      }
-
-      // Check for exceptions - multiply by container count
-      if (rawData.hasExceptions) {
-        hasExceptions += containerCount;
-      }
-
+      // Also check terminal/rail data for empty returned (legacy check, keep for robustness)
       // Terminal status checks - exactly matching frontend logic
       const terminalData = {
         terminalName: rawData.terminalName,
@@ -1945,13 +1906,84 @@ export class DbStorage implements IStorage {
       const firstContainer = containersArray[0] || {};
       const railData = firstContainer.rawData?.rail || {};
 
+      if (terminalData.terminalEmptyReturned || railData.emptyReturned) {
+        isEmptyReturned = true;
+      }
+
+      if (isEmptyReturned) {
+        emptyReturned += containerCount;
+      }
+
+      // Debug: Log every shipment's terminal data
+      if (rawData.terminalName) {
+        shipmentsWithTerminalData++;
+        console.log(`[DEBUG] Shipment ${shipment.id} terminal data:`, {
+          terminalName: rawData.terminalName,
+          terminalAvailableForPickup: rawData.terminalAvailableForPickup,
+          terminalFullOut: rawData.terminalFullOut,
+          containerCount,
+          availableType: typeof rawData.terminalAvailableForPickup,
+          fullOutType: typeof rawData.terminalFullOut,
+          isEmptyReturned
+        });
+      } else {
+        // Also log shipments without terminal data to understand the data structure
+        console.log(`[DEBUG] Shipment ${shipment.id} has NO terminal data, rawData keys:`, Object.keys(rawData));
+      }
+
+      // Derive status from ETA (matching frontend logic) - multiply by container count
+      // If Empty Returned, it is NOT In Transit or Delayed
+      if (!isEmptyReturned) {
+        if (shipment.eta) {
+          const etaDate = new Date(shipment.eta);
+          etaDate.setHours(0, 0, 0, 0);
+
+          if (etaDate.getTime() === today.getTime()) {
+            arrivingToday += containerCount;
+          } else if (etaDate < today) {
+            delayed += containerCount;
+          } else {
+            inTransit += containerCount;
+          }
+        } else {
+          inTransit += containerCount;
+        }
+      }
+
+      // Check if urgent (lastFreeDay within 0-3 days) - multiply by container count
+      const lastFreeDay = rawData.lastFreeDay;
+      if (lastFreeDay && !isEmptyReturned) {
+        const lfd = new Date(lastFreeDay);
+        lfd.setHours(0, 0, 0, 0);
+        const daysUntilLFD = Math.ceil((lfd.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+        if (daysUntilLFD >= 0 && daysUntilLFD <= 3) {
+          urgent += containerCount;
+        }
+        if (lfd < today) {
+          overdue += containerCount;
+        }
+      }
+
+      // Check risk level - multiply by container count
+      const riskLevel = rawData.riskLevel || 'low';
+      if ((riskLevel === 'high' || riskLevel === 'critical') && !isEmptyReturned) {
+        highRisk += containerCount;
+      }
+
+      // Check for exceptions - multiply by container count
+      if (rawData.hasExceptions && !isEmptyReturned) {
+        hasExceptions += containerCount;
+      }
+
       // POD needs attention - multiply by container count
       // Handle both boolean and string values for terminalAvailableForPickup
       const isAvailableForPickup = terminalData.terminalAvailableForPickup === true ||
         terminalData.terminalAvailableForPickup === 'true';
       const needsAttention = terminalData.terminalName &&
         !isAvailableForPickup &&
-        !terminalData.terminalFullOut;
+        !terminalData.terminalFullOut &&
+        !isEmptyReturned;
+
       if (needsAttention) {
         podNeedsAttention += containerCount;
         console.log(`[DEBUG] POD Needs Attention found: ${containerCount} containers`, {
@@ -1966,24 +1998,21 @@ export class DbStorage implements IStorage {
       // POD awaiting full out - multiply by container count
       const awaitingFullOut = terminalData.terminalName &&
         !isAvailableForPickup &&
-        !terminalData.terminalFullOut;
+        !terminalData.terminalFullOut &&
+        !isEmptyReturned;
+
       if (awaitingFullOut) {
         podAwaitingFullOut += containerCount;
       }
 
       // POD full out - multiply by container count
-      if (terminalData.terminalFullOut || railData.fullOut) {
+      if ((terminalData.terminalFullOut || railData.fullOut) && !isEmptyReturned) {
         podFullOut += containerCount;
         console.log(`[DEBUG] POD Full Out found: ${containerCount} containers`, {
           terminalFullOut: terminalData.terminalFullOut,
           railFullOut: railData.fullOut,
           shipmentId: shipment.id
         });
-      }
-
-      // Empty returned - multiply by container count
-      if (terminalData.terminalEmptyReturned || railData.emptyReturned) {
-        emptyReturned += containerCount;
       }
     }
 
@@ -2014,8 +2043,31 @@ export class DbStorage implements IStorage {
     return shipments.filter(shipment => {
       const rawData = shipment.rawData || {};
 
+      // Determine if empty returned based on events or legacy flags
+      let isEmptyReturned = false;
+      const milestones = rawData.milestones || rawData.events || [];
+      if (Array.isArray(milestones) && milestones.length > 0) {
+        const sortedMilestones = [...milestones].sort((a, b) => {
+          const timeA = new Date(a.actualTime || 0).getTime();
+          const timeB = new Date(b.actualTime || 0).getTime();
+          return timeB - timeA;
+        });
+        const lastEvent = sortedMilestones[0];
+        if (lastEvent && lastEvent.code === 'gateInWithContainerEmpty') {
+          isEmptyReturned = true;
+        }
+      }
+
+      const containersArray = rawData.containers || [];
+      const firstContainer = containersArray[0] || {};
+      const railData = firstContainer.rawData?.rail || {};
+      if (rawData.terminalEmptyReturned || railData.emptyReturned) {
+        isEmptyReturned = true;
+      }
+
       switch (kpiFilter) {
         case 'in-transit': {
+          if (isEmptyReturned) return false; // Exclude empty returned
           if (!shipment.eta) return true; // No ETA = in transit
           const etaDate = new Date(shipment.eta);
           etaDate.setHours(0, 0, 0, 0);
@@ -2023,6 +2075,7 @@ export class DbStorage implements IStorage {
         }
 
         case 'arriving-today': {
+          if (isEmptyReturned) return false;
           if (!shipment.eta) return false;
           const etaDate = new Date(shipment.eta);
           etaDate.setHours(0, 0, 0, 0);
@@ -2030,6 +2083,7 @@ export class DbStorage implements IStorage {
         }
 
         case 'delayed': {
+          if (isEmptyReturned) return false;
           if (!shipment.eta) return false;
           const etaDate = new Date(shipment.eta);
           etaDate.setHours(0, 0, 0, 0);
@@ -2037,6 +2091,7 @@ export class DbStorage implements IStorage {
         }
 
         case 'pod-needs-attention': {
+          if (isEmptyReturned) return false;
           const isAvailable = rawData.terminalAvailableForPickup === true ||
             rawData.terminalAvailableForPickup === 'true';
           return rawData.terminalName &&
@@ -2045,6 +2100,7 @@ export class DbStorage implements IStorage {
         }
 
         case 'pod-awaiting-full-out': {
+          if (isEmptyReturned) return false;
           const isAvailable = rawData.terminalAvailableForPickup === true ||
             rawData.terminalAvailableForPickup === 'true';
           return rawData.terminalName &&
@@ -2053,6 +2109,7 @@ export class DbStorage implements IStorage {
         }
 
         case 'pod-full-out': {
+          if (isEmptyReturned) return false;
           const containersArray = rawData.containers || [];
           const firstContainer = containersArray[0] || {};
           const railData = firstContainer.rawData?.rail || {};
@@ -2060,10 +2117,7 @@ export class DbStorage implements IStorage {
         }
 
         case 'empty-returned': {
-          const containersArray = rawData.containers || [];
-          const firstContainer = containersArray[0] || {};
-          const railData = firstContainer.rawData?.rail || {};
-          return !!(rawData.terminalEmptyReturned || railData.emptyReturned);
+          return isEmptyReturned;
         }
 
         default:

@@ -255,6 +255,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({
         data: mappedShipments,
         pagination: cargoesFlowResult.pagination,
+        stats: cargoesFlowResult.stats,
       });
     } catch (error) {
       console.error("Error fetching shipments:", error);

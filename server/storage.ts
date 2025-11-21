@@ -1777,10 +1777,14 @@ export class DbStorage implements IStorage {
       }
     }
 
-    // Convert map to array and apply pagination
+    // Convert map to array for statistics calculation
     const groupedArray = Array.from(grouped.values());
     const total = groupedArray.length;
     
+    // Calculate statistics from ALL grouped shipments (not just current page)
+    const stats = this.calculateStats(groupedArray);
+    
+    // Apply pagination to the grouped data
     const page = params?.page || 1;
     const pageSize = params?.pageSize || 25;
     const offset = (page - 1) * pageSize;
@@ -1795,6 +1799,141 @@ export class DbStorage implements IStorage {
         total,
         totalPages: Math.ceil(total / pageSize),
       },
+      stats,
+    };
+  }
+
+  // Helper method to calculate statistics from shipment data
+  private calculateStats(shipments: any[]): {
+    total: number;
+    inTransit: number;
+    arrivingToday: number;
+    delayed: number;
+    urgent: number;
+    highRisk: number;
+    hasExceptions: number;
+    overdue: number;
+    podNeedsAttention: number;
+    podAwaitingFullOut: number;
+    podFullOut: number;
+    emptyReturned: number;
+  } {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    let inTransit = 0;
+    let arrivingToday = 0;
+    let delayed = 0;
+    let urgent = 0;
+    let highRisk = 0;
+    let hasExceptions = 0;
+    let overdue = 0;
+    let podNeedsAttention = 0;
+    let podAwaitingFullOut = 0;
+    let podFullOut = 0;
+    let emptyReturned = 0;
+
+    for (const shipment of shipments) {
+      const rawData = shipment.rawData || {};
+      
+      // Derive status from ETA (matching frontend logic)
+      if (shipment.eta) {
+        const etaDate = new Date(shipment.eta);
+        etaDate.setHours(0, 0, 0, 0);
+        
+        if (etaDate.getTime() === today.getTime()) {
+          arrivingToday++;
+        } else if (etaDate < today) {
+          delayed++;
+        } else {
+          inTransit++;
+        }
+      } else {
+        inTransit++;
+      }
+
+      // Check if urgent (lastFreeDay within 0-3 days)
+      const lastFreeDay = rawData.lastFreeDay;
+      if (lastFreeDay) {
+        const lfd = new Date(lastFreeDay);
+        lfd.setHours(0, 0, 0, 0);
+        const daysUntilLFD = Math.ceil((lfd.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+        if (daysUntilLFD >= 0 && daysUntilLFD <= 3) {
+          urgent++;
+        }
+        if (lfd < today) {
+          overdue++;
+        }
+      }
+
+      // Check risk level
+      const riskLevel = rawData.riskLevel || 'low';
+      if (riskLevel === 'high' || riskLevel === 'critical') {
+        highRisk++;
+      }
+
+      // Check for exceptions
+      if (rawData.hasExceptions) {
+        hasExceptions++;
+      }
+
+      // Terminal status checks - exactly matching frontend logic
+      const terminalData = {
+        terminalName: rawData.terminalName,
+        terminalPort: rawData.terminalPort,
+        terminalAvailableForPickup: rawData.terminalAvailableForPickup,
+        terminalFullOut: rawData.terminalFullOut,
+        terminalEmptyReturned: rawData.terminalEmptyReturned,
+        terminalPickupAppointment: rawData.terminalPickupAppointment,
+        lastFreeDay: rawData.lastFreeDay,
+        demurrage: rawData.demurrage,
+        detention: rawData.detention,
+      };
+
+      // Extract rail data from containers array (matching frontend logic)
+      const containersArray = rawData.containers || [];
+      const firstContainer = containersArray[0] || {};
+      const railData = firstContainer.rawData?.rail || {};
+
+      // POD needs attention: have terminal info but not available for pickup and no full out
+      if (terminalData.terminalName && 
+          terminalData.terminalAvailableForPickup === false && 
+          !terminalData.terminalFullOut) {
+        podNeedsAttention++;
+      }
+
+      // POD awaiting full out: have terminal info, not available, no full out yet
+      // Note: This appears to be the same logic as podNeedsAttention in the original code
+      if (terminalData.terminalName && 
+          terminalData.terminalAvailableForPickup === false && 
+          !terminalData.terminalFullOut) {
+        podAwaitingFullOut++;
+      }
+
+      // POD full out: has full out completed (from terminal or rail)
+      if (terminalData.terminalFullOut || railData.fullOut) {
+        podFullOut++;
+      }
+
+      // Empty returned (from terminal or rail)
+      if (terminalData.terminalEmptyReturned || railData.emptyReturned) {
+        emptyReturned++;
+      }
+    }
+
+    return {
+      total: shipments.length,
+      inTransit,
+      arrivingToday,
+      delayed,
+      urgent,
+      highRisk,
+      hasExceptions,
+      overdue,
+      podNeedsAttention,
+      podAwaitingFullOut,
+      podFullOut,
+      emptyReturned,
     };
   }
 

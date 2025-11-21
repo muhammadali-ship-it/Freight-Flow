@@ -1,5 +1,5 @@
-import { 
-  type User, 
+import {
+  type User,
   type InsertUser,
   type AuditLog,
   type InsertAuditLog,
@@ -140,7 +140,7 @@ export interface PaginatedResult<T> {
 
 export interface IStorage {
   sessionStore: session.Store;
-  
+
   getUser(id: string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
@@ -148,12 +148,12 @@ export interface IStorage {
   createUser(user: InsertUser): Promise<User>;
   updateUser(id: string, user: Partial<InsertUser>): Promise<User | undefined>;
   deleteUser(id: string): Promise<boolean>;
-  
+
   createAuditLog(log: InsertAuditLog): Promise<AuditLog>;
   getAuditLogs(limit?: number): Promise<AuditLog[]>;
   getAuditLogsByUser(userId: string, limit?: number): Promise<AuditLog[]>;
   getAuditLogsByEntityType(entityType: string, limit?: number): Promise<AuditLog[]>;
-  
+
   // Notifications
   createNotification(notification: InsertNotification): Promise<Notification>;
   getNotifications(userId: string, limit?: number): Promise<Notification[]>;
@@ -164,31 +164,31 @@ export interface IStorage {
   deleteNotification(id: string, userId: string): Promise<boolean>;
   deleteAllUserNotifications(userId: string): Promise<number>;
   dismissRiskNotificationsForContainer(containerId: string, currentRiskLevel: string): Promise<number>;
-  
+
   // Organizations
   getAllOrganizations(type?: string): Promise<Organization[]>;
   getOrganizationById(id: string): Promise<Organization | undefined>;
   createOrganization(organization: InsertOrganization): Promise<Organization>;
   updateOrganization(id: string, organization: Partial<InsertOrganization>): Promise<Organization | undefined>;
   deleteOrganization(id: string): Promise<boolean>;
-  
+
   getShipments(params?: PaginationParams, filters?: ShipmentFilters, userId?: string, userRole?: string): Promise<PaginatedResult<Shipment>>;
   getShipmentById(id: string): Promise<(Shipment & { containers: Container[]; milestones: Milestone[]; assignedUsers?: User[] }) | undefined>;
   getShipmentByReference(referenceNumber: string): Promise<Shipment | undefined>;
   createShipment(shipment: InsertShipment): Promise<Shipment>;
   updateShipment(id: string, shipment: Partial<InsertShipment>): Promise<Shipment | undefined>;
   deleteShipment(id: string): Promise<boolean>;
-  
+
   getShipmentUsers(shipmentId: string): Promise<ShipmentUser[]>;
   addShipmentUser(shipmentUser: InsertShipmentUser): Promise<ShipmentUser>;
   removeShipmentUser(shipmentId: string, userId: string): Promise<boolean>;
   setShipmentUsers(shipmentId: string, userIds: string[]): Promise<void>;
-  
+
   getMilestones(shipmentId: string): Promise<Milestone[]>;
   createMilestone(milestone: InsertMilestone): Promise<Milestone>;
   updateMilestone(id: string, milestone: Partial<InsertMilestone>): Promise<Milestone | undefined>;
   deleteMilestone(id: string): Promise<boolean>;
-  
+
   getAllContainers(): Promise<Container[]>;
   getPaginatedContainers(params: PaginationParams, filters?: ContainerFilters, searchQuery?: string, userName?: string, userOffice?: string, userRole?: string, filterUsers?: string[]): Promise<PaginatedResult<Container>>;
   getContainerById(id: string): Promise<Container | undefined>;
@@ -197,23 +197,23 @@ export interface IStorage {
   createContainer(container: InsertContainer): Promise<Container>;
   updateContainer(id: string, container: Partial<InsertContainer>): Promise<Container | undefined>;
   deleteContainer(id: string): Promise<boolean>;
-  
+
   getAllExceptions(limit?: number): Promise<(Exception & { container?: Container })[]>;
   getExceptionsByContainerId(containerId: string): Promise<Exception[]>;
   createException(exception: InsertException): Promise<Exception>;
   deleteRiskAlertExceptions(containerId: string): Promise<void>;
-  
+
   getVesselPositionByContainerId(containerId: string): Promise<VesselPosition | undefined>;
   createVesselPosition(vesselPosition: InsertVesselPosition): Promise<VesselPosition>;
   updateVesselPosition(id: string, vesselPosition: Partial<InsertVesselPosition>): Promise<VesselPosition | undefined>;
-  
+
   getRailSegmentsByContainerId(containerId: string): Promise<RailSegment[]>;
   createRailSegment(railSegment: InsertRailSegment): Promise<RailSegment>;
-  
+
   getTimelineEventsByContainerId(containerId: string): Promise<TimelineEvent[]>;
   createTimelineEvent(timelineEvent: InsertTimelineEvent): Promise<TimelineEvent>;
   deleteTimelineEventsByContainerId(containerId: string): Promise<boolean>;
-  
+
   getAllSavedViews(): Promise<SavedView[]>;
   getSavedViewById(id: string): Promise<SavedView | undefined>;
   createSavedView(savedView: InsertSavedView): Promise<SavedView>;
@@ -241,9 +241,9 @@ export interface IStorage {
     avgDemurrage: number;
     costByType: { type: string; value: number }[];
     monthlyTrend: { month: string; cost: number }[];
-    topShipmentsByCost: Array<{ 
-      shipmentId: string; 
-      containerNumber: string; 
+    topShipmentsByCost: Array<{
+      shipmentId: string;
+      containerNumber: string;
       totalCost: number;
       demurrage: number;
       detention: number;
@@ -292,10 +292,10 @@ export interface IStorage {
   updateCargoesFlowShipment(id: string, shipment: Partial<InsertCargoesFlowShipment>): Promise<CargoesFlowShipment | undefined>;
   getTaiShipmentIdByMbl(mblNumber: string): Promise<string | null>;
   deleteCargoesFlowShipment(id: string): Promise<boolean>;
-  
+
   getCargoesFlowShipmentUsers(shipmentId: string): Promise<CargoesFlowShipmentUser[]>;
   setCargoesFlowShipmentUsers(shipmentId: string, userIds: string[]): Promise<void>;
-  
+
   getContainers(shipmentId: string): Promise<Container[]>;
 
   // Cargoes Flow Sync Logs
@@ -341,9 +341,9 @@ export class DbStorage implements IStorage {
   sessionStore: session.Store;
 
   constructor() {
-    this.sessionStore = new PostgresSessionStore({ 
-      pool, 
-      createTableIfMissing: true 
+    this.sessionStore = new PostgresSessionStore({
+      pool,
+      createTableIfMissing: true
     });
   }
 
@@ -482,9 +482,9 @@ export class DbStorage implements IStorage {
       'medium': 2,
       'low': 1,
     };
-    
+
     const currentRiskValue = riskLevelValues[currentRiskLevel] || 0;
-    
+
     // Get all notifications for this container
     const containerNotifications = await db.select()
       .from(notifications)
@@ -493,15 +493,15 @@ export class DbStorage implements IStorage {
         eq(notifications.entityId, containerId),
         eq(notifications.isRead, false)
       ));
-    
+
     let dismissedCount = 0;
-    
+
     // Filter and delete notifications with higher risk levels
     for (const notification of containerNotifications) {
       const metadata = notification.metadata as any;
       if (metadata?.riskLevel) {
         const notificationRiskValue = riskLevelValues[metadata.riskLevel] || 0;
-        
+
         // If the notification has a higher risk level than current, dismiss it
         if (notificationRiskValue > currentRiskValue) {
           await db.delete(notifications)
@@ -510,7 +510,7 @@ export class DbStorage implements IStorage {
         }
       }
     }
-    
+
     return dismissedCount;
   }
 
@@ -582,10 +582,10 @@ export class DbStorage implements IStorage {
       );
     }
 
-    const whereClause = whereClauses.length > 0 
+    const whereClause = whereClauses.length > 0
       ? sql`${whereClauses.reduce((acc, clause, idx) => {
-          return idx === 0 ? clause : sql`${acc} AND ${clause}`;
-        })}`
+        return idx === 0 ? clause : sql`${acc} AND ${clause}`;
+      })}`
       : undefined;
 
     const orderByClause: SQL[] = [];
@@ -617,7 +617,7 @@ export class DbStorage implements IStorage {
           .select({ count: sql<number>`count(*)` })
           .from(containers)
           .where(eq(containers.shipmentId, shipment.id));
-        
+
         return {
           ...shipment,
           containerCount: Number(containerCountResult[0]?.count || 0),
@@ -656,10 +656,10 @@ export class DbStorage implements IStorage {
 
     const assignedUserIds = await db.select().from(shipmentUsers)
       .where(eq(shipmentUsers.shipmentId, id));
-    
+
     const assignedUsers: User[] = [];
     if (assignedUserIds.length > 0) {
-      const userPromises = assignedUserIds.map(su => 
+      const userPromises = assignedUserIds.map(su =>
         db.select().from(users).where(eq(users.id, su.userId)).then(result => result[0])
       );
       const fetchedUsers = await Promise.all(userPromises);
@@ -715,7 +715,7 @@ export class DbStorage implements IStorage {
 
   async setShipmentUsers(shipmentId: string, userIds: string[]): Promise<void> {
     await db.delete(shipmentUsers).where(eq(shipmentUsers.shipmentId, shipmentId));
-    
+
     if (userIds.length > 0) {
       const values = userIds.map(userId => ({ shipmentId, userId }));
       await db.insert(shipmentUsers).values(values);
@@ -756,7 +756,7 @@ export class DbStorage implements IStorage {
 
     // Build where clauses
     const whereClauses: SQL[] = [];
-    
+
     // Add specific user filter (if provided, filter by selected users using AND logic)
     if (filterUsers && filterUsers.length > 0) {
       const shipmentIdSets = await Promise.all(
@@ -768,14 +768,14 @@ export class DbStorage implements IStorage {
           return new Set(userShipments.map(s => s.shipmentId));
         })
       );
-      
+
       const intersectionShipmentIds = shipmentIdSets.reduce((acc, set) => {
         if (acc === null) return set;
         return new Set(Array.from(acc).filter(id => set.has(id)));
       }, null as Set<string> | null);
-      
+
       const finalShipmentIds = intersectionShipmentIds ? Array.from(intersectionShipmentIds) : [];
-      
+
       if (finalShipmentIds.length > 0) {
         whereClauses.push(inArray(containers.shipmentId, finalShipmentIds));
       } else {
@@ -792,7 +792,7 @@ export class DbStorage implements IStorage {
       // The Dashboard should query Cargoes Flow shipments instead
       whereClauses.push(sql`1 = 0`); // Return empty results for non-admins
     }
-    
+
     // Add search filter
     if (searchQuery && searchQuery.trim()) {
       const searchPattern = `%${searchQuery}%`;
@@ -827,10 +827,10 @@ export class DbStorage implements IStorage {
     }
 
     // Combine where clauses with AND
-    const whereClause = whereClauses.length > 0 
+    const whereClause = whereClauses.length > 0
       ? sql`${whereClauses.reduce((acc, clause, idx) => {
-          return idx === 0 ? clause : sql`${acc} AND ${clause}`;
-        })}`
+        return idx === 0 ? clause : sql`${acc} AND ${clause}`;
+      })}`
       : undefined;
 
     // Build order by clause
@@ -852,7 +852,7 @@ export class DbStorage implements IStorage {
     if (whereClause) {
       query = query.where(whereClause) as typeof query;
     }
-    
+
     const rawData = await query
       .orderBy(...orderByClause)
       .limit(pageSize)
@@ -862,8 +862,8 @@ export class DbStorage implements IStorage {
     const containerIdsForPage = rawData.map(c => c.id);
     const exceptionsForPage = containerIdsForPage.length > 0
       ? await db.select({ containerId: exceptions.containerId })
-          .from(exceptions)
-          .where(sql`${exceptions.containerId} IN (${sql.join(containerIdsForPage.map(id => sql`${id}`), sql`, `)})`)
+        .from(exceptions)
+        .where(sql`${exceptions.containerId} IN (${sql.join(containerIdsForPage.map(id => sql`${id}`), sql`, `)})`)
       : [];
     const containerIdsWithExceptions = new Set(exceptionsForPage.map(e => e.containerId));
 
@@ -1040,7 +1040,7 @@ export class DbStorage implements IStorage {
       .leftJoin(containers, eq(exceptions.containerId, containers.id))
       .orderBy(desc(exceptions.createdAt))
       .limit(limit);
-    
+
     return result.map(row => ({
       id: row.id,
       containerId: row.containerId,
@@ -1216,9 +1216,9 @@ export class DbStorage implements IStorage {
     avgDemurrage: number;
     costByType: { type: string; value: number }[];
     monthlyTrend: { month: string; cost: number }[];
-    topShipmentsByCost: Array<{ 
-      shipmentId: string; 
-      containerNumber: string; 
+    topShipmentsByCost: Array<{
+      shipmentId: string;
+      containerNumber: string;
       totalCost: number;
       demurrage: number;
       detention: number;
@@ -1270,9 +1270,9 @@ export class DbStorage implements IStorage {
       if (c.createdAt) {
         const date = new Date(c.createdAt);
         const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-        const cost = parseFloat(c.demurrageFee || "0") + 
-                     parseFloat(c.detentionFee || "0") + 
-                     parseFloat(c.exceptionCost || "0");
+        const cost = parseFloat(c.demurrageFee || "0") +
+          parseFloat(c.detentionFee || "0") +
+          parseFloat(c.exceptionCost || "0");
         monthlyTrendMap.set(monthKey, (monthlyTrendMap.get(monthKey) || 0) + cost);
       }
     });
@@ -1309,7 +1309,7 @@ export class DbStorage implements IStorage {
         sql`LOWER(${customEntries.value}) = LOWER(${entry.value})`
       ))
       .limit(1);
-    
+
     if (existing.length > 0) {
       return existing[0];
     }
@@ -1331,7 +1331,7 @@ export class DbStorage implements IStorage {
     const offset = (page - 1) * pageSize;
 
     const conditions: SQL[] = [];
-    
+
     if (filters?.operation && filters.operation !== "all") {
       conditions.push(eq(webhookLogs.operation, filters.operation));
     }
@@ -1579,17 +1579,17 @@ export class DbStorage implements IStorage {
   async upsertCargoesFlowShipment(shipment: InsertCargoesFlowShipment): Promise<CargoesFlowShipment> {
     // Use containerNumber as the unique key to prevent duplicates when shipmentReference changes
     // If no containerNumber, fall back to shipmentReference
-    const existing = shipment.containerNumber 
+    const existing = shipment.containerNumber
       ? await this.getCargoesFlowShipmentByContainer(shipment.containerNumber)
       : await this.getCargoesFlowShipmentByReference(shipment.shipmentReference);
-    
+
     if (existing) {
       // Update existing record (keeping the same ID)
       const result = await db.update(cargoesFlowShipments)
-        .set({ 
-          ...shipment, 
+        .set({
+          ...shipment,
           lastFetchedAt: new Date(),
-          updatedAt: new Date() 
+          updatedAt: new Date()
         })
         .where(eq(cargoesFlowShipments.id, existing.id))
         .returning();
@@ -1728,16 +1728,16 @@ export class DbStorage implements IStorage {
 
     // Group by MBL number
     const grouped = new Map<string, any>();
-    
+
     for (const shipment of allShipments) {
       const mbl = shipment.mblNumber || 'NO_MBL';
-      
+
       if (!grouped.has(mbl)) {
         // First shipment for this MBL - create the group
         const rawData = shipment.rawData as any || {};
         const riskLevel = rawData.riskLevel || 'low';
         const riskReasons = rawData.riskReasons || [];
-        
+
         grouped.set(mbl, {
           ...shipment,
           containers: [{
@@ -1762,7 +1762,7 @@ export class DbStorage implements IStorage {
         if (shipment.containerNumber) {
           group.allContainerNumbers.push(shipment.containerNumber);
         }
-        
+
         // Update risk level to highest
         const currentRawData = shipment.rawData as any || {};
         const currentRisk = currentRawData.riskLevel || 'low';
@@ -1770,7 +1770,7 @@ export class DbStorage implements IStorage {
         if (riskOrder[currentRisk] > riskOrder[group.highestRiskLevel]) {
           group.highestRiskLevel = currentRisk;
         }
-        
+
         // Aggregate risk reasons (deduplicate)
         const reasons = currentRawData.riskReasons || [];
         const allReasons = [...group.aggregatedRiskReasons, ...reasons];
@@ -1780,17 +1780,17 @@ export class DbStorage implements IStorage {
 
     // Convert map to array for statistics calculation
     let groupedArray = Array.from(grouped.values());
-    
+
     // Calculate statistics from ALL grouped shipments (before KPI filtering)
     // These stats should NEVER change regardless of KPI filter
     const stats = this.calculateStats(groupedArray);
     console.log(`[DEBUG] Calculated stats from ${groupedArray.length} shipment groups:`, stats);
-    
+
     // CRITICAL DEBUG: Let's see if we have ANY data at all
     if (groupedArray.length === 0) {
       console.log(`[DEBUG] NO SHIPMENTS FOUND! This explains why all counts are 0.`);
     }
-    
+
     // Debug: Log some sample data
     if (groupedArray.length > 0) {
       const sample = groupedArray[0];
@@ -1804,20 +1804,20 @@ export class DbStorage implements IStorage {
         } : null
       });
     }
-    
+
     // Apply KPI filtering if specified (this only affects displayed containers, not stats)
     if (filters?.kpiFilter && filters.kpiFilter !== 'total') {
       groupedArray = this.applyKpiFilter(groupedArray, filters.kpiFilter);
     }
-    
+
     // This total is for pagination only - shows how many containers match the current filter
     const filteredTotal = groupedArray.length;
-    
+
     // Apply pagination to the filtered data
     const page = params?.page || 1;
     const pageSize = params?.pageSize || 25;
     const offset = (page - 1) * pageSize;
-    
+
     const paginatedData = groupedArray.slice(offset, offset + pageSize);
 
     return {
@@ -1862,35 +1862,35 @@ export class DbStorage implements IStorage {
     let podAwaitingFullOut = 0;
     let podFullOut = 0;
     let emptyReturned = 0;
-    
+
     let shipmentsWithTerminalData = 0;
 
     for (const shipment of shipments) {
       const rawData = shipment.rawData || {};
       const containerCount = shipment.containerCount || 1; // Number of containers in this grouped shipment
       totalContainers += containerCount;
-      
-        // Debug: Log every shipment's terminal data
-        if (rawData.terminalName) {
-          shipmentsWithTerminalData++;
-          console.log(`[DEBUG] Shipment ${shipment.id} terminal data:`, {
-            terminalName: rawData.terminalName,
-            terminalAvailableForPickup: rawData.terminalAvailableForPickup,
-            terminalFullOut: rawData.terminalFullOut,
-            containerCount,
-            availableType: typeof rawData.terminalAvailableForPickup,
-            fullOutType: typeof rawData.terminalFullOut
-          });
-        } else {
-          // Also log shipments without terminal data to understand the data structure
-          console.log(`[DEBUG] Shipment ${shipment.id} has NO terminal data, rawData keys:`, Object.keys(rawData));
-        }
-      
+
+      // Debug: Log every shipment's terminal data
+      if (rawData.terminalName) {
+        shipmentsWithTerminalData++;
+        console.log(`[DEBUG] Shipment ${shipment.id} terminal data:`, {
+          terminalName: rawData.terminalName,
+          terminalAvailableForPickup: rawData.terminalAvailableForPickup,
+          terminalFullOut: rawData.terminalFullOut,
+          containerCount,
+          availableType: typeof rawData.terminalAvailableForPickup,
+          fullOutType: typeof rawData.terminalFullOut
+        });
+      } else {
+        // Also log shipments without terminal data to understand the data structure
+        console.log(`[DEBUG] Shipment ${shipment.id} has NO terminal data, rawData keys:`, Object.keys(rawData));
+      }
+
       // Derive status from ETA (matching frontend logic) - multiply by container count
       if (shipment.eta) {
         const etaDate = new Date(shipment.eta);
         etaDate.setHours(0, 0, 0, 0);
-        
+
         if (etaDate.getTime() === today.getTime()) {
           arrivingToday += containerCount;
         } else if (etaDate < today) {
@@ -1947,11 +1947,11 @@ export class DbStorage implements IStorage {
 
       // POD needs attention - multiply by container count
       // Handle both boolean and string values for terminalAvailableForPickup
-      const isAvailableForPickup = terminalData.terminalAvailableForPickup === true || 
-                                   terminalData.terminalAvailableForPickup === 'true';
-      const needsAttention = terminalData.terminalName && 
-                            !isAvailableForPickup && 
-                            !terminalData.terminalFullOut;
+      const isAvailableForPickup = terminalData.terminalAvailableForPickup === true ||
+        terminalData.terminalAvailableForPickup === 'true';
+      const needsAttention = terminalData.terminalName &&
+        !isAvailableForPickup &&
+        !terminalData.terminalFullOut;
       if (needsAttention) {
         podNeedsAttention += containerCount;
         console.log(`[DEBUG] POD Needs Attention found: ${containerCount} containers`, {
@@ -1964,9 +1964,9 @@ export class DbStorage implements IStorage {
       }
 
       // POD awaiting full out - multiply by container count
-      const awaitingFullOut = terminalData.terminalName && 
-                             !isAvailableForPickup && 
-                             !terminalData.terminalFullOut;
+      const awaitingFullOut = terminalData.terminalName &&
+        !isAvailableForPickup &&
+        !terminalData.terminalFullOut;
       if (awaitingFullOut) {
         podAwaitingFullOut += containerCount;
       }
@@ -1989,7 +1989,7 @@ export class DbStorage implements IStorage {
 
     console.log(`[DEBUG] Statistics summary: ${shipmentsWithTerminalData}/${shipments.length} shipments have terminal data`);
     console.log(`[DEBUG] POD stats: needsAttention=${podNeedsAttention}, awaitingFullOut=${podAwaitingFullOut}, fullOut=${podFullOut}`);
-    
+
     return {
       total: totalContainers,
       inTransit,
@@ -2013,7 +2013,7 @@ export class DbStorage implements IStorage {
 
     return shipments.filter(shipment => {
       const rawData = shipment.rawData || {};
-      
+
       switch (kpiFilter) {
         case 'in-transit': {
           if (!shipment.eta) return true; // No ETA = in transit
@@ -2021,51 +2021,51 @@ export class DbStorage implements IStorage {
           etaDate.setHours(0, 0, 0, 0);
           return etaDate > today;
         }
-        
+
         case 'arriving-today': {
           if (!shipment.eta) return false;
           const etaDate = new Date(shipment.eta);
           etaDate.setHours(0, 0, 0, 0);
           return etaDate.getTime() === today.getTime();
         }
-        
+
         case 'delayed': {
           if (!shipment.eta) return false;
           const etaDate = new Date(shipment.eta);
           etaDate.setHours(0, 0, 0, 0);
           return etaDate < today;
         }
-        
+
         case 'pod-needs-attention': {
-          const isAvailable = rawData.terminalAvailableForPickup === true || 
-                              rawData.terminalAvailableForPickup === 'true';
-          return rawData.terminalName && 
-                 !isAvailable && 
-                 !rawData.terminalFullOut;
+          const isAvailable = rawData.terminalAvailableForPickup === true ||
+            rawData.terminalAvailableForPickup === 'true';
+          return rawData.terminalName &&
+            !isAvailable &&
+            !rawData.terminalFullOut;
         }
-        
+
         case 'pod-awaiting-full-out': {
-          const isAvailable = rawData.terminalAvailableForPickup === true || 
-                              rawData.terminalAvailableForPickup === 'true';
-          return rawData.terminalName && 
-                 !isAvailable && 
-                 !rawData.terminalFullOut;
+          const isAvailable = rawData.terminalAvailableForPickup === true ||
+            rawData.terminalAvailableForPickup === 'true';
+          return rawData.terminalName &&
+            !isAvailable &&
+            !rawData.terminalFullOut;
         }
-        
+
         case 'pod-full-out': {
           const containersArray = rawData.containers || [];
           const firstContainer = containersArray[0] || {};
           const railData = firstContainer.rawData?.rail || {};
           return !!(rawData.terminalFullOut || railData.fullOut);
         }
-        
+
         case 'empty-returned': {
           const containersArray = rawData.containers || [];
           const firstContainer = containersArray[0] || {};
           const railData = firstContainer.rawData?.rail || {};
           return !!(rawData.terminalEmptyReturned || railData.emptyReturned);
         }
-        
+
         default:
           return true;
       }
@@ -2146,7 +2146,7 @@ export class DbStorage implements IStorage {
 
   async setCargoesFlowShipmentUsers(shipmentId: string, userIds: string[]): Promise<void> {
     await db.delete(cargoesFlowShipmentUsers).where(eq(cargoesFlowShipmentUsers.shipmentId, shipmentId));
-    
+
     if (userIds.length > 0) {
       const values = userIds.map(userId => ({ shipmentId, userId }));
       await db.insert(cargoesFlowShipmentUsers).values(values);
@@ -2446,7 +2446,7 @@ export class DbStorage implements IStorage {
       .selectDistinct({ carrier: cargoesFlowShipments.carrier })
       .from(cargoesFlowShipments)
       .where(sql`${cargoesFlowShipments.carrier} IS NOT NULL AND ${cargoesFlowShipments.carrier} != ''`);
-    
+
     return result
       .map(row => row.carrier)
       .filter((carrier): carrier is string => carrier !== null && carrier !== undefined)
@@ -2458,18 +2458,18 @@ export class DbStorage implements IStorage {
       .selectDistinct({ port: cargoesFlowShipments.originPort })
       .from(cargoesFlowShipments)
       .where(sql`${cargoesFlowShipments.originPort} IS NOT NULL AND ${cargoesFlowShipments.originPort} != ''`);
-    
+
     const destinations = await db
       .selectDistinct({ port: cargoesFlowShipments.destinationPort })
       .from(cargoesFlowShipments)
       .where(sql`${cargoesFlowShipments.destinationPort} IS NOT NULL AND ${cargoesFlowShipments.destinationPort} != ''`);
-    
+
     const allPorts = [
       ...origins.map(row => row.port),
       ...destinations.map(row => row.port)
     ]
       .filter((port): port is string => port !== null && port !== undefined);
-    
+
     // Normalize and deduplicate port names
     const normalizedPorts = this.normalizePortNames(allPorts);
     const uniquePorts = Array.from(new Set(normalizedPorts));
@@ -2484,7 +2484,7 @@ export class DbStorage implements IStorage {
       'new york': 'New York',
       'nyc': 'New York',
       'new york, ny': 'New York',
-      
+
       // Karachi/Pakistan port variations
       'karachi': 'Karachi',
       'kemari': 'Karachi',
@@ -2493,45 +2493,45 @@ export class DbStorage implements IStorage {
       'bin qasim port': 'Karachi',
       'port qasim': 'Karachi',
       'port muhammad bin qasim': 'Karachi',
-      
+
       // Los Angeles variations
       'los angeles': 'Los Angeles',
       'la': 'Los Angeles',
       'los angeles, ca': 'Los Angeles',
-      
+
       // Long Beach variations
       'long beach': 'Long Beach',
       'long beach, ca': 'Long Beach',
-      
+
       // Shanghai variations
       'shanghai': 'Shanghai',
       'shanghai, china': 'Shanghai',
-      
+
       // Houston variations
       'houston': 'Houston',
       'houston, tx': 'Houston',
-      
+
       // Oakland variations
       'oakland': 'Oakland',
       'oakland, ca': 'Oakland',
-      
+
       // Seattle variations
       'seattle': 'Seattle',
       'seattle, wa': 'Seattle',
-      
+
       // Savannah variations
       'savannah': 'Savannah',
       'savannah, ga': 'Savannah',
-      
+
       // Norfolk variations
       'norfolk': 'Norfolk',
       'norfolk, va': 'Norfolk',
-      
+
       // Charleston variations
       'charleston': 'Charleston',
       'charleston, sc': 'Charleston',
     };
-    
+
     return ports.map(port => {
       const normalized = port.toLowerCase().trim();
       return portMapping[normalized] || port;

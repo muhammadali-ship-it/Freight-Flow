@@ -118,7 +118,7 @@ export default function Dashboard() {
         page: page.toString(),
         pageSize: pageSize.toString(),
       });
-      
+
       if (searchQuery) params.append("search", searchQuery);
       if (filters.status && filters.status !== "all") params.append("status", filters.status);
       if (filters.carrier && filters.carrier !== "all") params.append("carrier", filters.carrier);
@@ -126,7 +126,7 @@ export default function Dashboard() {
       if (filters.etaFrom) params.append("dateFrom", filters.etaFrom);
       if (filters.etaTo) params.append("dateTo", filters.etaTo);
       if (kpiFilter) params.append("kpiFilter", kpiFilter);
-      
+
       if (user?.id) params.append("userId", user.id);
       if (user?.role) params.append("userRole", user.role);
 
@@ -142,14 +142,14 @@ export default function Dashboard() {
   // Helper function to derive status from ETA date
   const getDerivedStatus = (eta: string): 'in-transit' | 'arriving-today' | 'delayed' => {
     if (!eta) return 'in-transit';
-    
+
     // Parse ETA date (format: "2025-11-05 12:00:00 AM")
     const etaDate = new Date(eta);
     etaDate.setHours(0, 0, 0, 0);
-    
+
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    
+
     if (etaDate.getTime() === today.getTime()) {
       return 'arriving-today';
     } else if (etaDate < today) {
@@ -180,7 +180,7 @@ export default function Dashboard() {
   };
 
   // Map Cargoes Flow shipments to container format for display
-  const containers = (paginatedData?.data || []).map((ship: any) => {
+  const containers = (paginatedData?.data || []).flatMap((ship: any) => {
     const rawData = ship.rawData || {};
     const terminalData = {
       terminalName: rawData.terminalName,
@@ -193,12 +193,12 @@ export default function Dashboard() {
       demurrage: rawData.demurrage,
       detention: rawData.detention,
     };
-    
+
     // Extract rail data from containers array
     const containersArray = rawData.containers || [];
     const firstContainer = containersArray[0] || {};
     const railData = firstContainer.rawData?.rail || {};
-    
+
     // Determine terminal status based on terminal data
     let terminalStatus: string | undefined = undefined;
     if (terminalData.terminalFullOut) {
@@ -208,11 +208,45 @@ export default function Dashboard() {
     } else if (terminalData.terminalAvailableForPickup === true) {
       terminalStatus = 'available';
     }
-    
+
     // Check if empty returned (from terminal or rail)
     const emptyReturned = !!(terminalData.terminalEmptyReturned || railData.emptyReturned);
-    
-    return {
+
+    // If we have a list of containers in the shipment group, create a card for each one
+    const shipContainers = ship.containers || [];
+
+    if (shipContainers.length > 0) {
+      return shipContainers.map((container: any) => ({
+        id: container.id, // Use the specific container ID
+        containerNumber: container.containerNumber || 'N/A',
+        status: ship.status || 'unknown',
+        origin: ship.originPort || 'Unknown',
+        destination: ship.destinationPort || 'Unknown',
+        carrier: ship.carrier || 'Unknown',
+        vesselName: ship.vesselName || 'Unknown',
+        bookingNumber: ship.bookingNumber || '',
+        masterBillOfLading: ship.mblNumber || '',
+        weight: '',
+        volume: '',
+        eta: ship.eta || '',
+        estimatedArrival: ship.eta || '',
+        progress: 50,
+        reference: ship.taiShipmentId || ship.shipmentReference,
+        riskLevel: rawData.riskLevel as RiskLevel,
+        riskReason: rawData.riskReasons?.join(', '),
+        terminalStatus,
+        lastFreeDay: terminalData.lastFreeDay || rawData.lastFreeDay,
+        demurrageFee: terminalData.demurrage ? parseFloat(terminalData.demurrage) : undefined,
+        detentionFee: terminalData.detention ? parseFloat(terminalData.detention) : undefined,
+        exceptionCost: undefined,
+        terminalData,
+        railData,
+        emptyReturned,
+      }));
+    }
+
+    // Fallback for single shipment without containers array (shouldn't happen with new backend logic but safe to keep)
+    return [{
       id: ship.id,
       containerNumber: ship.containerNumber || ship.taiShipmentId || 'N/A',
       status: ship.status || 'unknown',
@@ -238,7 +272,7 @@ export default function Dashboard() {
       terminalData,
       railData,
       emptyReturned,
-    };
+    }];
   });
 
   // Use backend-calculated stats (from full dataset, NEVER changes with KPI filters)
@@ -382,7 +416,7 @@ export default function Dashboard() {
       if (quickFilter === "exceptions" && !(container as any).hasExceptions) return false;
       if (quickFilter === "overdue" && !isOverdue(container)) return false;
     }
-    
+
     return true;
   });
 
@@ -671,7 +705,7 @@ export default function Dashboard() {
           <Package className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
           <p className="text-lg font-medium">No containers found</p>
           <p className="text-sm text-muted-foreground mt-1">
-            {containers.length === 0 
+            {containers.length === 0
               ? "No containers have been added yet"
               : "Try adjusting your search or filters"}
           </p>

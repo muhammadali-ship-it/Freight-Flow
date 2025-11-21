@@ -48,7 +48,7 @@ function detectDelays(milestones: Milestone[]): Milestone[] {
     if (milestone.timestampActual && milestone.timestampPlanned) {
       const actualTime = new Date(milestone.timestampActual).getTime();
       const plannedTime = new Date(milestone.timestampPlanned).getTime();
-      
+
       if (actualTime > plannedTime) {
         return { ...milestone, status: "delayed" };
       }
@@ -59,22 +59,22 @@ function detectDelays(milestones: Milestone[]): Milestone[] {
 
 export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
-  
+
   app.post("/api/shipments", async (req, res) => {
     try {
       const validatedData = insertShipmentSchema.parse(req.body);
       const shipment = await storage.createShipment(validatedData);
-      
+
       // If shipment has MBL, post it to Cargoes Flow API
       if (shipment.masterBillOfLading) {
         console.log(`[Create Shipment] Posting user-created shipment to Cargoes Flow: ${shipment.referenceNumber}`);
-        
+
         const result = await sendShipmentToCargoesFlow(
           shipment.referenceNumber,
           shipment.masterBillOfLading,
           shipment
         );
-        
+
         // Track the post in cargoes_flow_posts table
         await trackCargoesFlowPost(
           shipment.referenceNumber,
@@ -88,7 +88,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             bookingNumber: shipment.bookingNumber || null,
           }
         );
-        
+
         // Also insert into cargoesFlowShipments so it appears in active shipments immediately
         // This will be updated with full data when polled from Cargoes Flow API
         await storage.upsertCargoesFlowShipment({
@@ -112,11 +112,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           salesRepNames: null,
           rawData: { userCreated: true, ...shipment },
         });
-        
+
         console.log(`[Create Shipment] ${result.success ? '✅' : '❌'} Cargoes Flow post result: ${result.success ? 'success' : result.error}`);
         console.log(`[Create Shipment] ✅ Shipment added to active shipments tab`);
       }
-      
+
       res.status(201).json(shipment);
     } catch (error) {
       console.error("Error creating shipment:", error);
@@ -142,7 +142,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ORDER BY s.created_at DESC
         LIMIT ${pageSize} OFFSET ${offset}
       `;
-      
+
       const countQuery = sql`
         SELECT COUNT(DISTINCT s.id) as total
         FROM shipments s
@@ -178,13 +178,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const page = parseInt(req.query.page as string) || 1;
       const pageSize = parseInt(req.query.pageSize as string) || 50;
-      
+
       const filters = {
         search: req.query.search as string,
-        status: req.query.status as string,
-        carrier: req.query.carrier as string,
-        originPort: req.query.originPort as string,
-        destinationPort: req.query.destinationPort as string,
+        status: (req.query.status && req.query.status !== 'undefined' && req.query.status !== 'all') ? req.query.status as string : undefined,
+        carrier: (req.query.carrier && req.query.carrier !== 'undefined' && req.query.carrier !== 'all') ? req.query.carrier as string : undefined,
+        originPort: (req.query.originPort && req.query.originPort !== 'undefined' && req.query.originPort !== 'all') ? req.query.originPort as string : undefined,
+        destinationPort: (req.query.destinationPort && req.query.destinationPort !== 'undefined' && req.query.destinationPort !== 'all') ? req.query.destinationPort as string : undefined,
         dateRange: req.query.dateFrom && req.query.dateTo
           ? { start: req.query.dateFrom as string, end: req.query.dateTo as string }
           : undefined,
@@ -210,13 +210,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Fetch GROUPED Cargoes Flow API shipments (1 shipment per MBL with all containers)
       const cargoesFlowResult = await storage.getGroupedCargoesFlowShipments(
-        { page, pageSize }, 
+        { page, pageSize },
         {
           ...filters,
           ...userFilter,
         }
       );
-      
+
       // Map grouped shipments to frontend format
       const mappedShipments = cargoesFlowResult.data.map(ship => ({
         id: ship.id,
@@ -251,7 +251,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         source: 'api',
         isUserCreated: false,
       }));
-      
+
       res.json({
         data: mappedShipments,
         pagination: cargoesFlowResult.pagination,
@@ -267,7 +267,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       // First, try to fetch from user shipments (prioritize user-created data)
       let shipment = await storage.getShipmentById(req.params.id);
-      
+
       if (shipment) {
         // This is a user-created shipment, fetch related data
         const [milestones, containers, shipmentUsers] = await Promise.all([
@@ -275,7 +275,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           storage.getContainers(req.params.id),
           storage.getShipmentUsers(req.params.id),
         ]);
-        
+
         // Get assigned users from salesRepNames
         const salesRepNames = shipment.salesRepNames || [];
         const allUsers = await storage.getAllUsers();
@@ -284,14 +284,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (salesRepNames.includes(user.name)) {
             return true;
           }
-          
+
           // Try case-insensitive match
           const userNameLower = user.name.toLowerCase().trim();
-          return salesRepNames.some(repName => 
+          return salesRepNames.some(repName =>
             repName.toLowerCase().trim() === userNameLower
           );
         });
-        
+
         return res.json({
           ...shipment,
           office: shipment.officeName, // Map officeName to office for consistency
@@ -302,13 +302,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           assignedUsers: assignedUsers.filter(Boolean), // Filter out any null users
         });
       }
-      
+
       // If not found in user shipments, fetch from Cargoes Flow
       const cargoesFlowShipment = await storage.getCargoesFlowShipmentById(req.params.id);
       if (!cargoesFlowShipment) {
         return res.status(404).json({ error: "Shipment not found" });
       }
-      
+
       // Fetch ALL containers for this MBL (grouped shipments)
       let allContainers: any[] = [];
       if (cargoesFlowShipment.mblNumber) {
@@ -320,13 +320,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const containersArray = shipRawData.containers || [];
           const containerData = containersArray.find((c: any) => c.containerNumber === ship.containerNumber) || containersArray[0] || {};
           const containerRawData = containerData.rawData || {};
-          
+
           // Log if rail data is found (only log key fields to reduce noise)
           if (containerRawData.rail) {
             const railInfo = containerRawData.rail;
             console.log(`[GET Shipment] Rail data found for ${ship.containerNumber}: railNumber=${railInfo.railNumber || 'N/A'}, available=${railInfo.available !== undefined ? railInfo.available : 'N/A'}`);
           }
-          
+
           return {
             id: ship.id,
             containerNumber: ship.containerNumber,
@@ -351,11 +351,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           };
         });
       }
-      
+
       // Extract milestones from rawData if they exist
       const rawData = cargoesFlowShipment.rawData as any || {};
       const milestones = rawData.milestones || [];
-      
+
       // Get assigned users from salesRepNames for Cargoes Flow shipment
       const salesRepNames = cargoesFlowShipment.salesRepNames || [];
       const allUsers = await storage.getAllUsers();
@@ -364,14 +364,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (salesRepNames.includes(user.name)) {
           return true;
         }
-        
+
         // Try case-insensitive match
         const userNameLower = user.name.toLowerCase().trim();
-        return salesRepNames.some(repName => 
+        return salesRepNames.some(repName =>
           repName.toLowerCase().trim() === userNameLower
         );
       });
-      
+
       // If no containers from MBL grouping, use containers from rawData.containers
       if (allContainers.length === 0 && rawData.containers && Array.isArray(rawData.containers)) {
         allContainers = rawData.containers.map((container: any, index: number) => ({
@@ -394,7 +394,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           rawData: container.rawData || {},
         }));
       }
-      
+
       res.json({
         ...cargoesFlowShipment,
         containers: allContainers,
@@ -443,7 +443,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // First check if it's a Cargoes Flow shipment
       const cargoesFlowShipment = await storage.getCargoesFlowShipmentById(shipmentId);
-      
+
       if (cargoesFlowShipment) {
         // Update Cargoes Flow shipment table
         await storage.updateCargoesFlowShipment(shipmentId, {
@@ -452,11 +452,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           voyageNumber,
           bookingNumber: bookingReference,
         });
-        
+
         // Update or create containers array in rawData
         const existingContainers = cargoesFlowShipment.rawData?.containers || [];
         let updatedContainers;
-        
+
         if (existingContainers.length > 0) {
           // Update existing first container
           updatedContainers = [...existingContainers];
@@ -496,13 +496,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
             yardLocation: yardLocation || "",
           }];
         }
-        
+
         // Update terminal info in rawData
         const updatedRawData: any = {
           ...cargoesFlowShipment.rawData,
           containers: updatedContainers,
         };
-        
+
         // Helper function to set value only if it's not an empty string
         const setValueIfProvided = (key: string, value: any) => {
           if (value !== undefined && value !== null && value !== '') {
@@ -512,7 +512,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             delete updatedRawData[key];
           }
         };
-        
+
         // Update terminal fields if provided
         setValueIfProvided('terminalName', terminalName);
         setValueIfProvided('terminalPort', terminalPort);
@@ -524,22 +524,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         setValueIfProvided('lastFreeDay', lastFreeDay);
         setValueIfProvided('demurrage', demurrage);
         setValueIfProvided('detention', detention);
-        
+
         // Handle boolean separately
         if (terminalAvailableForPickup !== undefined) {
           updatedRawData.terminalAvailableForPickup = terminalAvailableForPickup;
         }
-        
+
         try {
           await storage.updateCargoesFlowShipment(shipmentId, {
             rawData: updatedRawData,
           });
-          
+
           const updated = await storage.getCargoesFlowShipmentById(shipmentId);
           if (!updated) {
             return res.status(404).json({ error: "Shipment not found after update" });
           }
-          
+
           const containers = updated?.rawData?.containers || [];
           const milestones = updated?.rawData?.milestones || [];
           return res.json({
@@ -553,7 +553,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.error("Database error updating terminal info:", dbError);
           // Return a more specific error message
           if (dbError.message?.includes('Connection terminated') || dbError.message?.includes('ECONNRESET')) {
-            return res.status(503).json({ 
+            return res.status(503).json({
               error: "Database connection error. Please try again in a moment.",
               details: "The database connection was interrupted. This may be temporary."
             });
@@ -561,7 +561,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           throw dbError; // Re-throw to be caught by outer try-catch
         }
       }
-      
+
       // Otherwise, update user-created shipment
       const shipment = await storage.updateShipment(shipmentId, {
         containerNumber,
@@ -570,11 +570,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         bookingNumber: bookingReference,
         ...otherFields,
       });
-      
+
       if (!shipment) {
         return res.status(404).json({ error: "Shipment not found" });
       }
-      
+
       // Update the first container if it exists
       const containers = await storage.getContainers(shipmentId);
       if (containers && containers.length > 0) {
@@ -589,10 +589,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (detentionFee) updateData.detentionFee = detentionFee;
         if (pickupChassis) updateData.pickupChassis = pickupChassis;
         if (yardLocation) updateData.yardLocation = yardLocation;
-        
+
         await storage.updateContainer(containers[0].id, updateData);
       }
-      
+
       res.json(shipment);
     } catch (error) {
       console.error("Error updating shipment:", error);
@@ -604,17 +604,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       // First try deleting from the user shipments table
       let deleted = await storage.deleteShipment(req.params.id);
-      
+
       // If not found, try deleting from the cargoes_flow_shipments table
       if (!deleted) {
         deleted = await storage.deleteCargoesFlowShipment(req.params.id);
       }
-      
+
       // Return 404 only if the shipment isn't found in either table
       if (!deleted) {
         return res.status(404).json({ error: "Shipment not found" });
       }
-      
+
       res.status(204).send();
     } catch (error) {
       console.error("Error deleting shipment:", error);
@@ -625,31 +625,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/shipments/:shipmentId/users", async (req, res) => {
     try {
       const shipmentId = req.params.shipmentId;
-      
+
       // Check if it's a Cargoes Flow shipment
       const cargoesFlowShipment = await storage.getCargoesFlowShipmentById(shipmentId);
-      
+
       if (cargoesFlowShipment) {
         // Get users whose names match the salesRepNames
         const salesRepNames = cargoesFlowShipment.salesRepNames || [];
         const allUsers = await storage.getAllUsers();
-        
+
         console.log("Cargoes Flow - Sales Rep Names:", salesRepNames);
         console.log("All User Names:", allUsers.map(u => u.name));
-        
+
         const matchingUsers = allUsers.filter(user => {
           // Try exact match first
           if (salesRepNames.includes(user.name)) {
             return true;
           }
-          
+
           // Try case-insensitive match
           const userNameLower = user.name.toLowerCase().trim();
-          return salesRepNames.some(repName => 
+          return salesRepNames.some(repName =>
             repName.toLowerCase().trim() === userNameLower
           );
         });
-        
+
         console.log("Matching Users:", matchingUsers.map(u => u.name));
         res.json(matchingUsers);
       } else {
@@ -658,23 +658,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (shipment) {
           const salesRepNames = shipment.salesRepNames || [];
           const allUsers = await storage.getAllUsers();
-          
+
           console.log("Regular Shipment - Sales Rep Names:", salesRepNames);
           console.log("All User Names:", allUsers.map(u => u.name));
-          
+
           const matchingUsers = allUsers.filter(user => {
             // Try exact match first
             if (salesRepNames.includes(user.name)) {
               return true;
             }
-            
+
             // Try case-insensitive match
             const userNameLower = user.name.toLowerCase().trim();
-            return salesRepNames.some(repName => 
+            return salesRepNames.some(repName =>
               repName.toLowerCase().trim() === userNameLower
             );
           });
-          
+
           console.log("Matching Users:", matchingUsers.map(u => u.name));
           res.json(matchingUsers);
         } else {
@@ -691,7 +691,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { userIds } = req.body;
       const shipmentId = req.params.shipmentId;
-      
+
       // Get user names from user IDs
       const users = await Promise.all(
         userIds.map(async (userId: string) => {
@@ -700,28 +700,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
         })
       );
       const selectedUserNames = users.filter(Boolean) as string[];
-      
+
       // Check if it's a Cargoes Flow shipment
       const cargoesFlowShipment = await storage.getCargoesFlowShipmentById(shipmentId);
-      
+
       if (cargoesFlowShipment) {
         // Get current salesRepNames and all users to determine which are user-based vs manual
         const currentSalesRepNames = cargoesFlowShipment.salesRepNames || [];
         const allUsers = await storage.getAllUsers();
         const allUserNames = allUsers.map(user => user.name);
-        
+
         // Separate manual entries (not matching any user) from user-based entries
         const manualSalesRepNames = currentSalesRepNames.filter(repName => {
           // Check if this sales rep name matches any user (case-insensitive, trimmed)
           const repNameLower = repName.toLowerCase().trim();
-          return !allUserNames.some(userName => 
+          return !allUserNames.some(userName =>
             userName.toLowerCase().trim() === repNameLower
           );
         });
-        
+
         // Combine manual entries with selected user names
         const newSalesRepNames = [...manualSalesRepNames, ...selectedUserNames];
-        
+
         await storage.updateCargoesFlowShipment(shipmentId, {
           salesRepNames: newSalesRepNames
         });
@@ -732,23 +732,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const currentSalesRepNames = shipment.salesRepNames || [];
           const allUsers = await storage.getAllUsers();
           const allUserNames = allUsers.map(user => user.name);
-          
+
           const manualSalesRepNames = currentSalesRepNames.filter(repName => {
             // Check if this sales rep name matches any user (case-insensitive, trimmed)
             const repNameLower = repName.toLowerCase().trim();
-            return !allUserNames.some(userName => 
+            return !allUserNames.some(userName =>
               userName.toLowerCase().trim() === repNameLower
             );
           });
-          
+
           const newSalesRepNames = [...manualSalesRepNames, ...selectedUserNames];
-          
+
           await storage.updateShipment(shipmentId, {
             salesRepNames: newSalesRepNames
           });
         }
       }
-      
+
       res.status(200).json({ success: true });
     } catch (error) {
       console.error("Error setting shipment users:", error);
@@ -817,7 +817,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const milestones = await storage.getMilestones(req.params.id);
       const milestonesWithDelays = detectDelays(milestones);
-      
+
       for (const milestone of milestonesWithDelays) {
         if (milestone.status === "delayed") {
           await storage.updateMilestone(milestone.id, { status: "delayed" });
@@ -904,7 +904,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         userRole,
         filterUsers
       );
-      
+
       res.json(result);
     } catch (error) {
       console.error("Error fetching containers:", error);
@@ -945,7 +945,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!query) {
         return res.status(400).json({ error: "Search query is required" });
       }
-      
+
       const containers = await storage.searchContainers(query);
       res.json(containers);
     } catch (error) {
@@ -957,10 +957,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/containers/manual-update", async (req, res) => {
     try {
       const updateData = req.body;
-      
+
       // First check if container exists
       let container = await storage.getContainerByNumber(updateData.containerNumber);
-      
+
       if (!container) {
         // Create new container if it doesn't exist
         container = await storage.createContainer({
@@ -1028,11 +1028,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (container) {
         // Get all users to notify (in a real system, this would be filtered by assignment)
         const users = await storage.getAllUsers();
-        
+
         // Determine notification type and priority based on status
         let notificationType = "STATUS_CHANGE";
         let priority = "normal";
-        
+
         if (updateData.currentStatus === "delayed") {
           notificationType = "DELAY";
           priority = "high";
@@ -1043,7 +1043,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           notificationType = "ARRIVAL";
           priority = "normal";
         }
-        
+
         // Create notifications for all users
         for (const user of users) {
           await storage.createNotification({
@@ -1151,9 +1151,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { shipmentId, segmentIndex } = req.params;
       const { containerNumber, segmentData, transportMode, origin, destination } = req.body;
-      
+
       console.log(`[Segment Update] Updating segment ${segmentIndex} for shipment ${shipmentId}`);
-      
+
       // Get only the rawData to minimize data transfer
       const cargoesFlowShipment = await storage.getCargoesFlowShipmentById(shipmentId);
       if (!cargoesFlowShipment) {
@@ -1162,11 +1162,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Get the current rawData (minimize data transfer)
       const currentRawData = cargoesFlowShipment.rawData as any || {};
-      
+
       // Find segments in the rawData
       let segments = null;
       let segmentsPath = '';
-      
+
       if (currentRawData.shipmentLegs?.portToPort?.segments) {
         segments = currentRawData.shipmentLegs.portToPort.segments;
         segmentsPath = 'shipmentLegs.portToPort.segments';
@@ -1206,7 +1206,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       console.log(`[Segment Update] ✅ Successfully updated ${transportMode} segment: ${origin} → ${destination}`);
-      
+
       res.json({
         success: true,
         message: `${transportMode} segment updated successfully`,
@@ -1216,9 +1216,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     } catch (error: any) {
       console.error("[Segment Update] Error:", error);
-      res.status(500).json({ 
-        error: "Failed to update segment", 
-        details: error.message 
+      res.status(500).json({
+        error: "Failed to update segment",
+        details: error.message
       });
     }
   });
@@ -1228,10 +1228,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const containerId = req.params.id;
       const containerNumber = req.body.containerNumber;
       const railData = req.body.rawData?.rail;
-      
+
       // First, try to find this as a Cargoes Flow shipment (containers are stored in rawData.containers)
       let cargoesFlowShipment = await storage.getCargoesFlowShipmentById(containerId);
-      
+
       // If not found by ID and we have containerNumber, try to find by container number
       if (!cargoesFlowShipment && containerNumber) {
         cargoesFlowShipment = await storage.getCargoesFlowShipmentByContainer(containerNumber);
@@ -1240,11 +1240,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           cargoesFlowShipment = await storage.getCargoesFlowShipmentByContainerInRawData(containerNumber);
         }
       }
-      
+
       // Handle rail info update in rawData for Cargoes Flow shipments
       if (railData) {
         let targetContainerNumber = containerNumber;
-        
+
         // If we don't have a shipment yet, try to find it by container number to get the MBL
         if (!cargoesFlowShipment && targetContainerNumber) {
           const tempShipment = await storage.getCargoesFlowShipmentByContainer(targetContainerNumber);
@@ -1253,54 +1253,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
             console.log(`[Rail Update] Found shipment by container lookup, MBL: ${tempShipment.mblNumber}`);
           }
         }
-        
+
         // If still no shipment, try searching through MBL shipments
         if (!cargoesFlowShipment && targetContainerNumber) {
           // We need to find the MBL first - try searching all shipments
           // This is expensive but necessary as a last resort
           console.log(`[Rail Update] Attempting broad search for container ${targetContainerNumber}...`);
           // For now, return error - we'd need a different approach to search all shipments
-          return res.status(404).json({ 
+          return res.status(404).json({
             error: "Shipment not found",
             details: `Could not find a Cargoes Flow shipment with ID ${containerId} or container number ${containerNumber}. Please ensure the container exists in the system.`
           });
         }
-        
+
         if (!cargoesFlowShipment) {
           console.log(`[Rail Update] No Cargoes Flow shipment found for rail update`);
-          return res.status(404).json({ 
+          return res.status(404).json({
             error: "Shipment not found",
             details: `Could not find a Cargoes Flow shipment with ID ${containerId} or container number ${containerNumber}`
           });
         }
-        
+
         const existingContainers = cargoesFlowShipment.rawData?.containers || [];
         let containerIndex = -1;
-        
+
         // Try to find container by matching containerNumber if available
         if (targetContainerNumber) {
-          containerIndex = existingContainers.findIndex((c: any) => 
+          containerIndex = existingContainers.findIndex((c: any) =>
             c.containerNumber === targetContainerNumber
           );
         }
-        
+
         // If not found in current shipment and we have an MBL, search across all shipments with same MBL
         if (containerIndex < 0 && cargoesFlowShipment.mblNumber && targetContainerNumber) {
           const mblToSearch = cargoesFlowShipment.mblNumber;
           const allShipmentsForMbl = await storage.getAllCargoesFlowShipmentsByMbl(mblToSearch);
-          
+
           // Find the shipment that contains this container
           for (const shipment of allShipmentsForMbl) {
             if (shipment.containerNumber === targetContainerNumber) {
               // This shipment IS the container - update it directly
               cargoesFlowShipment = shipment;
               const shipmentContainers = shipment.rawData?.containers || [];
-              
+
               // Check if container exists in this shipment's containers array
-              const foundIndex = shipmentContainers.findIndex((c: any) => 
+              const foundIndex = shipmentContainers.findIndex((c: any) =>
                 c.containerNumber === targetContainerNumber
               );
-              
+
               if (foundIndex >= 0) {
                 // Update container in the array
                 const updatedContainers = [...shipmentContainers];
@@ -1337,15 +1337,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
                   containerType: shipment.containerType,
                   rawData: {},
                 }];
-                
-                const containerToUpdate = updatedContainers.find((c: any) => 
+
+                const containerToUpdate = updatedContainers.find((c: any) =>
                   c.containerNumber === targetContainerNumber
                 ) || updatedContainers[0];
-                
-                const containerIndexToUpdate = updatedContainers.findIndex((c: any) => 
+
+                const containerIndexToUpdate = updatedContainers.findIndex((c: any) =>
                   c.containerNumber === targetContainerNumber
                 );
-                
+
                 if (containerIndexToUpdate >= 0) {
                   updatedContainers[containerIndexToUpdate] = {
                     ...containerToUpdate,
@@ -1385,10 +1385,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
             } else {
               // Check if this shipment's containers array has the container
               const shipmentContainers = shipment.rawData?.containers || [];
-              const foundIndex = shipmentContainers.findIndex((c: any) => 
+              const foundIndex = shipmentContainers.findIndex((c: any) =>
                 c.containerNumber === targetContainerNumber
               );
-              
+
               if (foundIndex >= 0) {
                 // Found it in this shipment
                 const updatedContainers = [...shipmentContainers];
@@ -1419,7 +1419,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
           }
         }
-        
+
         // If found in current shipment's containers array
         if (containerIndex >= 0) {
           const updatedContainers = [...existingContainers];
@@ -1449,16 +1449,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
             },
           });
         }
-        
+
         // If container not found and we have containerNumber, create it in the current shipment
         if (targetContainerNumber && cargoesFlowShipment) {
           const updatedContainers = existingContainers.length > 0 ? [...existingContainers] : [];
-          
+
           // Check if container already exists
-          const existingIndex = updatedContainers.findIndex((c: any) => 
+          const existingIndex = updatedContainers.findIndex((c: any) =>
             c.containerNumber === targetContainerNumber
           );
-          
+
           if (existingIndex >= 0) {
             // Update existing
             updatedContainers[existingIndex] = {
@@ -1488,7 +1488,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             },
           });
 
-          const finalContainer = updatedContainers.find((c: any) => 
+          const finalContainer = updatedContainers.find((c: any) =>
             c.containerNumber === targetContainerNumber
           ) || updatedContainers[updatedContainers.length - 1];
 
@@ -1498,11 +1498,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
             rawData: finalContainer.rawData || { rail: railData },
           });
         }
-        
+
         // If we still haven't found it and no containerNumber provided, return error
         if (!targetContainerNumber) {
-          return res.status(400).json({ 
-            error: "Container number is required to update rail information for Cargoes Flow shipments" 
+          return res.status(400).json({
+            error: "Container number is required to update rail information for Cargoes Flow shipments"
           });
         }
       }
@@ -1510,7 +1510,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Standard container update (for non-Cargoes Flow containers)
       const container = await storage.getContainerById(containerId);
       if (!container) {
-        return res.status(404).json({ 
+        return res.status(404).json({
           error: "Container not found",
           details: `Could not find a container or shipment with ID ${containerId}. If this is a Cargoes Flow shipment, ensure the container number ${containerNumber} is correct.`
         });
@@ -1649,7 +1649,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ...req.body,
         createdBy: user.id,
       });
-      
+
       const entry = await storage.createCustomEntry(parsed);
       res.status(201).json(entry);
     } catch (error) {
@@ -1685,11 +1685,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const parsed = insertIntegrationConfigSchema.parse(req.body);
       const integration = await storage.createIntegrationConfig(parsed);
-      
+
       if (integration.isActive) {
         integrationOrchestrator.startIntegration(integration);
       }
-      
+
       res.status(201).json(integration);
     } catch (error) {
       console.error("Error creating integration:", error);
@@ -1701,7 +1701,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const parsed = insertIntegrationConfigSchema.partial().parse(req.body);
       const integration = await storage.updateIntegrationConfig(req.params.id, parsed);
-      
+
       if (!integration) {
         return res.status(404).json({ error: "Integration not found" });
       }
@@ -1711,7 +1711,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } else {
         integrationOrchestrator.stopIntegration(integration.id);
       }
-      
+
       res.json(integration);
     } catch (error) {
       console.error("Error updating integration:", error);
@@ -1722,12 +1722,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/integrations/:id", async (req, res) => {
     try {
       integrationOrchestrator.stopIntegration(req.params.id);
-      
+
       const deleted = await storage.deleteIntegrationConfig(req.params.id);
       if (!deleted) {
         return res.status(404).json({ error: "Integration not found" });
       }
-      
+
       res.status(204).send();
     } catch (error) {
       console.error("Error deleting integration:", error);
@@ -1759,7 +1759,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ===== TMS WEBHOOK ROUTES =====
 
   app.post("/api/webhooks/tms", handleTmsWebhook);
-  
+
   app.post("/api/test/webhook", sendTestWebhook);
 
   app.get("/api/webhooks/tms/logs", async (req, res) => {
@@ -1803,9 +1803,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       console.log(`[Webhook Retry] Retrying webhook ${log.id}...`);
-      
+
       await retryWebhook(log.id, log.rawPayload);
-      
+
       console.log(`[Webhook Retry] ✅ Successfully retried webhook ${log.id}`);
       res.json({ success: true, message: "Webhook reprocessed successfully" });
     } catch (error: any) {
@@ -1859,9 +1859,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log('[ShipNexus Webhook] Headers:', JSON.stringify(req.headers, null, 2));
       console.log('[ShipNexus Webhook] Body:', JSON.stringify(req.body, null, 2));
       console.log('='.repeat(80));
-      
+
       const payload = req.body;
-      
+
       const webhook = await storage.createShipNexusWebhook({
         payload,
         shipmentReference: payload.shipmentReference || payload.containerNumber || payload.referenceNumber || null,
@@ -1872,27 +1872,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log('[ShipNexus Webhook] ✅ Webhook saved to database, ID:', webhook.id);
       console.log('[ShipNexus Webhook] Starting shipment import from ShipNexus API...');
-      
+
       const shipnexusApiUrl = process.env.SHIPNEXUS_API_URL;
       if (shipnexusApiUrl) {
         try {
           console.log('[ShipNexus Import] Fetching latest shipments from ShipNexus API...');
-          
+
           const shipnexusUrl = new URL('/api/shipments', shipnexusApiUrl);
           shipnexusUrl.searchParams.append('page', '1');
           shipnexusUrl.searchParams.append('limit', '100');
-          
+
           const response = await fetch(shipnexusUrl.toString());
-          
+
           if (response.ok) {
             const result = await response.json();
             const shipments = result.data || [];
-            
+
             console.log(`[ShipNexus Import] Fetched ${shipments.length} shipments, importing...`);
-            
+
             let importedCount = 0;
             let updatedCount = 0;
-            
+
             for (const shipment of shipments) {
               try {
                 const transformedShipment = {
@@ -1909,9 +1909,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
                   carrier: null,
                   vesselName: null,
                 };
-                
+
                 const existingShipment = await storage.getShipmentByReference(transformedShipment.referenceNumber);
-                
+
                 if (existingShipment) {
                   await storage.updateShipment(existingShipment.id, transformedShipment);
                   updatedCount++;
@@ -1923,7 +1923,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 console.error(`[ShipNexus Import] Error importing shipment:`, error);
               }
             }
-            
+
             console.log(`[ShipNexus Import] Complete - Imported: ${importedCount}, Updated: ${updatedCount}`);
           } else {
             console.error(`[ShipNexus Import] API returned ${response.status}`);
@@ -1936,12 +1936,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const mblNumber = payload.mblNumber || payload.masterBillOfLading;
-      
+
       if (mblNumber) {
         console.log(`[Cargoes Flow] Posting shipment to Cargoes Flow: ${mblNumber}`);
-        
+
         const cargoesFlowApiKey = process.env.CARGOES_FLOW_API_KEY;
-        
+
         if (!cargoesFlowApiKey) {
           console.error('[Cargoes Flow] API key not configured');
         } else {
@@ -2003,10 +2003,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log('[Cargoes Flow] No MBL number found in webhook payload, skipping Cargoes Flow post');
       }
 
-      res.status(200).json({ 
-        success: true, 
+      res.status(200).json({
+        success: true,
         webhookId: webhook.id,
-        message: "Webhook received successfully" 
+        message: "Webhook received successfully"
       });
     } catch (error) {
       console.error("Error receiving ShipNexus webhook:", error);
@@ -2078,31 +2078,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
       );
 
       const webhooksArray = recentWebhooks.data || [];
-      
+
       const lastWebhook = webhooksArray[0];
       const lastWebhookTime = lastWebhook ? new Date(lastWebhook.createdAt).toISOString() : null;
-      
-      const webhooksLast5Min = webhooksArray.filter((w: any) => 
+
+      const webhooksLast5Min = webhooksArray.filter((w: any) =>
         new Date(w.createdAt) > fiveMinutesAgo
       ).length;
-      
-      const webhooksLastHour = webhooksArray.filter((w: any) => 
+
+      const webhooksLastHour = webhooksArray.filter((w: any) =>
         new Date(w.createdAt) > oneHourAgo
       ).length;
-      
-      const webhooksLast24Hours = webhooksArray.filter((w: any) => 
+
+      const webhooksLast24Hours = webhooksArray.filter((w: any) =>
         new Date(w.createdAt) > twentyFourHoursAgo
       ).length;
 
-      const failedWebhooks = webhooksArray.filter((w: any) => 
+      const failedWebhooks = webhooksArray.filter((w: any) =>
         w.status === 'failed'
       ).length;
 
       const cargoesFlowPosts = await storage.getCargoesFlowPosts(
         { page: 1, pageSize: 100 }
       );
-      
-      const failedPosts = cargoesFlowPosts.data.filter((p: any) => 
+
+      const failedPosts = cargoesFlowPosts.data.filter((p: any) =>
         p.status === 'failed'
       ).length;
 
@@ -2231,7 +2231,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             undefined,
             error.message || 'Network error'
           );
-          
+
           res.json({
             success: true,
             message: "Test webhook saved but Cargoes Flow posting failed",
@@ -2265,7 +2265,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       );
 
       const dailyStats: Record<string, { received: number; failed: number; processed: number }> = {};
-      
+
       for (let i = 0; i < daysBack; i++) {
         const date = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
         const dateKey = date.toISOString().split('T')[0];
@@ -2286,7 +2286,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const hourlyStats: Record<string, number> = {};
       const last24Hours = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-      
+
       for (let i = 0; i < 24; i++) {
         const hour = new Date(now.getTime() - i * 60 * 60 * 1000);
         const hourKey = `${hour.getHours()}:00`;
@@ -2329,9 +2329,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/shipnexus/sync-now", async (req, res) => {
     try {
       console.log('[Manual Sync] 🔄 Starting manual sync from ShipNexus...');
-      
+
       const shipnexusApiUrl = process.env.SHIPNEXUS_API_URL;
-      
+
       if (!shipnexusApiUrl) {
         return res.status(500).json({ error: "SHIPNEXUS_API_URL not configured" });
       }
@@ -2345,18 +2345,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const shipnexusUrl = new URL('/api/shipments', shipnexusApiUrl);
         shipnexusUrl.searchParams.append('page', currentPage.toString());
         shipnexusUrl.searchParams.append('limit', pageSize.toString());
-        
+
         console.log(`[Manual Sync] Fetching page ${currentPage}/${totalPages}...`);
         const response = await fetch(shipnexusUrl.toString());
-        
+
         if (!response.ok) {
           throw new Error(`ShipNexus API returned ${response.status}`);
         }
-        
+
         const result = await response.json();
         allShipments = allShipments.concat(result.data);
         totalPages = result.pagination.totalPages;
-        
+
         console.log(`[Manual Sync] Fetched page ${currentPage}/${totalPages} (${result.data.length} shipments)`);
         currentPage++;
       }
@@ -2383,9 +2383,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
             carrier: null,
             vesselName: null,
           };
-          
+
           const existingShipment = await storage.getShipmentByReference(transformedShipment.referenceNumber);
-          
+
           if (existingShipment) {
             await storage.updateShipment(existingShipment.id, transformedShipment);
             updatedCount++;
@@ -2428,28 +2428,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
         { page: 1, pageSize: 10000 },
         {}
       );
-      
+
       const webhookReferences = new Set(
         allWebhooks.data.map((webhook: any) => webhook.shipmentReference)
       );
-      
+
       const shipnexusUrl = new URL('/api/shipments', shipnexusApiUrl);
       shipnexusUrl.searchParams.append('page', page.toString());
       shipnexusUrl.searchParams.append('limit', pageSize.toString());
-      
+
       const response = await fetch(shipnexusUrl.toString());
-      
+
       if (!response.ok) {
         throw new Error(`ShipNexus API returned ${response.status}`);
       }
-      
+
       const shipmentsResult = await response.json();
-      
+
       const shipmentsWithWebhookStatus = shipmentsResult.data.map((shipment: any) => ({
         ...shipment,
         receivedViaWebhook: webhookReferences.has(shipment.containerNumber)
       }));
-      
+
       res.json({
         ...shipmentsResult,
         data: shipmentsWithWebhookStatus
@@ -2479,17 +2479,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const shipnexusUrl = new URL('/api/shipments', shipnexusApiUrl);
         shipnexusUrl.searchParams.append('page', currentPage.toString());
         shipnexusUrl.searchParams.append('limit', pageSize.toString());
-        
+
         const response = await fetch(shipnexusUrl.toString());
-        
+
         if (!response.ok) {
           throw new Error(`ShipNexus API returned ${response.status}`);
         }
-        
+
         const result = await response.json();
         allShipments = allShipments.concat(result.data);
         totalPages = result.pagination.totalPages;
-        
+
         console.log(`[ShipNexus Import] Fetched page ${currentPage}/${totalPages} (${result.data.length} shipments)`);
         currentPage++;
       }
@@ -2568,13 +2568,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/cargoes-flow/retry/:id", async (req, res) => {
     try {
       const post = await storage.getCargoesFlowPostById(req.params.id);
-      
+
       if (!post) {
         return res.status(404).json({ error: "Post not found" });
       }
 
       const cargoesFlowApiKey = process.env.CARGOES_FLOW_API_KEY;
-      
+
       if (!cargoesFlowApiKey) {
         return res.status(500).json({ error: "CARGOES_FLOW_API_KEY not configured" });
       }
@@ -2643,44 +2643,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/debug/database-status", async (req, res) => {
     try {
       console.log("[Debug] Checking database status...");
-      
+
       // Test basic database connection
       const testQuery = await db.execute(sql`SELECT 1 as test`);
       console.log("[Debug] Basic DB connection:", testQuery);
-      
+
       // Test missing MBL shipments table
       try {
         const mblCount = await db.select({ count: sql<number>`count(*)` }).from(missingMblShipments);
         console.log("[Debug] Missing MBL shipments count:", mblCount);
       } catch (mblError) {
         console.error("[Debug] Missing MBL table error:", mblError);
-        return res.status(500).json({ 
-          error: "Missing MBL table not found", 
+        return res.status(500).json({
+          error: "Missing MBL table not found",
           details: mblError instanceof Error ? mblError.message : String(mblError)
         });
       }
-      
+
       // Test webhook logs table
       try {
         const webhookCount = await db.select({ count: sql<number>`count(*)` }).from(webhookLogs);
         console.log("[Debug] Webhook logs count:", webhookCount);
       } catch (webhookError) {
         console.error("[Debug] Webhook logs table error:", webhookError);
-        return res.status(500).json({ 
-          error: "Webhook logs table not found", 
+        return res.status(500).json({
+          error: "Webhook logs table not found",
           details: webhookError instanceof Error ? webhookError.message : String(webhookError)
         });
       }
-      
-      res.json({ 
-        status: "OK", 
+
+      res.json({
+        status: "OK",
         message: "Database connection successful",
         timestamp: new Date().toISOString()
       });
     } catch (error) {
       console.error("[Debug] Database status check failed:", error);
-      res.status(500).json({ 
-        error: "Database connection failed", 
+      res.status(500).json({
+        error: "Database connection failed",
         details: error instanceof Error ? error.message : String(error)
       });
     }
@@ -2704,7 +2704,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/cargoes-flow/missing-mbl/:id", async (req, res) => {
     try {
       const deleted = await storage.deleteMissingMblShipment(req.params.id);
-      
+
       if (!deleted) {
         return res.status(404).json({ error: "Shipment not found" });
       }
@@ -2743,9 +2743,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/cargoes-flow/trigger-sync", async (req, res) => {
     try {
       console.log("[API] Manual sync triggered");
-      
+
       const syncLog = await triggerManualPoll();
-      
+
       if (!syncLog) {
         // Sync is already running, return the latest sync log instead
         const latestLog = await storage.getLatestCargoesFlowSyncLog();
@@ -2753,31 +2753,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Ensure createdAt is serialized as ISO string
           const serializedLog = {
             ...latestLog,
-            createdAt: latestLog.createdAt instanceof Date 
-              ? latestLog.createdAt.toISOString() 
+            createdAt: latestLog.createdAt instanceof Date
+              ? latestLog.createdAt.toISOString()
               : latestLog.createdAt,
           };
-          return res.json({ 
-            success: true, 
+          return res.json({
+            success: true,
             message: "Sync is already running. Showing last completed sync.",
-            syncLog: serializedLog 
+            syncLog: serializedLog
           });
         }
-        return res.json({ 
-          success: true, 
+        return res.json({
+          success: true,
           message: "Sync is already running. No previous sync log found.",
-          syncLog: null 
+          syncLog: null
         });
       }
-      
+
       // Ensure createdAt is serialized as ISO string
       const serializedSyncLog = {
         ...syncLog,
-        createdAt: syncLog.createdAt instanceof Date 
-          ? syncLog.createdAt.toISOString() 
+        createdAt: syncLog.createdAt instanceof Date
+          ? syncLog.createdAt.toISOString()
           : syncLog.createdAt,
       };
-      
+
       console.log("[API] Returning sync log:", {
         id: serializedSyncLog.id,
         status: serializedSyncLog.status,
@@ -2786,11 +2786,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         shipmentsUpdated: serializedSyncLog.shipmentsUpdated,
         createdAt: serializedSyncLog.createdAt,
       });
-      
-      res.json({ 
-        success: true, 
+
+      res.json({
+        success: true,
         message: "Sync completed successfully",
-        syncLog: serializedSyncLog 
+        syncLog: serializedSyncLog
       });
     } catch (error: any) {
       console.error("Error triggering manual sync:", error);
@@ -2803,9 +2803,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       console.log("[API] Resetting polling state");
       resetPollingState();
-      res.json({ 
-        success: true, 
-        message: "Polling state reset successfully" 
+      res.json({
+        success: true,
+        message: "Polling state reset successfully"
       });
     } catch (error: any) {
       console.error("Error resetting polling state:", error);
@@ -2835,7 +2835,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/cargoes-flow/update-logs/:id", async (req, res) => {
     try {
       const log = await storage.getCargoesFlowUpdateLogById(req.params.id);
-      
+
       if (!log) {
         return res.status(404).json({ error: "Update log not found" });
       }
@@ -2863,7 +2863,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/cargoes-flow/map-routes/:shipmentNumber", async (req, res) => {
     const shipmentNumber = req.params.shipmentNumber;
     const startTime = Date.now();
-    
+
     try {
       const CARGOES_FLOW_API_KEY = process.env.CARGOES_FLOW_API_KEY || "dL6SngaHRXZfvzGA716lioRD7ZsRC9hs";
       const CARGOES_FLOW_ORG_TOKEN = process.env.CARGOES_FLOW_ORG_TOKEN || "V904eqatVp49P7FZuwEtoFg72TJDyFnb";
@@ -2888,7 +2888,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (!response.ok) {
         console.error(`[Cargoes Flow Map] API returned status ${response.status}`);
-        
+
         await storage.createCargoesFlowMapLog({
           shipmentNumber,
           shipmentReference: null,
@@ -2900,14 +2900,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           requestDurationMs,
         });
 
-        return res.status(response.status).json({ 
-          error: `Failed to fetch map routes: ${response.statusText}` 
+        return res.status(response.status).json({
+          error: `Failed to fetch map routes: ${response.statusText}`
         });
       }
 
       const mapData = await response.json();
       console.log(`[Cargoes Flow Map] Successfully fetched map routes for ${shipmentNumber}`);
-      
+
       await storage.createCargoesFlowMapLog({
         shipmentNumber,
         shipmentReference: mapData.shipmentReference || null,
@@ -2922,7 +2922,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(mapData);
     } catch (error: any) {
       console.error("[Cargoes Flow Map] Error fetching map routes:", error);
-      
+
       const requestDurationMs = Date.now() - startTime;
       await storage.createCargoesFlowMapLog({
         shipmentNumber,
@@ -3018,7 +3018,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/cargoes-flow/batch-process", async (req, res) => {
     try {
       console.log("[Cargoes Flow Batch] Starting batch processing of webhook logs...");
-      
+
       const webhookLogs = await storage.getAllWebhookLogs();
       console.log(`[Cargoes Flow Batch] Found ${webhookLogs.length} webhook logs to process`);
 
@@ -3029,7 +3029,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       for (const log of webhookLogs) {
         try {
           const payload = log.rawPayload as any;
-          
+
           const mblRef = payload.shipmentReferenceNumbers?.find(
             (ref: any) => ref.referenceType === "MAWB Number"
           );
@@ -3037,7 +3037,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           if (mblNumber && mblNumber.trim()) {
             const existingPost = await storage.getCargoesFlowPostByReference(log.shipmentId || '');
-            
+
             if (!existingPost) {
               const containerRef = payload.shipmentReferenceNumbers?.find(
                 (ref: any) => ref.referenceType === "Container Number"
@@ -3052,7 +3052,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               // Extract office and salesRepNames from webhook payload
               const office = payload.customer?.office || null;
               const salesRepNamesString = payload.customer?.salesRepNames || '';
-              const salesRepNames = salesRepNamesString 
+              const salesRepNames = salesRepNamesString
                 ? salesRepNamesString.split(',').map((name: string) => name.trim()).filter(Boolean)
                 : null;
 
@@ -3093,41 +3093,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
                   uploadType: 'FORM_BY_MBL_NUMBER'
                 }));
 
-                  const cargoesData = await cargoesResponse.json();
+                const cargoesData = await cargoesResponse.json();
 
-                  if (cargoesResponse.ok) {
-                    await storage.updateCargoesFlowPostStatus(
-                      postRecord.id,
-                      'success',
-                      cargoesData,
-                      undefined
-                    );
-                    posted++;
-                    console.log(`[Cargoes Flow Batch] Posted: ${mblNumber}`);
-                  } else {
-                    await storage.updateCargoesFlowPostStatus(
-                      postRecord.id,
-                      'failed',
-                      cargoesData,
-                      cargoesData.message || 'Unknown error'
-                    );
-                    errors++;
-                    console.error(`[Cargoes Flow Batch] Failed: ${mblNumber}`, cargoesData);
-                  }
-                } catch (cargoesError: any) {
+                if (cargoesResponse.ok) {
+                  await storage.updateCargoesFlowPostStatus(
+                    postRecord.id,
+                    'success',
+                    cargoesData,
+                    undefined
+                  );
+                  posted++;
+                  console.log(`[Cargoes Flow Batch] Posted: ${mblNumber}`);
+                } else {
                   await storage.updateCargoesFlowPostStatus(
                     postRecord.id,
                     'failed',
-                    undefined,
-                    cargoesError.message || 'Network error'
+                    cargoesData,
+                    cargoesData.message || 'Unknown error'
                   );
                   errors++;
-                  console.error(`[Cargoes Flow Batch] Error posting ${mblNumber}:`, cargoesError);
+                  console.error(`[Cargoes Flow Batch] Failed: ${mblNumber}`, cargoesData);
                 }
+              } catch (cargoesError: any) {
+                await storage.updateCargoesFlowPostStatus(
+                  postRecord.id,
+                  'failed',
+                  undefined,
+                  cargoesError.message || 'Network error'
+                );
+                errors++;
+                console.error(`[Cargoes Flow Batch] Error posting ${mblNumber}:`, cargoesError);
+              }
             }
           } else {
             const existingMissing = await storage.getMissingMblShipmentByReference(log.shipmentId || '');
-            
+
             if (!existingMissing) {
               const containerRef = payload.shipmentReferenceNumbers?.find(
                 (ref: any) => ref.referenceType === "Container Number"
@@ -3135,7 +3135,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               const oceanLineRef = payload.shipmentReferenceNumbers?.find(
                 (ref: any) => ref.referenceType === "Steamship Line"
               );
-              
+
               const firstPickup = payload.stops?.find((stop: any) => stop.stopType === "First Pickup");
               const lastDrop = payload.stops?.find((stop: any) => stop.stopType === "Last Drop");
 
@@ -3193,7 +3193,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!req.user) {
       return res.status(401).json({ error: "Unauthorized" });
     }
-    
+
     try {
       const notifications = await storage.getNotifications(req.user.id);
       res.json(notifications);
@@ -3207,7 +3207,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!req.user) {
       return res.status(401).json({ error: "Unauthorized" });
     }
-    
+
     try {
       const notifications = await storage.getUnreadNotifications(req.user.id);
       res.json(notifications);
@@ -3221,7 +3221,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!req.user) {
       return res.status(401).json({ error: "Unauthorized" });
     }
-    
+
     try {
       const count = await storage.getUnreadNotificationCount(req.user.id);
       res.json({ count });
@@ -3235,7 +3235,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!req.user) {
       return res.status(401).json({ error: "Unauthorized" });
     }
-    
+
     try {
       const notification = await storage.markNotificationAsRead(req.params.id, req.user.id);
       if (!notification) {
@@ -3252,7 +3252,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!req.user) {
       return res.status(401).json({ error: "Unauthorized" });
     }
-    
+
     try {
       await storage.markAllNotificationsAsRead(req.user.id);
       res.json({ success: true });
@@ -3266,7 +3266,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!req.user) {
       return res.status(401).json({ error: "Unauthorized" });
     }
-    
+
     try {
       const deleted = await storage.deleteNotification(req.params.id, req.user.id);
       if (!deleted) {
@@ -3369,7 +3369,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/users", async (req, res) => {
     try {
       const { password, ...userData } = req.body;
-      
+
       const existingUser = await storage.getUserByEmail(userData.email);
       if (existingUser) {
         return res.status(400).json({ error: "Email already exists" });
@@ -3402,9 +3402,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       console.log("[Update User] ID:", req.params.id);
       console.log("[Update User] Request body:", JSON.stringify(req.body, null, 2));
-      
+
       const { password, ...updateData } = req.body;
-      
+
       if (password) {
         console.log("[Update User] Hashing password...");
         updateData.password = await hashPassword(password);
@@ -3496,10 +3496,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         try {
           // Use Name as username (merged field)
           const username = userData.name || userData.email.split('@')[0];
-          
+
           // Default password is "password123" - users should change it on first login
           const hashedPassword = await hashPassword("password123");
-          
+
           const user = await storage.createUser({
             username: username,
             email: userData.email,
@@ -3546,14 +3546,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const limit = parseInt(req.query.limit as string) || 100;
       const entityType = req.query.entityType as string;
-      
+
       let logs;
       if (entityType) {
         logs = await storage.getAuditLogsByEntityType(entityType, limit);
       } else {
         logs = await storage.getAuditLogs(limit);
       }
-      
+
       res.json(logs);
     } catch (error) {
       console.error("Error fetching audit logs:", error);
@@ -3745,7 +3745,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/cargoes-flow/test", async (req, res) => {
     try {
       const { mblNumber } = req.body;
-      
+
       if (!mblNumber) {
         return res.status(400).json({ error: "mblNumber is required" });
       }

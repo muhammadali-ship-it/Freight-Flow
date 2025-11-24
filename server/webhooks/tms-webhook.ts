@@ -129,8 +129,8 @@ async function processTaiShipmentUpdate(payload: any, webhookId: string) {
     referenceNumber: referenceNumber,
     bookingNumber: shipperRefNumber || '',
     masterBillOfLading: mawbNumber || '',
-    shipper: customerName,
-    consignee: lastDrop?.companyName || null,
+    shipper: null, // Removed as per user request
+    consignee: null, // Removed as per user request
     originPort: originPort,
     destinationPort: destinationPort,
     etd: firstPickup?.estimatedReadyDateTime || null,

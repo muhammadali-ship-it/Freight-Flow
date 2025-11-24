@@ -1989,10 +1989,8 @@ export class DbStorage implements IStorage {
       }
       const hasActiveHolds = activeHolds.length > 0;
 
-      const needsAttention = terminalData.terminalName &&
-        (!isAvailableForPickup || hasActiveHolds) &&
-        !terminalData.terminalFullOut &&
-        !isEmptyReturned;
+      // POD Needs Attention: ONLY containers with active holds
+      const needsAttention = hasActiveHolds && !isEmptyReturned;
 
       if (needsAttention) {
         podNeedsAttention += containerCount;
@@ -2116,9 +2114,8 @@ export class DbStorage implements IStorage {
           }
           const hasActiveHolds = activeHolds.length > 0;
 
-          return rawData.terminalName &&
-            (!isAvailable || hasActiveHolds) &&
-            !rawData.terminalFullOut;
+          // Only show containers with active holds
+          return hasActiveHolds;
         }
 
         case 'pod-awaiting-full-out': {

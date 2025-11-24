@@ -1587,6 +1587,7 @@ export default function CargoesFlowShipmentDetail() {
                     setTerminalForm({
                       terminalName: rawData.terminalName || "",
                       terminalPort: rawData.terminalPort || "",
+                      lfd: rawData.lastFreeDay || "",
                       demurrage: rawData.demurrage || "",
                       detention: rawData.detention || "",
                       yardLocation: rawData.terminalYardLocation || "",

@@ -436,6 +436,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         terminalPickupAppointment,
         terminalEmptyReturned,
         terminalAvailableForPickup,
+        terminalHolds,
         demurrage,
         detention,
         ...otherFields
@@ -528,6 +529,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Handle boolean separately
         if (terminalAvailableForPickup !== undefined) {
           updatedRawData.terminalAvailableForPickup = terminalAvailableForPickup;
+        }
+
+        // Handle terminalHolds array
+        if (terminalHolds !== undefined) {
+          updatedRawData.terminalHolds = terminalHolds;
         }
 
         try {

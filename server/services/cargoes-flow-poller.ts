@@ -68,7 +68,7 @@ async function fetchShipmentsFromCargoesFlow(): Promise<CargoesFlowShipmentData[
       const url = `${CARGOES_FLOW_API_URL}?shipmentType=INTERMODAL_SHIPMENT&status=ACTIVE&_page=${page}&_limit=${limit}&_t=${timestamp}`;
 
       console.log(`[Cargoes Flow Poller] Fetching page ${page}: ${url}`);
-      
+
       const response = await fetch(url, {
         method: 'GET',
         headers: {
@@ -88,9 +88,9 @@ async function fetchShipmentsFromCargoesFlow(): Promise<CargoesFlowShipmentData[
       }
 
       const data: CargoesFlowApiResponse = await response.json();
-      
+
       console.log(`[Cargoes Flow Poller] Received ${Array.isArray(data) ? data.length : 'non-array'} shipments on page ${page}`);
-      
+
       if (!Array.isArray(data) || data.length === 0) {
         console.log(`[Cargoes Flow Poller] No more data on page ${page}, stopping pagination`);
         hasMorePages = false;
@@ -149,7 +149,7 @@ async function processAndStoreShipmentsWithStats(shipments: CargoesFlowShipmentD
       }
       // Use shipmentNumber as the primary reference (convert to string if number)
       const shipmentRef = String(shipment.shipmentNumber || shipment.referenceNumber || '');
-      
+
       if (!shipmentRef) {
         console.warn('[Cargoes Flow Poller] Skipping shipment without shipmentNumber or referenceNumber:', shipment);
         skippedCount++;
@@ -158,7 +158,7 @@ async function processAndStoreShipmentsWithStats(shipments: CargoesFlowShipmentD
 
       // Extract carrier name from carrierScac if carrier is null
       const carrierName = shipment.carrier || shipment.carrierScac || null;
-      
+
       // Handle different shipment types (INTERMODAL vs AIR/ROAD)
       const mblNumber = shipment.mblNumber || shipment.blNumber || null;
       const originPort = shipment.originOceanPort || shipment.originPort || extractOriginFromLegs(shipment.shipmentLegs);
@@ -171,7 +171,7 @@ async function processAndStoreShipmentsWithStats(shipments: CargoesFlowShipmentD
       let taiShipmentId: string | null = null;
       let office: string | null = null;
       let salesRepNames: string[] | null = null;
-      
+
       if (mblNumber) {
         const cargoesFlowPost = await storage.getCargoesFlowPostByMbl(mblNumber);
         if (cargoesFlowPost) {
@@ -184,17 +184,17 @@ async function processAndStoreShipmentsWithStats(shipments: CargoesFlowShipmentD
       // Get existing shipment to preserve manually added data (rail, terminal info)
       // Try multiple lookup strategies to find the correct shipment
       let existing = await storage.getCargoesFlowShipmentByReference(shipmentRef);
-      
+
       // If not found by reference, try by container number
       if (!existing && shipment.containerNumber) {
         existing = await storage.getCargoesFlowShipmentByContainer(shipment.containerNumber);
       }
-      
+
       // Debug: Log first few shipments to see what's happening
       if (i < 3) {
         console.log(`[Cargoes Flow Poller] Shipment ${shipmentRef}: existing=${!!existing ? 'YES' : 'NO'}, container=${shipment.containerNumber}`);
       }
-      
+
       // For MBL-grouped shipments, collect ALL shipments with same MBL to merge their data
       let allMblShipments: any[] = [];
       if (mblNumber) {
@@ -208,7 +208,7 @@ async function processAndStoreShipmentsWithStats(shipments: CargoesFlowShipmentD
             existing = allMblShipments[0];
           }
         }
-        
+
         // Debug: Log if we found MBL shipments with manual data
         if (allMblShipments.length > 0) {
           const hasTerminalData = allMblShipments.some(s => {
@@ -224,10 +224,10 @@ async function processAndStoreShipmentsWithStats(shipments: CargoesFlowShipmentD
           }
         }
       }
-      
+
       // Merge rawData: preserve manually added fields (terminal, rail) from existing, update with new API data
       let mergedRawData: any = shipment; // Start with fresh API data
-      
+
       // Collect terminal and rail data from ALL shipments with same MBL (not just one)
       if (mblNumber && allMblShipments.length > 0) {
         // Merge terminal info from all MBL shipments (terminal info is usually at shipment level)
@@ -252,7 +252,7 @@ async function processAndStoreShipmentsWithStats(shipments: CargoesFlowShipmentD
             if (mblRawData.terminalDemurrage) mergedRawData.terminalDemurrage = mblRawData.terminalDemurrage;
           }
         }
-        
+
         // Collect all containers with rail data from ALL MBL shipments
         const allExistingContainers: any[] = [];
         for (const mblShipment of allMblShipments) {
@@ -263,7 +263,7 @@ async function processAndStoreShipmentsWithStats(shipments: CargoesFlowShipmentD
             }
           }
         }
-        
+
         if (allExistingContainers.length > 0) {
           // Create a map of existing containers by containerNumber (deduplicate, keep latest)
           const containersMap = new Map<string, any>();
@@ -282,25 +282,25 @@ async function processAndStoreShipmentsWithStats(shipments: CargoesFlowShipmentD
               }
             }
           });
-          
+
           // API might return containers array or just a single containerNumber
           const apiContainerNumber = shipment.containerNumber;
           const apiContainers = shipment.containers || (apiContainerNumber ? [{ containerNumber: apiContainerNumber }] : []);
-          
+
           // Merge: preserve existing containers with rail data, update with API data
           const mergedContainers: any[] = [];
-          
+
           // First, add all existing containers (preserving their rail data)
           containersMap.forEach((container) => {
             mergedContainers.push(container);
           });
-          
+
           // Then, update with API data if containerNumber matches
           apiContainers.forEach((apiContainer: any) => {
-            const existingIndex = mergedContainers.findIndex((c: any) => 
+            const existingIndex = mergedContainers.findIndex((c: any) =>
               c.containerNumber === apiContainer.containerNumber
             );
-            
+
             if (existingIndex >= 0) {
               // Container exists - update with API data but preserve rawData (rail)
               const existingRawData = mergedContainers[existingIndex].rawData;
@@ -314,7 +314,7 @@ async function processAndStoreShipmentsWithStats(shipments: CargoesFlowShipmentD
               mergedContainers.push(apiContainer);
             }
           });
-          
+
           mergedRawData.containers = mergedContainers;
         } else if (shipment.containerNumber) {
           // No existing containers array, but we have a containerNumber from API
@@ -323,7 +323,7 @@ async function processAndStoreShipmentsWithStats(shipments: CargoesFlowShipmentD
       } else if (existing && existing.rawData) {
         // No MBL grouping, just use the single existing shipment's data
         const existingRawData = existing.rawData as any;
-        
+
         // Preserve manually added terminal info
         if (existingRawData.terminalName) mergedRawData.terminalName = existingRawData.terminalName;
         if (existingRawData.terminalPort) mergedRawData.terminalPort = existingRawData.terminalPort;
@@ -339,7 +339,7 @@ async function processAndStoreShipmentsWithStats(shipments: CargoesFlowShipmentD
         if (existingRawData.lastFreeDay) mergedRawData.lastFreeDay = existingRawData.lastFreeDay;
         if (existingRawData.terminalLastFreeDay) mergedRawData.terminalLastFreeDay = existingRawData.terminalLastFreeDay;
         if (existingRawData.terminalDemurrage) mergedRawData.terminalDemurrage = existingRawData.terminalDemurrage;
-        
+
         // Preserve manually added containers array with rail data
         if (existingRawData.containers && Array.isArray(existingRawData.containers)) {
           mergedRawData.containers = existingRawData.containers;
@@ -374,7 +374,7 @@ async function processAndStoreShipmentsWithStats(shipments: CargoesFlowShipmentD
           rawData: mergedRawData,
           lastFetchedAt: new Date(),
         });
-        
+
         // For MBL-grouped shipments, also update all other shipments with same MBL
         // to ensure terminal and rail data is consistent across all records
         if (mblNumber && allMblShipments.length > 1) {
@@ -399,14 +399,14 @@ async function processAndStoreShipmentsWithStats(shipments: CargoesFlowShipmentD
                 // Use merged containers array (includes all containers with rail data from all MBL shipments)
                 containers: mergedRawData.containers || otherMblRawData.containers,
               };
-              
+
               await storage.updateCargoesFlowShipment(mblShipment.id, {
                 rawData: otherMblMergedRawData,
               });
             }
           }
         }
-        
+
         if (i < 3) {
           console.log(`[Cargoes Flow Poller] ✅ Updated shipment ${shipmentRef}`);
         }
@@ -462,21 +462,21 @@ async function pollShipments() {
     console.log('[Cargoes Flow Poller] ⏭️ Skipping - previous poll still running');
     return null;
   }
-  
+
   console.log('[Cargoes Flow Poller] 🔒 Setting isPolling = true');
   isPolling = true;
   const startTime = Date.now();
   let syncLog;
-  
+
   try {
     console.log('[Cargoes Flow Poller] 🚀 Starting sync...');
     const shipments = await fetchShipmentsFromCargoesFlow();
-    
+
     console.log(`[Cargoes Flow Poller] 📦 Fetched ${shipments.length} shipments from API`);
-    
+
     let newCount = 0;
     let updatedCount = 0;
-    
+
     if (shipments.length > 0) {
       console.log('[Cargoes Flow Poller] 💾 Processing and storing shipments...');
       const stats = await processAndStoreShipmentsWithStats(shipments);
@@ -494,14 +494,14 @@ async function pollShipments() {
       shipmentsCreated: newCount,
       shipmentsUpdated: updatedCount,
       syncDurationMs: syncDuration,
-      metadata: { 
+      metadata: {
         totalFetched: shipments.length,
         timestamp: new Date().toISOString()
       },
     });
-    
+
     console.log(`[Cargoes Flow Poller] ✅ Sync: ${newCount} new, ${updatedCount} updated`);
-    
+
     // Run risk assessment after successful sync
     try {
       const riskService = new CargoesFlowRiskAssessmentService(storage);
@@ -512,7 +512,7 @@ async function pollShipments() {
     }
   } catch (error: any) {
     console.error('[Cargoes Flow Poller] Poll cycle failed:', error.message);
-    
+
     const syncDuration = Date.now() - startTime;
     syncLog = await storage.createCargoesFlowSyncLog({
       status: 'error',
@@ -521,7 +521,7 @@ async function pollShipments() {
       shipmentsUpdated: 0,
       errorMessage: error.message,
       syncDurationMs: syncDuration,
-      metadata: { 
+      metadata: {
         error: error.message,
         timestamp: new Date().toISOString()
       },
@@ -530,7 +530,7 @@ async function pollShipments() {
     console.log('[Cargoes Flow Poller] 🔓 Setting isPolling = false');
     isPolling = false; // Release the lock
   }
-  
+
   console.log('[Cargoes Flow Poller] Poll cycle complete');
   return syncLog;
 }
@@ -560,55 +560,55 @@ export function stopPolling() {
 // Helper functions to extract data from shipmentLegs
 function extractOriginFromLegs(shipmentLegs: any): string | null {
   if (!shipmentLegs) return null;
-  
+
   // Check portToPort legs (INTERMODAL)
   if (shipmentLegs.portToPort?.firstPort) return shipmentLegs.portToPort.firstPort;
   if (shipmentLegs.portToPort?.loadingPort) return shipmentLegs.portToPort.loadingPort;
-  
+
   // Check road legs (LTL/ROAD)
   if (shipmentLegs.road?.origin) return shipmentLegs.road.origin;
-  
+
   return null;
 }
 
 function extractDestinationFromLegs(shipmentLegs: any): string | null {
   if (!shipmentLegs) return null;
-  
+
   // Check portToPort legs (INTERMODAL)
   if (shipmentLegs.portToPort?.lastPort) return shipmentLegs.portToPort.lastPort;
   if (shipmentLegs.portToPort?.dischargePort) return shipmentLegs.portToPort.dischargePort;
-  
+
   // Check road legs (LTL/ROAD)
   if (shipmentLegs.road?.destination) return shipmentLegs.road.destination;
-  
+
   return null;
 }
 
 function extractEtdFromLegs(shipmentLegs: any): string | null {
   if (!shipmentLegs) return null;
-  
+
   // Check portToPort legs (INTERMODAL)
   if (shipmentLegs.portToPort?.firstPortEtd) return shipmentLegs.portToPort.firstPortEtd;
   if (shipmentLegs.portToPort?.firstPortAtd) return shipmentLegs.portToPort.firstPortAtd;
-  
+
   // Check road legs (LTL/ROAD)
   if (shipmentLegs.road?.etd) return shipmentLegs.road.etd;
   if (shipmentLegs.road?.atd) return shipmentLegs.road.atd;
-  
+
   return null;
 }
 
 function extractEtaFromLegs(shipmentLegs: any): string | null {
   if (!shipmentLegs) return null;
-  
+
   // Check portToPort legs (INTERMODAL)
   if (shipmentLegs.portToPort?.lastPortEta) return shipmentLegs.portToPort.lastPortEta;
   if (shipmentLegs.portToPort?.lastPortAta) return shipmentLegs.portToPort.lastPortAta;
-  
+
   // Check road legs (LTL/ROAD)
   if (shipmentLegs.road?.eta) return shipmentLegs.road.eta;
   if (shipmentLegs.road?.ata) return shipmentLegs.road.ata;
-  
+
   return null;
 }
 

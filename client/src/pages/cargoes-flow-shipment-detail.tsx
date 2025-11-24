@@ -215,7 +215,7 @@ function MapLogsSection({ shipmentNumber }: { shipmentNumber: string }) {
                   </Button>
                 </CollapsibleTrigger>
               </div>
-              
+
               <CollapsibleContent className="mt-3 pt-3 border-t">
                 <div className="space-y-3">
                   <div>
@@ -224,7 +224,7 @@ function MapLogsSection({ shipmentNumber }: { shipmentNumber: string }) {
                       {log.requestUrl}
                     </code>
                   </div>
-                  
+
                   {log.responseData && (
                     <div>
                       <p className="text-xs font-medium text-muted-foreground mb-1">Response Data</p>
@@ -296,7 +296,7 @@ function TrackingTimeline({ shipmentReference }: { shipmentReference: string }) 
     <div className="space-y-6">
       <div className="relative">
         <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-border" />
-        
+
         <div className="relative pl-12 pb-8">
           <div className="absolute left-0 top-0">
             <div className="h-8 w-8 rounded-full bg-green-500 flex items-center justify-center">
@@ -550,7 +550,7 @@ export default function CargoesFlowShipmentDetail() {
       console.log("User assignment successful, invalidating queries for shipmentId:", shipmentId);
       queryClient.invalidateQueries({ queryKey: ["/api/shipments", shipmentId] });
       queryClient.invalidateQueries({ queryKey: ["/api/shipments"] });
-      
+
       toast({
         title: "Users assigned",
         description: "The users have been successfully assigned to this shipment.",
@@ -610,7 +610,7 @@ export default function CargoesFlowShipmentDetail() {
       return await apiRequest(`/api/containers/${data.containerId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           rawData: { rail: data.rail },
           containerNumber: data.containerNumber,
         }),
@@ -1011,12 +1011,12 @@ export default function CargoesFlowShipmentDetail() {
 
         {/* Terminal Information Card - Show if terminal data exists */}
         {(() => {
-          const hasTerminalInfo = rawData.terminalName || rawData.terminalPort || rawData.lastFreeDay || rawData.demurrage || 
+          const hasTerminalInfo = rawData.terminalName || rawData.terminalPort || rawData.lastFreeDay || rawData.demurrage ||
             rawData.detention || rawData.terminalYardLocation || rawData.terminalPickupChassis || rawData.terminalFullOut ||
             rawData.terminalPickupAppointment || rawData.terminalEmptyReturned || rawData.terminalAvailableForPickup !== undefined;
-          
+
           if (!hasTerminalInfo) return null;
-          
+
           return (
             <Card>
               <CardHeader>
@@ -1106,15 +1106,15 @@ export default function CargoesFlowShipmentDetail() {
         {/* Rail Information Card - Show if rail data exists */}
         {(() => {
           // Check if any container has rail data
-          const containersArray = shipment.containers && (shipment.containers as any[]).length > 0 
-            ? (shipment.containers as any[]) 
+          const containersArray = shipment.containers && (shipment.containers as any[]).length > 0
+            ? (shipment.containers as any[])
             : [];
-          
+
           const hasRailInfo = containersArray.some((container: any) => {
             const containerData = container.rawData || {};
             return containerData.rail && (
-              containerData.rail.railNumber || 
-              containerData.rail.podRailCarrier || 
+              containerData.rail.railNumber ||
+              containerData.rail.podRailCarrier ||
               containerData.rail.destinationRailCarrier ||
               containerData.rail.railLoaded ||
               containerData.rail.railDeparted ||
@@ -1128,19 +1128,19 @@ export default function CargoesFlowShipmentDetail() {
               containerData.rail.available !== undefined
             );
           });
-          
+
           if (!hasRailInfo) return null;
-          
+
           // Get the first container with rail data
           const containerWithRail = containersArray.find((container: any) => {
             const containerData = container.rawData || {};
             return containerData.rail;
           });
-          
+
           if (!containerWithRail) return null;
-          
+
           const railData = containerWithRail.rawData?.rail || {};
-          
+
           return (
             <Card>
               <CardHeader>
@@ -1270,7 +1270,7 @@ export default function CargoesFlowShipmentDetail() {
       {(() => {
         // Try to find segments in different possible locations in rawData
         let segments = null;
-        
+
         // Debug: Log available data structure (only in development)
         if (process.env.NODE_ENV === 'development') {
           console.log('CargoesFlow Segments Debug:', {
@@ -1279,7 +1279,7 @@ export default function CargoesFlowShipmentDetail() {
             'rawData.shipmentLegs': rawData.shipmentLegs
           });
         }
-        
+
         // First try: rawData.shipmentLegs.portToPort.segments
         if (legs.portToPort?.segments && Array.isArray(legs.portToPort.segments) && legs.portToPort.segments.length > 0) {
           segments = legs.portToPort.segments;
@@ -1295,28 +1295,28 @@ export default function CargoesFlowShipmentDetail() {
           segments = rawData.shipmentLegs.segments;
           console.log('Found segments in rawData.shipmentLegs.segments:', segments);
         }
-        
+
         if (segments) {
           const railSegments = segments.filter((s: any) => s.transportMode === 'RAIL');
           console.log(`Displaying ${segments.length} segments (${railSegments.length} rail segments):`, segments);
-          
+
           // Get container numbers from the shipment
-          const containerNumbers = shipment.containers 
+          const containerNumbers = shipment.containers
             ? (shipment.containers as any[]).map(c => c.containerNumber).filter(Boolean)
             : [shipment.containerNumber].filter(Boolean);
-          
+
           return (
-            <SegmentsTrackingSection 
-              segments={segments} 
+            <SegmentsTrackingSection
+              segments={segments}
               containerNumbers={containerNumbers}
               onUpdateSegment={async (segmentIndex, updates) => {
                 try {
                   console.log('Updating segment:', segmentIndex, updates);
-                  
+
                   // Find the container number for this segment
                   const segment = segments[segmentIndex];
                   const containerNumber = segment.containerNumber || shipment.containerNumber;
-                  
+
                   if (!containerNumber) {
                     toast({
                       title: "Error",
@@ -1342,12 +1342,12 @@ export default function CargoesFlowShipmentDetail() {
 
                     // Refresh the shipment data
                     queryClient.invalidateQueries({ queryKey: ["/api/shipments", shipmentId] });
-                    
+
                     toast({
                       title: "Success",
                       description: `${segment.transportMode} segment updated successfully`,
                     });
-                    
+
                   } catch (dbError: any) {
                     // If database quota exceeded, save to local storage as fallback
                     if (dbError?.message?.includes('data transfer quota') || dbError?.message?.includes('exceeded')) {
@@ -1362,7 +1362,7 @@ export default function CargoesFlowShipmentDetail() {
                         timestamp: new Date().toISOString()
                       };
                       localStorage.setItem(localKey, JSON.stringify(existingUpdates));
-                      
+
                       toast({
                         title: "Saved Locally",
                         description: "Database quota exceeded. Changes saved locally and will sync when quota resets.",
@@ -1372,7 +1372,7 @@ export default function CargoesFlowShipmentDetail() {
                       throw dbError;
                     }
                   }
-                  
+
                 } catch (error: any) {
                   console.error('Failed to update segment:', error);
                   toast({
@@ -1397,7 +1397,7 @@ export default function CargoesFlowShipmentDetail() {
           <TabsTrigger value="documents">Documents</TabsTrigger>
           <TabsTrigger value="raw">Raw Data</TabsTrigger>
         </TabsList>
-        
+
         <TabsContent value="tracking" className="mt-6">
           <Card>
             <CardHeader>
@@ -1411,7 +1411,7 @@ export default function CargoesFlowShipmentDetail() {
             </CardContent>
           </Card>
         </TabsContent>
-        
+
         <TabsContent value="events" className="mt-6">
           <Card>
             <CardHeader>
@@ -1582,6 +1582,9 @@ export default function CargoesFlowShipmentDetail() {
                   size="sm"
                   onClick={() => {
                     const rawData = shipment.rawData as any || {};
+                    const events = rawData.shipmentEvents || [];
+                    const gateOutEvent = events.find((e: any) => e.code === "gateOutWithContainerFull");
+
                     setTerminalForm({
                       terminalName: rawData.terminalName || "",
                       terminalPort: rawData.terminalPort || "",
@@ -1590,10 +1593,10 @@ export default function CargoesFlowShipmentDetail() {
                       detention: rawData.detention || "",
                       yardLocation: rawData.terminalYardLocation || "",
                       pickupChassis: rawData.terminalPickupChassis || "",
-                      fullOut: rawData.terminalFullOut || "",
+                      fullOut: rawData.terminalFullOut || (gateOutEvent ? gateOutEvent.actualTime : ""),
                       pickupAppointment: rawData.terminalPickupAppointment || "",
                       emptyReturned: rawData.terminalEmptyReturned || "",
-                      availableForPickup: rawData.terminalAvailableForPickup || false,
+                      availableForPickup: rawData.terminalAvailableForPickup || !!gateOutEvent,
                     });
                     setAddTerminalDialogOpen(true);
                   }}
@@ -1606,10 +1609,20 @@ export default function CargoesFlowShipmentDetail() {
               <CardContent>
                 {(() => {
                   const rawData = shipment.rawData as any || {};
-                  const hasTerminalInfo = rawData.terminalName || rawData.terminalPort || rawData.lastFreeDay || rawData.demurrage || 
+                  const events = rawData.shipmentEvents || [];
+                  const gateOutEvent = events.find((e: any) => e.code === "gateOutWithContainerFull");
+
+                  const hasTerminalInfo = rawData.terminalName || rawData.terminalPort || rawData.lastFreeDay || rawData.demurrage ||
                     rawData.detention || rawData.terminalYardLocation || rawData.terminalPickupChassis || rawData.terminalFullOut ||
-                    rawData.terminalPickupAppointment || rawData.terminalEmptyReturned || rawData.terminalAvailableForPickup;
-                  
+                    rawData.terminalPickupAppointment || rawData.terminalEmptyReturned || rawData.terminalAvailableForPickup !== undefined ||
+                    gateOutEvent;
+
+                  const effectiveFullOut = rawData.terminalFullOut || (gateOutEvent ? gateOutEvent.actualTime : null);
+                  // Prioritize event existence: if event exists, it implies available (unless explicitly false? No, user wants automatic check).
+                  // Actually, let's say: if manually set to true, OR event exists -> true.
+                  // If manually set to false, but event exists -> true (override manual false because event happened).
+                  const effectiveAvailable = rawData.terminalAvailableForPickup === true || !!gateOutEvent;
+
                   return hasTerminalInfo ? (
                     <div className="rounded-lg border p-4 space-y-3">
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -1655,10 +1668,12 @@ export default function CargoesFlowShipmentDetail() {
                             <p className="text-sm font-medium">${rawData.detention}</p>
                           </div>
                         )}
-                        {rawData.terminalFullOut && (
+                        {effectiveFullOut && (
                           <div>
-                            <p className="text-xs text-muted-foreground">Full Out</p>
-                            <p className="text-sm font-medium">{formatDateTime(rawData.terminalFullOut)}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {!rawData.terminalFullOut && gateOutEvent ? "Full Container Gate Out" : "Full Out"}
+                            </p>
+                            <p className="text-sm font-medium">{formatDateTime(effectiveFullOut)}</p>
                           </div>
                         )}
                         {rawData.terminalPickupAppointment && (
@@ -1673,11 +1688,11 @@ export default function CargoesFlowShipmentDetail() {
                             <p className="text-sm font-medium">{formatDateTime(rawData.terminalEmptyReturned)}</p>
                           </div>
                         )}
-                        {rawData.terminalAvailableForPickup !== undefined && (
+                        {(rawData.terminalAvailableForPickup !== undefined || gateOutEvent) && (
                           <div>
                             <p className="text-xs text-muted-foreground">Available For Pickup</p>
                             <div className="text-sm font-medium">
-                              {rawData.terminalAvailableForPickup ? (
+                              {effectiveAvailable ? (
                                 <Badge variant="default" className="bg-green-500">Yes</Badge>
                               ) : (
                                 <Badge variant="outline">No</Badge>
@@ -1718,228 +1733,229 @@ export default function CargoesFlowShipmentDetail() {
                       </Badge>
                     </div>
                     <div className="space-y-3">
-                          {(shipment.containers as any[]).map((container: any, index: number) => {
-                            const containerData = container.rawData || {};
-                            const riskLevel = containerData.riskLevel;
-                            const riskReasons = containerData.riskReasons || [];
-                            
-                            return (
-                            <div key={container.id || index} className="rounded-lg border p-4 space-y-3 hover-elevate">
-                              <div className="flex items-start justify-between gap-4 flex-wrap">
-                                <div className="flex items-center gap-3">
-                                  <div className="h-10 w-10 rounded-full bg-blue-500/10 flex items-center justify-center flex-shrink-0">
-                                    <Package className="h-5 w-5 text-blue-600" />
-                                  </div>
-                                  <div>
-                                    <p className="font-medium font-mono">{container.containerNumber || `Container ${index + 1}`}</p>
-                                    {container.containerType && (
-                                      <p className="text-xs text-muted-foreground">{container.containerType}</p>
-                                    )}
-                                    {container.shipmentReference && (
-                                      <p className="text-xs text-muted-foreground">Ref: {container.shipmentReference}</p>
-                                    )}
-                                  </div>
+                      {(shipment.containers as any[]).map((container: any, index: number) => {
+                        const containerData = container.rawData || {};
+                        const riskLevel = containerData.riskLevel;
+                        const riskReasons = containerData.riskReasons || [];
+
+                        return (
+                          <div key={container.id || index} className="rounded-lg border p-4 space-y-3 hover-elevate">
+                            <div className="flex items-start justify-between gap-4 flex-wrap">
+                              <div className="flex items-center gap-3">
+                                <div className="h-10 w-10 rounded-full bg-blue-500/10 flex items-center justify-center flex-shrink-0">
+                                  <Package className="h-5 w-5 text-blue-600" />
                                 </div>
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  {container.containerStatus && (
-                                    <Badge variant="outline" className="text-xs">
-                                      {container.containerStatus}
-                                    </Badge>
+                                <div>
+                                  <p className="font-medium font-mono">{container.containerNumber || `Container ${index + 1}`}</p>
+                                  {container.containerType && (
+                                    <p className="text-xs text-muted-foreground">{container.containerType}</p>
                                   )}
-                                  {riskLevel && riskLevel !== 'low' && (
-                                    <Badge
-                                      variant={riskLevel === 'critical' || riskLevel === 'high' ? 'destructive' : 'secondary'}
-                                      className="text-xs"
-                                      title={riskReasons.join(', ')}
-                                    >
-                                      {riskLevel === 'critical' ? '🔴 Critical' :
-                                       riskLevel === 'high' ? '🟠 High Risk' :
-                                       '🟡 Medium Risk'}
-                                    </Badge>
+                                  {container.shipmentReference && (
+                                    <p className="text-xs text-muted-foreground">Ref: {container.shipmentReference}</p>
                                   )}
                                 </div>
                               </div>
-                              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 pt-2 border-t text-sm">
-                                {container.bookingReference && (
-                                  <div>
-                                    <p className="text-xs text-muted-foreground">Booking</p>
-                                    <p className="font-mono text-xs">{container.bookingReference}</p>
-                                  </div>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                {container.containerStatus && (
+                                  <Badge variant="outline" className="text-xs">
+                                    {container.containerStatus}
+                                  </Badge>
                                 )}
-                                {container.weight && (
-                                  <div>
-                                    <p className="text-xs text-muted-foreground">Weight</p>
-                                    <p className="text-xs">{container.weight} lbs</p>
-                                  </div>
-                                )}
-                                {container.voyageNumber && (
-                                  <div>
-                                    <p className="text-xs text-muted-foreground">Voyage</p>
-                                    <p className="font-mono text-xs">{container.voyageNumber}</p>
-                                  </div>
-                                )}
-                                {container.sealNumber && (
-                                  <div>
-                                    <p className="text-xs text-muted-foreground">Seal</p>
-                                    <p className="font-mono text-xs">{container.sealNumber}</p>
-                                  </div>
-                                )}
-                                {container.containerEta && (
-                                  <div>
-                                    <p className="text-xs text-muted-foreground">Container ETA</p>
-                                    <p className="text-xs">{formatDateOnly(container.containerEta)}</p>
-                                  </div>
-                                )}
-                                {container.containerAta && (
-                                  <div>
-                                    <p className="text-xs text-muted-foreground">Container ATA</p>
-                                    <p className="text-xs text-green-600 dark:text-green-400">{formatDateOnly(container.containerAta)}</p>
-                                  </div>
-                                )}
-                                {container.lastFreeDay && (
-                                  <div>
-                                    <p className="text-xs text-muted-foreground">Last Free Day</p>
-                                    <p className="text-xs">{formatDateOnly(container.lastFreeDay)}</p>
-                                  </div>
-                                )}
-                                {container.dailyFeeRate && (
-                                  <div>
-                                    <p className="text-xs text-muted-foreground">Daily Fee Rate</p>
-                                    <p className="text-xs">${container.dailyFeeRate}</p>
-                                  </div>
-                                )}
-                                {container.detentionFee && (
-                                  <div>
-                                    <p className="text-xs text-muted-foreground">Detention Fee</p>
-                                    <p className="text-xs">${container.detentionFee}</p>
-                                  </div>
-                                )}
-                                {container.pickupChassis && (
-                                  <div>
-                                    <p className="text-xs text-muted-foreground">Pickup Chassis</p>
-                                    <p className="text-xs">{container.pickupChassis}</p>
-                                  </div>
-                                )}
-                                {container.yardLocation && (
-                                  <div>
-                                    <p className="text-xs text-muted-foreground">Yard Location</p>
-                                    <p className="text-xs">{container.yardLocation}</p>
-                                  </div>
-                                )}
-                              </div>
-                              
-                              {/* Rail Information Section */}
-                              <div className="mt-3 pt-3 border-t">
-                                <div className="flex items-center justify-between mb-3">
-                                  <h5 className="text-sm font-semibold flex items-center gap-2">
-                                    <Truck className="h-4 w-4" />
-                                    Rail Information
-                                  </h5>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    disabled
-                                    title="Rail information is now managed in Transport Segments above"
-                                    data-testid={`button-add-rail-${container.id}`}
+                                {riskLevel && riskLevel !== 'low' && (
+                                  <Badge
+                                    variant={riskLevel === 'critical' || riskLevel === 'high' ? 'destructive' : 'secondary'}
+                                    className="text-xs"
+                                    title={riskReasons.join(', ')}
                                   >
-                                    <Plus className="mr-2 h-3 w-3" />
-                                    Use Transport Segments
-                                  </Button>
-                                </div>
-                                {containerData.rail ? (
-                                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm bg-muted/50 p-3 rounded-lg">
-                                    {containerData.rail.railNumber && (
-                                      <div>
-                                        <p className="text-xs text-muted-foreground">Rail Number</p>
-                                        <p className="text-xs font-medium">{containerData.rail.railNumber}</p>
-                                      </div>
-                                    )}
-                                    {containerData.rail.podRailCarrier && (
-                                      <div>
-                                        <p className="text-xs text-muted-foreground">POD Rail Carrier</p>
-                                        <p className="text-xs font-medium">{containerData.rail.podRailCarrier}</p>
-                                      </div>
-                                    )}
-                                    {containerData.rail.destinationRailCarrier && (
-                                      <div>
-                                        <p className="text-xs text-muted-foreground">Destination Rail Carrier</p>
-                                        <p className="text-xs font-medium">{containerData.rail.destinationRailCarrier}</p>
-                                      </div>
-                                    )}
-                                    {containerData.rail.railLoaded && (
-                                      <div>
-                                        <p className="text-xs text-muted-foreground">Rail Loaded</p>
-                                        <p className="text-xs">{formatDateTime(containerData.rail.railLoaded)}</p>
-                                      </div>
-                                    )}
-                                    {containerData.rail.railDeparted && (
-                                      <div>
-                                        <p className="text-xs text-muted-foreground">Rail Departed</p>
-                                        <p className="text-xs">{formatDateTime(containerData.rail.railDeparted)}</p>
-                                      </div>
-                                    )}
-                                    {containerData.rail.railArrived && (
-                                      <div>
-                                        <p className="text-xs text-muted-foreground">Rail Arrived</p>
-                                        <p className="text-xs">{formatDateTime(containerData.rail.railArrived)}</p>
-                                      </div>
-                                    )}
-                                    {containerData.rail.railUnloaded && (
-                                      <div>
-                                        <p className="text-xs text-muted-foreground">Rail Unloaded</p>
-                                        <p className="text-xs">{formatDateTime(containerData.rail.railUnloaded)}</p>
-                                      </div>
-                                    )}
-                                    {containerData.rail.arrivedAtDestination && (
-                                      <div>
-                                        <p className="text-xs text-muted-foreground">Arrived At Destination</p>
-                                        <p className="text-xs">{formatDateTime(containerData.rail.arrivedAtDestination)}</p>
-                                      </div>
-                                    )}
-                                    {containerData.rail.fullOut && (
-                                      <div>
-                                        <p className="text-xs text-muted-foreground">Full Out</p>
-                                        <p className="text-xs">{formatDateTime(containerData.rail.fullOut)}</p>
-                                      </div>
-                                    )}
-                                    {containerData.rail.emptyReturned && (
-                                      <div>
-                                        <p className="text-xs text-muted-foreground">Empty Returned</p>
-                                        <p className="text-xs">{formatDateTime(containerData.rail.emptyReturned)}</p>
-                                      </div>
-                                    )}
-                                    {containerData.rail.estimatedArrivalAtFinalDestination && (
-                                      <div>
-                                        <p className="text-xs text-muted-foreground">Est. Arrival at Final Dest</p>
-                                        <p className="text-xs">{formatDateTime(containerData.rail.estimatedArrivalAtFinalDestination)}</p>
-                                      </div>
-                                    )}
-                                    {containerData.rail.lfd && (
-                                      <div>
-                                        <p className="text-xs text-muted-foreground">LFD</p>
-                                        <p className="text-xs">{formatDateOnly(containerData.rail.lfd)}</p>
-                                      </div>
-                                    )}
-                                    {containerData.rail.available !== undefined && (
-                                      <div>
-                                        <p className="text-xs text-muted-foreground">Available</p>
-                                        <div className="text-xs">
-                                          {containerData.rail.available ? (
-                                            <Badge variant="default" className="bg-green-500 text-xs">Yes</Badge>
-                                          ) : (
-                                            <Badge variant="outline" className="text-xs">No</Badge>
-                                          )}
-                                        </div>
-                                      </div>
-                                    )}
-                                  </div>
-                                ) : (
-                                  <p className="text-xs text-muted-foreground">No rail information available</p>
+                                    {riskLevel === 'critical' ? '🔴 Critical' :
+                                      riskLevel === 'high' ? '🟠 High Risk' :
+                                        '🟡 Medium Risk'}
+                                  </Badge>
                                 )}
                               </div>
                             </div>
-                          )})}
-                        </div>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 pt-2 border-t text-sm">
+                              {container.bookingReference && (
+                                <div>
+                                  <p className="text-xs text-muted-foreground">Booking</p>
+                                  <p className="font-mono text-xs">{container.bookingReference}</p>
+                                </div>
+                              )}
+                              {container.weight && (
+                                <div>
+                                  <p className="text-xs text-muted-foreground">Weight</p>
+                                  <p className="text-xs">{container.weight} lbs</p>
+                                </div>
+                              )}
+                              {container.voyageNumber && (
+                                <div>
+                                  <p className="text-xs text-muted-foreground">Voyage</p>
+                                  <p className="font-mono text-xs">{container.voyageNumber}</p>
+                                </div>
+                              )}
+                              {container.sealNumber && (
+                                <div>
+                                  <p className="text-xs text-muted-foreground">Seal</p>
+                                  <p className="font-mono text-xs">{container.sealNumber}</p>
+                                </div>
+                              )}
+                              {container.containerEta && (
+                                <div>
+                                  <p className="text-xs text-muted-foreground">Container ETA</p>
+                                  <p className="text-xs">{formatDateOnly(container.containerEta)}</p>
+                                </div>
+                              )}
+                              {container.containerAta && (
+                                <div>
+                                  <p className="text-xs text-muted-foreground">Container ATA</p>
+                                  <p className="text-xs text-green-600 dark:text-green-400">{formatDateOnly(container.containerAta)}</p>
+                                </div>
+                              )}
+                              {container.lastFreeDay && (
+                                <div>
+                                  <p className="text-xs text-muted-foreground">Last Free Day</p>
+                                  <p className="text-xs">{formatDateOnly(container.lastFreeDay)}</p>
+                                </div>
+                              )}
+                              {container.dailyFeeRate && (
+                                <div>
+                                  <p className="text-xs text-muted-foreground">Daily Fee Rate</p>
+                                  <p className="text-xs">${container.dailyFeeRate}</p>
+                                </div>
+                              )}
+                              {container.detentionFee && (
+                                <div>
+                                  <p className="text-xs text-muted-foreground">Detention Fee</p>
+                                  <p className="text-xs">${container.detentionFee}</p>
+                                </div>
+                              )}
+                              {container.pickupChassis && (
+                                <div>
+                                  <p className="text-xs text-muted-foreground">Pickup Chassis</p>
+                                  <p className="text-xs">{container.pickupChassis}</p>
+                                </div>
+                              )}
+                              {container.yardLocation && (
+                                <div>
+                                  <p className="text-xs text-muted-foreground">Yard Location</p>
+                                  <p className="text-xs">{container.yardLocation}</p>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Rail Information Section */}
+                            <div className="mt-3 pt-3 border-t">
+                              <div className="flex items-center justify-between mb-3">
+                                <h5 className="text-sm font-semibold flex items-center gap-2">
+                                  <Truck className="h-4 w-4" />
+                                  Rail Information
+                                </h5>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  disabled
+                                  title="Rail information is now managed in Transport Segments above"
+                                  data-testid={`button-add-rail-${container.id}`}
+                                >
+                                  <Plus className="mr-2 h-3 w-3" />
+                                  Use Transport Segments
+                                </Button>
+                              </div>
+                              {containerData.rail ? (
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm bg-muted/50 p-3 rounded-lg">
+                                  {containerData.rail.railNumber && (
+                                    <div>
+                                      <p className="text-xs text-muted-foreground">Rail Number</p>
+                                      <p className="text-xs font-medium">{containerData.rail.railNumber}</p>
+                                    </div>
+                                  )}
+                                  {containerData.rail.podRailCarrier && (
+                                    <div>
+                                      <p className="text-xs text-muted-foreground">POD Rail Carrier</p>
+                                      <p className="text-xs font-medium">{containerData.rail.podRailCarrier}</p>
+                                    </div>
+                                  )}
+                                  {containerData.rail.destinationRailCarrier && (
+                                    <div>
+                                      <p className="text-xs text-muted-foreground">Destination Rail Carrier</p>
+                                      <p className="text-xs font-medium">{containerData.rail.destinationRailCarrier}</p>
+                                    </div>
+                                  )}
+                                  {containerData.rail.railLoaded && (
+                                    <div>
+                                      <p className="text-xs text-muted-foreground">Rail Loaded</p>
+                                      <p className="text-xs">{formatDateTime(containerData.rail.railLoaded)}</p>
+                                    </div>
+                                  )}
+                                  {containerData.rail.railDeparted && (
+                                    <div>
+                                      <p className="text-xs text-muted-foreground">Rail Departed</p>
+                                      <p className="text-xs">{formatDateTime(containerData.rail.railDeparted)}</p>
+                                    </div>
+                                  )}
+                                  {containerData.rail.railArrived && (
+                                    <div>
+                                      <p className="text-xs text-muted-foreground">Rail Arrived</p>
+                                      <p className="text-xs">{formatDateTime(containerData.rail.railArrived)}</p>
+                                    </div>
+                                  )}
+                                  {containerData.rail.railUnloaded && (
+                                    <div>
+                                      <p className="text-xs text-muted-foreground">Rail Unloaded</p>
+                                      <p className="text-xs">{formatDateTime(containerData.rail.railUnloaded)}</p>
+                                    </div>
+                                  )}
+                                  {containerData.rail.arrivedAtDestination && (
+                                    <div>
+                                      <p className="text-xs text-muted-foreground">Arrived At Destination</p>
+                                      <p className="text-xs">{formatDateTime(containerData.rail.arrivedAtDestination)}</p>
+                                    </div>
+                                  )}
+                                  {containerData.rail.fullOut && (
+                                    <div>
+                                      <p className="text-xs text-muted-foreground">Full Out</p>
+                                      <p className="text-xs">{formatDateTime(containerData.rail.fullOut)}</p>
+                                    </div>
+                                  )}
+                                  {containerData.rail.emptyReturned && (
+                                    <div>
+                                      <p className="text-xs text-muted-foreground">Empty Returned</p>
+                                      <p className="text-xs">{formatDateTime(containerData.rail.emptyReturned)}</p>
+                                    </div>
+                                  )}
+                                  {containerData.rail.estimatedArrivalAtFinalDestination && (
+                                    <div>
+                                      <p className="text-xs text-muted-foreground">Est. Arrival at Final Dest</p>
+                                      <p className="text-xs">{formatDateTime(containerData.rail.estimatedArrivalAtFinalDestination)}</p>
+                                    </div>
+                                  )}
+                                  {containerData.rail.lfd && (
+                                    <div>
+                                      <p className="text-xs text-muted-foreground">LFD</p>
+                                      <p className="text-xs">{formatDateOnly(containerData.rail.lfd)}</p>
+                                    </div>
+                                  )}
+                                  {containerData.rail.available !== undefined && (
+                                    <div>
+                                      <p className="text-xs text-muted-foreground">Available</p>
+                                      <div className="text-xs">
+                                        {containerData.rail.available ? (
+                                          <Badge variant="default" className="bg-green-500 text-xs">Yes</Badge>
+                                        ) : (
+                                          <Badge variant="outline" className="text-xs">No</Badge>
+                                        )}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              ) : (
+                                <p className="text-xs text-muted-foreground">No rail information available</p>
+                              )}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
                   </div>
                 ) : (
                   <div className="text-center py-12">
@@ -1975,7 +1991,7 @@ export default function CargoesFlowShipmentDetail() {
                               )}
                             </div>
                           </div>
-                          <Badge 
+                          <Badge
                             variant={milestone.status === 'completed' ? 'default' : milestone.status === 'delayed' ? 'destructive' : 'outline'}
                             className="text-xs"
                           >
@@ -2015,7 +2031,7 @@ export default function CargoesFlowShipmentDetail() {
 
         <TabsContent value="raw" className="mt-6 space-y-6">
           <MapLogsSection shipmentNumber={shipment.shipmentReference} />
-          
+
           <Card>
             <CardHeader>
               <CardTitle>Raw API Data</CardTitle>
@@ -2098,10 +2114,10 @@ export default function CargoesFlowShipmentDetail() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="terminal-port">Port</Label>
-                <Select 
-                  value={terminalForm.terminalPort} 
-                  onValueChange={(value) => setTerminalForm({ 
-                    ...terminalForm, 
+                <Select
+                  value={terminalForm.terminalPort}
+                  onValueChange={(value) => setTerminalForm({
+                    ...terminalForm,
                     terminalPort: value,
                     terminalName: "" // Reset terminal name when port changes
                   })}
@@ -2120,25 +2136,25 @@ export default function CargoesFlowShipmentDetail() {
               </div>
               <div>
                 <Label htmlFor="terminal-name">Terminal Name</Label>
-                <Select 
-                  value={terminalForm.terminalName} 
+                <Select
+                  value={terminalForm.terminalName}
                   onValueChange={(value) => setTerminalForm({ ...terminalForm, terminalName: value })}
                   disabled={!terminalForm.terminalPort}
                 >
                   <SelectTrigger data-testid="select-terminal-name">
                     <SelectValue placeholder={
-                      terminalForm.terminalPort 
-                        ? "Select a terminal" 
+                      terminalForm.terminalPort
+                        ? "Select a terminal"
                         : "Select port first"
                     } />
                   </SelectTrigger>
                   <SelectContent>
-                    {terminalForm.terminalPort && 
-                     PORT_TERMINALS[terminalForm.terminalPort]?.map((terminal) => (
-                      <SelectItem key={terminal} value={terminal}>
-                        {terminal}
-                      </SelectItem>
-                    ))}
+                    {terminalForm.terminalPort &&
+                      PORT_TERMINALS[terminalForm.terminalPort]?.map((terminal) => (
+                        <SelectItem key={terminal} value={terminal}>
+                          {terminal}
+                        </SelectItem>
+                      ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -2270,182 +2286,182 @@ export default function CargoesFlowShipmentDetail() {
 
       {/* Add Rail Dialog - Hidden since rail data is now handled in Transport Segments */}
       {false && (
-      <Dialog open={addRailDialogOpen} onOpenChange={setAddRailDialogOpen}>
-        <DialogContent data-testid="dialog-add-rail" className="max-w-4xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Add Rail Information</DialogTitle>
-            <DialogDescription>
-              Add rail tracking and milestone information for this container
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="grid grid-cols-3 gap-4">
-              <div>
-                <Label htmlFor="rail-number">Rail Number</Label>
-                <Input
-                  id="rail-number"
-                  placeholder="e.g., RAIL123456"
-                  value={railForm.railNumber}
-                  onChange={(e) => setRailForm({ ...railForm, railNumber: e.target.value })}
-                  data-testid="input-rail-number"
-                />
+        <Dialog open={addRailDialogOpen} onOpenChange={setAddRailDialogOpen}>
+          <DialogContent data-testid="dialog-add-rail" className="max-w-4xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Add Rail Information</DialogTitle>
+              <DialogDescription>
+                Add rail tracking and milestone information for this container
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <Label htmlFor="rail-number">Rail Number</Label>
+                  <Input
+                    id="rail-number"
+                    placeholder="e.g., RAIL123456"
+                    value={railForm.railNumber}
+                    onChange={(e) => setRailForm({ ...railForm, railNumber: e.target.value })}
+                    data-testid="input-rail-number"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="pod-rail-carrier">POD Rail Carrier</Label>
+                  <Input
+                    id="pod-rail-carrier"
+                    placeholder="e.g., Union Pacific"
+                    value={railForm.podRailCarrier}
+                    onChange={(e) => setRailForm({ ...railForm, podRailCarrier: e.target.value })}
+                    data-testid="input-pod-rail-carrier"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="dest-rail-carrier">Destination Rail Carrier</Label>
+                  <Input
+                    id="dest-rail-carrier"
+                    placeholder="e.g., BNSF"
+                    value={railForm.destinationRailCarrier}
+                    onChange={(e) => setRailForm({ ...railForm, destinationRailCarrier: e.target.value })}
+                    data-testid="input-dest-rail-carrier"
+                  />
+                </div>
               </div>
-              <div>
-                <Label htmlFor="pod-rail-carrier">POD Rail Carrier</Label>
-                <Input
-                  id="pod-rail-carrier"
-                  placeholder="e.g., Union Pacific"
-                  value={railForm.podRailCarrier}
-                  onChange={(e) => setRailForm({ ...railForm, podRailCarrier: e.target.value })}
-                  data-testid="input-pod-rail-carrier"
-                />
+
+              <Separator />
+              <h4 className="font-semibold text-sm">Rail Milestones</h4>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="rail-loaded">Rail Loaded</Label>
+                  <Input
+                    type="datetime-local"
+                    id="rail-loaded"
+                    value={railForm.railLoaded}
+                    onChange={(e) => setRailForm({ ...railForm, railLoaded: e.target.value })}
+                    data-testid="input-rail-loaded"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="rail-departed">Rail Departed</Label>
+                  <Input
+                    type="datetime-local"
+                    id="rail-departed"
+                    value={railForm.railDeparted}
+                    onChange={(e) => setRailForm({ ...railForm, railDeparted: e.target.value })}
+                    data-testid="input-rail-departed"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="rail-arrived">Rail Arrived</Label>
+                  <Input
+                    type="datetime-local"
+                    id="rail-arrived"
+                    value={railForm.railArrived}
+                    onChange={(e) => setRailForm({ ...railForm, railArrived: e.target.value })}
+                    data-testid="input-rail-arrived"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="rail-unloaded">Rail Unloaded</Label>
+                  <Input
+                    type="datetime-local"
+                    id="rail-unloaded"
+                    value={railForm.railUnloaded}
+                    onChange={(e) => setRailForm({ ...railForm, railUnloaded: e.target.value })}
+                    data-testid="input-rail-unloaded"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="arrived-at-dest">Arrived At Destination</Label>
+                  <Input
+                    type="datetime-local"
+                    id="arrived-at-dest"
+                    value={railForm.arrivedAtDestination}
+                    onChange={(e) => setRailForm({ ...railForm, arrivedAtDestination: e.target.value })}
+                    data-testid="input-arrived-at-dest"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="full-out">Full Out</Label>
+                  <Input
+                    type="datetime-local"
+                    id="full-out"
+                    value={railForm.fullOut}
+                    onChange={(e) => setRailForm({ ...railForm, fullOut: e.target.value })}
+                    data-testid="input-full-out"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="empty-returned">Empty Returned</Label>
+                  <Input
+                    type="datetime-local"
+                    id="empty-returned"
+                    value={railForm.emptyReturned}
+                    onChange={(e) => setRailForm({ ...railForm, emptyReturned: e.target.value })}
+                    data-testid="input-empty-returned"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="est-arrival-final">Estimated Arrival at Final Destination</Label>
+                  <Input
+                    type="datetime-local"
+                    id="est-arrival-final"
+                    value={railForm.estimatedArrivalAtFinalDestination}
+                    onChange={(e) => setRailForm({ ...railForm, estimatedArrivalAtFinalDestination: e.target.value })}
+                    data-testid="input-est-arrival-final"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="rail-lfd">LFD (Last Free Day)</Label>
+                  <Input
+                    type="date"
+                    id="rail-lfd"
+                    value={railForm.lfd}
+                    onChange={(e) => setRailForm({ ...railForm, lfd: e.target.value })}
+                    data-testid="input-rail-lfd"
+                  />
+                </div>
               </div>
-              <div>
-                <Label htmlFor="dest-rail-carrier">Destination Rail Carrier</Label>
-                <Input
-                  id="dest-rail-carrier"
-                  placeholder="e.g., BNSF"
-                  value={railForm.destinationRailCarrier}
-                  onChange={(e) => setRailForm({ ...railForm, destinationRailCarrier: e.target.value })}
-                  data-testid="input-dest-rail-carrier"
+
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="rail-available"
+                  checked={railForm.available}
+                  onCheckedChange={(checked) => setRailForm({ ...railForm, available: checked as boolean })}
+                  data-testid="checkbox-rail-available"
                 />
+                <Label htmlFor="rail-available" className="text-sm font-medium cursor-pointer">
+                  Available
+                </Label>
               </div>
             </div>
-            
-            <Separator />
-            <h4 className="font-semibold text-sm">Rail Milestones</h4>
-            
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="rail-loaded">Rail Loaded</Label>
-                <Input
-                  type="datetime-local"
-                  id="rail-loaded"
-                  value={railForm.railLoaded}
-                  onChange={(e) => setRailForm({ ...railForm, railLoaded: e.target.value })}
-                  data-testid="input-rail-loaded"
-                />
-              </div>
-              <div>
-                <Label htmlFor="rail-departed">Rail Departed</Label>
-                <Input
-                  type="datetime-local"
-                  id="rail-departed"
-                  value={railForm.railDeparted}
-                  onChange={(e) => setRailForm({ ...railForm, railDeparted: e.target.value })}
-                  data-testid="input-rail-departed"
-                />
-              </div>
-              <div>
-                <Label htmlFor="rail-arrived">Rail Arrived</Label>
-                <Input
-                  type="datetime-local"
-                  id="rail-arrived"
-                  value={railForm.railArrived}
-                  onChange={(e) => setRailForm({ ...railForm, railArrived: e.target.value })}
-                  data-testid="input-rail-arrived"
-                />
-              </div>
-              <div>
-                <Label htmlFor="rail-unloaded">Rail Unloaded</Label>
-                <Input
-                  type="datetime-local"
-                  id="rail-unloaded"
-                  value={railForm.railUnloaded}
-                  onChange={(e) => setRailForm({ ...railForm, railUnloaded: e.target.value })}
-                  data-testid="input-rail-unloaded"
-                />
-              </div>
-              <div>
-                <Label htmlFor="arrived-at-dest">Arrived At Destination</Label>
-                <Input
-                  type="datetime-local"
-                  id="arrived-at-dest"
-                  value={railForm.arrivedAtDestination}
-                  onChange={(e) => setRailForm({ ...railForm, arrivedAtDestination: e.target.value })}
-                  data-testid="input-arrived-at-dest"
-                />
-              </div>
-              <div>
-                <Label htmlFor="full-out">Full Out</Label>
-                <Input
-                  type="datetime-local"
-                  id="full-out"
-                  value={railForm.fullOut}
-                  onChange={(e) => setRailForm({ ...railForm, fullOut: e.target.value })}
-                  data-testid="input-full-out"
-                />
-              </div>
-              <div>
-                <Label htmlFor="empty-returned">Empty Returned</Label>
-                <Input
-                  type="datetime-local"
-                  id="empty-returned"
-                  value={railForm.emptyReturned}
-                  onChange={(e) => setRailForm({ ...railForm, emptyReturned: e.target.value })}
-                  data-testid="input-empty-returned"
-                />
-              </div>
-              <div>
-                <Label htmlFor="est-arrival-final">Estimated Arrival at Final Destination</Label>
-                <Input
-                  type="datetime-local"
-                  id="est-arrival-final"
-                  value={railForm.estimatedArrivalAtFinalDestination}
-                  onChange={(e) => setRailForm({ ...railForm, estimatedArrivalAtFinalDestination: e.target.value })}
-                  data-testid="input-est-arrival-final"
-                />
-              </div>
-              <div>
-                <Label htmlFor="rail-lfd">LFD (Last Free Day)</Label>
-                <Input
-                  type="date"
-                  id="rail-lfd"
-                  value={railForm.lfd}
-                  onChange={(e) => setRailForm({ ...railForm, lfd: e.target.value })}
-                  data-testid="input-rail-lfd"
-                />
-              </div>
-            </div>
-            
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="rail-available"
-                checked={railForm.available}
-                onCheckedChange={(checked) => setRailForm({ ...railForm, available: checked as boolean })}
-                data-testid="checkbox-rail-available"
-              />
-              <Label htmlFor="rail-available" className="text-sm font-medium cursor-pointer">
-                Available
-              </Label>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setAddRailDialogOpen(false)}
-              data-testid="button-cancel-rail"
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={() => {
-                if (selectedContainerId) {
-                  addRailMutation.mutate({
-                    containerId: selectedContainerId,
-                    containerNumber: selectedContainerNumber || undefined,
-                    rail: railForm,
-                  });
-                }
-              }}
-              disabled={addRailMutation.isPending || !selectedContainerId}
-              data-testid="button-save-rail"
-            >
-              {addRailMutation.isPending ? "Saving..." : "Save Rail Info"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setAddRailDialogOpen(false)}
+                data-testid="button-cancel-rail"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => {
+                  if (selectedContainerId) {
+                    addRailMutation.mutate({
+                      containerId: selectedContainerId,
+                      containerNumber: selectedContainerNumber || undefined,
+                      rail: railForm,
+                    });
+                  }
+                }}
+                disabled={addRailMutation.isPending || !selectedContainerId}
+                data-testid="button-save-rail"
+              >
+                {addRailMutation.isPending ? "Saving..." : "Save Rail Info"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       )}
 
       {/* Add Milestone Dialog */}

@@ -14,25 +14,25 @@ export async function handleTmsWebhook(req: Request, res: Response) {
     // Validate webhook secret
     const tmsSecret = process.env.TMS_WEBHOOK_SECRET;
     const receivedSignature = req.headers['x-tms-signature'] || req.headers['x-tms-key'];
-    
+
     if (tmsSecret && receivedSignature !== tmsSecret) {
       console.error('[TAI TMS Webhook] ❌ Invalid signature');
       return res.status(401).json({ error: "Unauthorized" });
     }
 
     const payload = req.body;
-    
+
     // Extract TAI-specific fields
     const shipmentId = payload.shipmentId?.toString() || 'UNKNOWN';
     const status = payload.status?.toLowerCase() || 'unknown';
     const shipmentType = payload.shipmentType || 'UNKNOWN'; // Drayage, Truckload, LTL, etc.
-    
+
     // Extract container number from reference numbers array
     const containerRef = payload.shipmentReferenceNumbers?.find(
       (ref: any) => ref.referenceType === "Container Number"
     );
     const containerNumber = containerRef?.value || null;
-    
+
     // Determine if this is a CREATE or UPDATE operation by checking if shipment exists
     const existingShipment = await storage.getShipmentByReference(shipmentId);
     const operation = existingShipment ? 'UPDATE' : 'CREATE';
@@ -57,7 +57,7 @@ export async function handleTmsWebhook(req: Request, res: Response) {
 
       // Mark webhook as processed
       await storage.updateWebhookLogProcessed(webhookLog.id, new Date());
-      
+
       console.log('[TAI TMS Webhook] ✅ Processing complete');
       res.json({ success: true, webhookId: webhookLog.id });
     } catch (processingError: any) {
@@ -74,53 +74,53 @@ export async function handleTmsWebhook(req: Request, res: Response) {
 async function processTaiShipmentUpdate(payload: any, webhookId: string) {
   // Extract reference numbers
   const referenceNumbers = payload.shipmentReferenceNumbers || [];
-  
+
   const containerRef = referenceNumbers.find((ref: any) => ref.referenceType === "Container Number");
   const mawbRef = referenceNumbers.find((ref: any) => ref.referenceType === "MAWB Number");
   const shipmentIdRef = referenceNumbers.find((ref: any) => ref.referenceType === "Shipment Id");
   const shipperRef = referenceNumbers.find((ref: any) => ref.referenceType === "Shipper Reference Number");
-  
+
   const containerNumber = containerRef?.value;
   const mawbNumber = mawbRef?.value;
   const taiShipmentId = shipmentIdRef?.value || payload.shipmentId?.toString();
   const shipperRefNumber = shipperRef?.value;
-  
+
   // Use shipment ID as primary reference
   const referenceNumber = taiShipmentId || `TAI-${Date.now()}`;
-  
+
   // Extract stops
   const stops = payload.stops || [];
   const firstPickup = stops.find((stop: any) => stop.stopType === "First Pickup");
   const lastDrop = stops.find((stop: any) => stop.stopType === "Last Drop");
-  
+
   // Build location strings from stop data
-  const originPort = firstPickup 
+  const originPort = firstPickup
     ? [firstPickup.companyName, firstPickup.city, firstPickup.state].filter(Boolean).join(', ')
     : '';
-  
+
   const destinationPort = lastDrop
     ? [lastDrop.companyName, lastDrop.city, lastDrop.state].filter(Boolean).join(', ')
     : '';
-  
+
   // Extract customer info
   const customerName = payload.customer?.name || null;
   const staffName = payload.customer?.staffName || null;
   const officeName = payload.customer?.office || null;
-  
+
   // Extract sales reps from customer.salesRepNames (comma-separated string)
   const salesRepNamesString = payload.customer?.salesRepNames || '';
-  const salesRepNames = salesRepNamesString 
+  const salesRepNames = salesRepNamesString
     ? salesRepNamesString.split(',').map((name: string) => name.trim()).filter(Boolean)
     : [];
-  
+
   // Extract commodities
   const commodities = payload.commodities || [];
   const commodityDescription = commodities.map((c: any) => c.description).join(', ') || null;
-  
+
   // Extract carrier list
   const carriers = payload.carrierList || [];
   const carrierName = carriers.length > 0 ? carriers[0].name : null;
-  
+
   // Extract shipment type from payload (used for Cargoes Flow logic)
   const shipmentType = payload.shipmentType || '';
 
@@ -129,8 +129,9 @@ async function processTaiShipmentUpdate(payload: any, webhookId: string) {
     referenceNumber: referenceNumber,
     bookingNumber: shipperRefNumber || '',
     masterBillOfLading: mawbNumber || '',
-    shipper: customerName,
-    consignee: lastDrop?.companyName || null,
+    // shipper and consignee removed to prevent overwriting local data
+    // shipper: customerName,
+    // consignee: lastDrop?.companyName || null,
     originPort: originPort,
     destinationPort: destinationPort,
     etd: firstPickup?.estimatedReadyDateTime || null,
@@ -156,11 +157,11 @@ async function processTaiShipmentUpdate(payload: any, webhookId: string) {
   });
 
   const existingShipment = await storage.getShipmentByReference(shipmentData.referenceNumber);
-  
+
   if (existingShipment) {
     console.log(`[TAI TMS Webhook] Updating existing shipment: ${shipmentData.referenceNumber}`);
     await storage.updateShipment(existingShipment.id, shipmentData);
-    
+
     // Create milestone for status update
     try {
       await storage.createMilestone({
@@ -178,20 +179,20 @@ async function processTaiShipmentUpdate(payload: any, webhookId: string) {
     // Send update to Cargoes Flow if this is a Drayage shipment with MBL
     if (shipmentType.toLowerCase() === 'drayage' && shipmentData.masterBillOfLading && shipmentData.masterBillOfLading.trim() !== '') {
       console.log(`[Cargoes Flow Update] ✅ Drayage UPDATE detected - sending update for ${shipmentData.referenceNumber} (MBL: ${shipmentData.masterBillOfLading})`);
-      
+
       try {
         // Look up the Cargoes Flow shipment reference by MBL number
         // Cargoes Flow uses shipment_reference (e.g., TS-6583V3) as the shipmentNumber, NOT the MBL
         const cargoesFlowShipment = await storage.getCargoesFlowShipmentByMbl(shipmentData.masterBillOfLading);
-        
+
         if (!cargoesFlowShipment) {
           console.log(`[Cargoes Flow Update] ⚠️ Shipment not found in Cargoes Flow by MBL: ${shipmentData.masterBillOfLading} - skipping update`);
           return;
         }
-        
+
         const shipmentNumber = cargoesFlowShipment.shipmentReference;
         console.log(`[Cargoes Flow Update] 📍 Using Cargoes Flow shipment reference: ${shipmentNumber} (MBL: ${shipmentData.masterBillOfLading})`);
-        
+
         // Helper function to convert ISO datetime to simple date (YYYY-MM-DD)
         const toSimpleDate = (isoString: string | null): string | undefined => {
           if (!isoString) return undefined;
@@ -201,15 +202,15 @@ async function processTaiShipmentUpdate(payload: any, webhookId: string) {
             return undefined;
           }
         };
-        
+
         // Build update payload with available fields (using simple date format)
         const updatePayload: any = {};
-        
-        if (shipmentData.shipper) updatePayload.shipper = shipmentData.shipper;
-        if (shipmentData.consignee) updatePayload.consignee = shipmentData.consignee;
+
+        if (customerName) updatePayload.shipper = customerName;
+        if (lastDrop?.companyName) updatePayload.consignee = lastDrop.companyName;
         if (shipmentData.etd) updatePayload.promisedEtd = toSimpleDate(shipmentData.etd);
         if (shipmentData.eta) updatePayload.promisedEta = toSimpleDate(shipmentData.eta);
-        
+
         // Send the update to Cargoes Flow
         const result = await sendUpdateToCargoesFlow(shipmentNumber, updatePayload);
 
@@ -235,7 +236,7 @@ async function processTaiShipmentUpdate(payload: any, webhookId: string) {
   } else {
     console.log(`[TAI TMS Webhook] Creating new shipment: ${shipmentData.referenceNumber}`);
     const newShipment = await storage.createShipment(shipmentData);
-    
+
     // Create initial milestones from stops
     if (firstPickup && firstPickup.estimatedReadyDateTime) {
       try {
@@ -251,7 +252,7 @@ async function processTaiShipmentUpdate(payload: any, webhookId: string) {
         console.error('[TAI TMS Webhook] Error creating pickup milestone:', milestoneError);
       }
     }
-    
+
     if (lastDrop) {
       try {
         await storage.createMilestone({
@@ -271,7 +272,7 @@ async function processTaiShipmentUpdate(payload: any, webhookId: string) {
   // Send to Cargoes Flow ONLY if shipment type is "Drayage" AND has MBL
   if (shipmentType.toLowerCase() === 'drayage' && shipmentData.masterBillOfLading && shipmentData.masterBillOfLading.trim() !== '') {
     console.log(`[Cargoes Flow] ✅ Drayage shipment with MBL detected - sending ${shipmentData.referenceNumber} to Cargoes Flow (MBL: ${shipmentData.masterBillOfLading})`);
-    
+
     try {
       const result = await sendShipmentToCargoesFlow(
         shipmentData.referenceNumber,
@@ -284,8 +285,8 @@ async function processTaiShipmentUpdate(payload: any, webhookId: string) {
           carrier: shipmentData.carrier,
           status: shipmentData.status,
           bookingNumber: shipmentData.bookingNumber,
-          shipper: shipmentData.shipper,
-          consignee: shipmentData.consignee,
+          shipper: customerName,
+          consignee: lastDrop?.companyName || null,
           office: officeName,
           salesRepNames: salesRepNames,
         }
@@ -319,15 +320,15 @@ async function processTaiShipmentUpdate(payload: any, webhookId: string) {
     console.log(`[Cargoes Flow] ⏭️ Skipping non-Drayage shipment: ${shipmentData.referenceNumber} (Type: ${shipmentType})`);
   } else if (!shipmentData.masterBillOfLading || shipmentData.masterBillOfLading.trim() === '') {
     console.log(`[Cargoes Flow] ⚠️ Drayage shipment ${shipmentData.referenceNumber} has no MBL - tracking as missing`);
-    
+
     // Track shipment with missing MBL
     try {
       await storage.createMissingMblShipment({
         shipmentReference: shipmentData.referenceNumber,
         webhookId: webhookId,
         containerNumber: containerNumber || null,
-        shipper: shipmentData.shipper,
-        consignee: shipmentData.consignee,
+        shipper: customerName,
+        consignee: lastDrop?.companyName || null,
         originPort: shipmentData.originPort,
         destinationPort: shipmentData.destinationPort,
         carrier: shipmentData.carrier,
@@ -343,7 +344,7 @@ async function processTaiShipmentUpdate(payload: any, webhookId: string) {
 export async function sendTestWebhook(req: Request, res: Response) {
   try {
     const webhookUrl = `${req.protocol}://${req.get('host')}/api/webhooks/tms`;
-    
+
     // Use real TAI TMS payload format
     const testPayload = {
       shipmentType: "Drayage",
@@ -400,7 +401,7 @@ export async function sendTestWebhook(req: Request, res: Response) {
     };
 
     console.log('[Test Webhook] Sending TAI TMS test webhook to:', webhookUrl);
-    
+
     const response = await fetch(webhookUrl, {
       method: 'POST',
       headers: {
@@ -411,9 +412,9 @@ export async function sendTestWebhook(req: Request, res: Response) {
     });
 
     const result = await response.json();
-    
+
     console.log('[Test Webhook] Response:', result);
-    
+
     res.json({
       success: true,
       message: 'TAI TMS test webhook sent',
@@ -429,7 +430,7 @@ export async function sendTestWebhook(req: Request, res: Response) {
 
 export async function retryWebhook(webhookId: string, payload: any) {
   console.log(`[Webhook Retry] Processing webhook ${webhookId}...`);
-  
+
   try {
     await processTaiShipmentUpdate(payload, webhookId);
     await storage.updateWebhookLogProcessed(webhookId, new Date());

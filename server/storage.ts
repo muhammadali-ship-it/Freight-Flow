@@ -1979,8 +1979,18 @@ export class DbStorage implements IStorage {
       // Handle both boolean and string values for terminalAvailableForPickup
       const isAvailableForPickup = terminalData.terminalAvailableForPickup === true ||
         terminalData.terminalAvailableForPickup === 'true';
+
+      // Check for active holds (excluding Customs Hold if customsRelease event exists)
+      const events = rawData.shipmentEvents || [];
+      const customsReleaseEvent = events.find((e: any) => e.code === 'customsRelease' || e.code === 'customsHoldReleased');
+      let activeHolds = rawData.terminalHolds || [];
+      if (customsReleaseEvent) {
+        activeHolds = activeHolds.filter((h: string) => h !== 'Customs Hold');
+      }
+      const hasActiveHolds = activeHolds.length > 0;
+
       const needsAttention = terminalData.terminalName &&
-        !isAvailableForPickup &&
+        (!isAvailableForPickup || hasActiveHolds) &&
         !terminalData.terminalFullOut &&
         !isEmptyReturned;
 
@@ -1991,6 +2001,8 @@ export class DbStorage implements IStorage {
           terminalAvailableForPickup: terminalData.terminalAvailableForPickup,
           terminalFullOut: terminalData.terminalFullOut,
           isAvailableForPickup,
+          hasActiveHolds,
+          activeHolds,
           shipmentId: shipment.id
         });
       }
@@ -2094,8 +2106,18 @@ export class DbStorage implements IStorage {
           if (isEmptyReturned) return false;
           const isAvailable = rawData.terminalAvailableForPickup === true ||
             rawData.terminalAvailableForPickup === 'true';
+
+          // Check for active holds (excluding Customs Hold if customsRelease event exists)
+          const events = rawData.shipmentEvents || [];
+          const customsReleaseEvent = events.find((e: any) => e.code === 'customsRelease' || e.code === 'customsHoldReleased');
+          let activeHolds = rawData.terminalHolds || [];
+          if (customsReleaseEvent) {
+            activeHolds = activeHolds.filter((h: string) => h !== 'Customs Hold');
+          }
+          const hasActiveHolds = activeHolds.length > 0;
+
           return rawData.terminalName &&
-            !isAvailable &&
+            (!isAvailable || hasActiveHolds) &&
             !rawData.terminalFullOut;
         }
 

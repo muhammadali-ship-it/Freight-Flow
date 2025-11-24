@@ -129,9 +129,8 @@ async function processTaiShipmentUpdate(payload: any, webhookId: string) {
     referenceNumber: referenceNumber,
     bookingNumber: shipperRefNumber || '',
     masterBillOfLading: mawbNumber || '',
-    // shipper and consignee removed to prevent overwriting local data
-    // shipper: customerName,
-    // consignee: lastDrop?.companyName || null,
+    shipper: customerName,
+    consignee: lastDrop?.companyName || null,
     originPort: originPort,
     destinationPort: destinationPort,
     etd: firstPickup?.estimatedReadyDateTime || null,
@@ -206,8 +205,8 @@ async function processTaiShipmentUpdate(payload: any, webhookId: string) {
         // Build update payload with available fields (using simple date format)
         const updatePayload: any = {};
 
-        if (customerName) updatePayload.shipper = customerName;
-        if (lastDrop?.companyName) updatePayload.consignee = lastDrop.companyName;
+        if (shipmentData.shipper) updatePayload.shipper = shipmentData.shipper;
+        if (shipmentData.consignee) updatePayload.consignee = shipmentData.consignee;
         if (shipmentData.etd) updatePayload.promisedEtd = toSimpleDate(shipmentData.etd);
         if (shipmentData.eta) updatePayload.promisedEta = toSimpleDate(shipmentData.eta);
 
@@ -285,8 +284,8 @@ async function processTaiShipmentUpdate(payload: any, webhookId: string) {
           carrier: shipmentData.carrier,
           status: shipmentData.status,
           bookingNumber: shipmentData.bookingNumber,
-          shipper: customerName,
-          consignee: lastDrop?.companyName || null,
+          shipper: shipmentData.shipper,
+          consignee: shipmentData.consignee,
           office: officeName,
           salesRepNames: salesRepNames,
         }
@@ -327,8 +326,8 @@ async function processTaiShipmentUpdate(payload: any, webhookId: string) {
         shipmentReference: shipmentData.referenceNumber,
         webhookId: webhookId,
         containerNumber: containerNumber || null,
-        shipper: customerName,
-        consignee: lastDrop?.companyName || null,
+        shipper: shipmentData.shipper,
+        consignee: shipmentData.consignee,
         originPort: shipmentData.originPort,
         destinationPort: shipmentData.destinationPort,
         carrier: shipmentData.carrier,

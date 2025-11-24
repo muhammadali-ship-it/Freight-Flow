@@ -2,7 +2,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useRoute, Link } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Package, MapPin, Calendar, Ship, User, FileText, Truck, Weight, Box, Clock, CheckCircle2, XCircle, Plus, Edit, Users } from "lucide-react";
+import { ArrowLeft, Package, MapPin, Calendar, Ship, User, FileText, Truck, Weight, Box, Clock, CheckCircle2, XCircle, Plus, Edit, Users, AlertCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -474,6 +474,7 @@ export default function CargoesFlowShipmentDetail() {
     pickupChassis: "",
     pickupAppointment: "",
     availableForPickup: false,
+    holds: [] as string[],
   });
   const [milestoneForm, setMilestoneForm] = useState({
     eventType: "",
@@ -1586,13 +1587,13 @@ export default function CargoesFlowShipmentDetail() {
                     setTerminalForm({
                       terminalName: rawData.terminalName || "",
                       terminalPort: rawData.terminalPort || "",
-                      lfd: rawData.lastFreeDay || "",
                       demurrage: rawData.demurrage || "",
                       detention: rawData.detention || "",
                       yardLocation: rawData.terminalYardLocation || "",
                       pickupChassis: rawData.terminalPickupChassis || "",
                       pickupAppointment: rawData.terminalPickupAppointment || "",
                       availableForPickup: rawData.terminalAvailableForPickup || !!gateOutEvent,
+                      holds: rawData.terminalHolds || [],
                     });
                     setAddTerminalDialogOpen(true);
                   }}
@@ -1607,20 +1608,38 @@ export default function CargoesFlowShipmentDetail() {
                   const rawData = shipment.rawData as any || {};
                   const events = rawData.shipmentEvents || [];
                   const gateOutEvent = events.find((e: any) => e.code === "gateOutWithContainerFull");
+                  const customsReleaseEvent = events.find((e: any) => e.code === "customsRelease" || e.code === "customsHoldReleased");
 
                   const hasTerminalInfo = rawData.terminalName || rawData.terminalPort || rawData.lastFreeDay || rawData.demurrage ||
                     rawData.detention || rawData.terminalYardLocation || rawData.terminalPickupChassis || rawData.terminalFullOut ||
                     rawData.terminalPickupAppointment || rawData.terminalEmptyReturned || rawData.terminalAvailableForPickup !== undefined ||
+                    (rawData.terminalHolds && rawData.terminalHolds.length > 0) ||
                     gateOutEvent;
 
                   const effectiveFullOut = rawData.terminalFullOut || (gateOutEvent ? gateOutEvent.actualTime : null);
-                  // Prioritize event existence: if event exists, it implies available (unless explicitly false? No, user wants automatic check).
-                  // Actually, let's say: if manually set to true, OR event exists -> true.
-                  // If manually set to false, but event exists -> true (override manual false because event happened).
                   const effectiveAvailable = rawData.terminalAvailableForPickup === true || !!gateOutEvent;
+
+                  // Calculate effective holds
+                  let effectiveHolds = rawData.terminalHolds || [];
+                  if (customsReleaseEvent) {
+                    effectiveHolds = effectiveHolds.filter((h: string) => h !== "Customs Hold");
+                  }
 
                   return hasTerminalInfo ? (
                     <div className="rounded-lg border p-4 space-y-3">
+                      {effectiveHolds.length > 0 && (
+                        <div className="flex flex-wrap gap-2 mb-4 p-3 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900 rounded-md">
+                          <span className="text-sm font-medium text-red-800 dark:text-red-300 flex items-center gap-2 w-full">
+                            <AlertCircle className="h-4 w-4" />
+                            Active Holds
+                          </span>
+                          {effectiveHolds.map((hold: string) => (
+                            <Badge key={hold} variant="destructive" className="font-normal">
+                              {hold}
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         {rawData.terminalName && (
                           <div>
@@ -1698,1020 +1717,1072 @@ export default function CargoesFlowShipmentDetail() {
                         )}
                       </div>
                     </div>
-                  (
-                      iv className = "text-center py-12" >
-                      apPin className = "h-12 w-12 text-muted-foreground mx-auto mb-3" />
-                      className= "text-muted-foreground" > No terminal information available</p>
-                       className="text-xs text-muted-foreground mt-2">Click "Edit Terminal" to add details</p>
-                    div>
-                  
+                  ) : (
+                    <div className="text-center py-12">
+                      <MapPin className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
+                      <p className="text-muted-foreground">No terminal information available</p>
+                      <p className="text-xs text-muted-foreground mt-2">Click "Edit Terminal" to add details</p>
+                    </div>
+                  );
                 })()}
-              Content>
-          </Card>
+              </CardContent>
+            </Card>
 
-          {/* Container Information Section */}
-          <Card data-testid="card-container-info">
-            <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-4">
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Package className="h-5 w-5" />
-                Container Information
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {(shipment.containers && (shipment.containers as any[]).length > 0) ? (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h4 className="font-medium">
-                      {(shipment.containers as any[]).length === 1 ? 'Container Details' : `All Containers (${(shipment.containers as any[]).length})`}
-                    </h4>
-                    <Badge variant="outline" className="text-xs">
-                      MBL: {shipment.mblNumber}
-                    </Badge>
-                  </div>
-                  <div className="space-y-3">
-                    {(shipment.containers as any[]).map((container: any, index: number) => {
-                      const containerData = container.rawData || {};
-                      const riskLevel = containerData.riskLevel;
-                      const riskReasons = containerData.riskReasons || [];
-
-                      return (
-                        <div key={container.id || index} className="rounded-lg border p-4 space-y-3 hover-elevate">
-                          <div className="flex items-start justify-between gap-4 flex-wrap">
-                            <div className="flex items-center gap-3">
-                              <div className="h-10 w-10 rounded-full bg-blue-500/10 flex items-center justify-center flex-shrink-0">
-                                <Package className="h-5 w-5 text-blue-600" />
-                              </div>
-                              <div>
-                                <p className="font-medium font-mono">{container.containerNumber || `Container ${index + 1}`}</p>
-                                {container.containerType && (
-                                  <p className="text-xs text-muted-foreground">{container.containerType}</p>
-                                )}
-                                {container.shipmentReference && (
-                                  <p className="text-xs text-muted-foreground">Ref: {container.shipmentReference}</p>
-                                )}
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-2 flex-wrap">
-                              {container.containerStatus && (
-                                <Badge variant="outline" className="text-xs">
-                                  {container.containerStatus}
-                                </Badge>
-                              )}
-                              {riskLevel && riskLevel !== 'low' && (
-                                <Badge
-                                  variant={riskLevel === 'critical' || riskLevel === 'high' ? 'destructive' : 'secondary'}
-                                  className="text-xs"
-                                  title={riskReasons.join(', ')}
-                                >
-                                  {riskLevel === 'critical' ? '🔴 Critical' :
-                                    riskLevel === 'high' ? '🟠 High Risk' :
-                                      '🟡 Medium Risk'}
-                                </Badge>
-                              )}
-                            </div>
-                          </div>
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 pt-2 border-t text-sm">
-                            {container.bookingReference && (
-                              <div>
-                                <p className="text-xs text-muted-foreground">Booking</p>
-                                <p className="font-mono text-xs">{container.bookingReference}</p>
-                              </div>
-                            )}
-                            {container.weight && (
-                              <div>
-                                <p className="text-xs text-muted-foreground">Weight</p>
-                                <p className="text-xs">{container.weight} lbs</p>
-                              </div>
-                            )}
-                            {container.voyageNumber && (
-                              <div>
-                                <p className="text-xs text-muted-foreground">Voyage</p>
-                                <p className="font-mono text-xs">{container.voyageNumber}</p>
-                              </div>
-                            )}
-                            {container.sealNumber && (
-                              <div>
-                                <p className="text-xs text-muted-foreground">Seal</p>
-                                <p className="font-mono text-xs">{container.sealNumber}</p>
-                              </div>
-                            )}
-                            {container.containerEta && (
-                              <div>
-                                <p className="text-xs text-muted-foreground">Container ETA</p>
-                                <p className="text-xs">{formatDateOnly(container.containerEta)}</p>
-                              </div>
-                            )}
-                            {container.containerAta && (
-                              <div>
-                                <p className="text-xs text-muted-foreground">Container ATA</p>
-                                <p className="text-xs text-green-600 dark:text-green-400">{formatDateOnly(container.containerAta)}</p>
-                              </div>
-                            )}
-                            {container.lastFreeDay && (
-                              <div>
-                                <p className="text-xs text-muted-foreground">Last Free Day</p>
-                                <p className="text-xs">{formatDateOnly(container.lastFreeDay)}</p>
-                              </div>
-                            )}
-                            {container.dailyFeeRate && (
-                              <div>
-                                <p className="text-xs text-muted-foreground">Daily Fee Rate</p>
-                                <p className="text-xs">${container.dailyFeeRate}</p>
-                              </div>
-                            )}
-                            {container.detentionFee && (
-                              <div>
-                                <p className="text-xs text-muted-foreground">Detention Fee</p>
-                                <p className="text-xs">${container.detentionFee}</p>
-                              </div>
-                            )}
-                            {container.pickupChassis && (
-                              <div>
-                                <p className="text-xs text-muted-foreground">Pickup Chassis</p>
-                                <p className="text-xs">{container.pickupChassis}</p>
-                              </div>
-                            )}
-                            {container.yardLocation && (
-                              <div>
-                                <p className="text-xs text-muted-foreground">Yard Location</p>
-                                <p className="text-xs">{container.yardLocation}</p>
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Rail Information Section removed as per user request */}
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-              ) : (
-                <div className="text-center py-12">
-                  <Package className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
-                  <p className="text-muted-foreground">No container information available</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Milestone Events Overview */}
-          {shipment.milestones && (shipment.milestones as any[]).length > 0 && (
-            <Card data-testid="card-milestones-overview">
-              <CardHeader>
+            {/* Container Information Section */}
+            <Card data-testid="card-container-info">
+              <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-4">
                 <CardTitle className="text-lg flex items-center gap-2">
-                  <Calendar className="h-5 w-5" />
-                  Milestone Events ({(shipment.milestones as any[]).length})
+                  <Package className="h-5 w-5" />
+                  Container Information
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-3">
-                  {(shipment.milestones as any[]).map((milestone: any, index: number) => (
-                    <div key={index} className="rounded-lg border p-4 space-y-3">
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex gap-3 flex-1">
-                          <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                            <Calendar className="h-5 w-5 text-primary" />
-                          </div>
-                          <div className="flex-1">
-                            <p className="font-medium">{milestone.type || milestone.eventType}</p>
-                            {milestone.location && (
-                              <p className="text-sm text-muted-foreground">{milestone.location}</p>
-                            )}
-                          </div>
-                        </div>
-                        <Badge
-                          variant={milestone.status === 'completed' ? 'default' : milestone.status === 'delayed' ? 'destructive' : 'outline'}
-                          className="text-xs"
-                        >
-                          {milestone.status || 'pending'}
-                        </Badge>
-                      </div>
-                      <div className="grid grid-cols-2 gap-4 pt-2 border-t">
-                        {(milestone.plannedTimestamp || milestone.timestampPlanned) && (
-                          <div>
-                            <p className="text-xs text-muted-foreground">Planned</p>
-                            <p className="text-sm font-medium">
-                              {new Date(milestone.plannedTimestamp || milestone.timestampPlanned).toLocaleDateString()}
-                            </p>
-                          </div>
-                        )}
-                        {(milestone.actualTimestamp || milestone.timestampActual) && (
-                          <div>
-                            <p className="text-xs text-muted-foreground">Actual</p>
-                            <p className="text-sm font-medium text-green-600 dark:text-green-400">
-                              {new Date(milestone.actualTimestamp || milestone.timestampActual).toLocaleDateString()}
-                            </p>
-                          </div>
-                        )}
-                      </div>
+                {(shipment.containers && (shipment.containers as any[]).length > 0) ? (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-medium">
+                        {(shipment.containers as any[]).length === 1 ? 'Container Details' : `All Containers (${(shipment.containers as any[]).length})`}
+                      </h4>
+                      <Badge variant="outline" className="text-xs">
+                        MBL: {shipment.mblNumber}
+                      </Badge>
                     </div>
-                  ))}
-                </div>
+                    <div className="space-y-3">
+                      {(shipment.containers as any[]).map((container: any, index: number) => {
+                        const containerData = container.rawData || {};
+                        const riskLevel = containerData.riskLevel;
+                        const riskReasons = containerData.riskReasons || [];
+
+                        return (
+                          <div key={container.id || index} className="rounded-lg border p-4 space-y-3 hover-elevate">
+                            <div className="flex items-start justify-between gap-4 flex-wrap">
+                              <div className="flex items-center gap-3">
+                                <div className="h-10 w-10 rounded-full bg-blue-500/10 flex items-center justify-center flex-shrink-0">
+                                  <Package className="h-5 w-5 text-blue-600" />
+                                </div>
+                                <div>
+                                  <p className="font-medium font-mono">{container.containerNumber || `Container ${index + 1}`}</p>
+                                  {container.containerType && (
+                                    <p className="text-xs text-muted-foreground">{container.containerType}</p>
+                                  )}
+                                  {container.shipmentReference && (
+                                    <p className="text-xs text-muted-foreground">Ref: {container.shipmentReference}</p>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                {container.containerStatus && (
+                                  <Badge variant="outline" className="text-xs">
+                                    {container.containerStatus}
+                                  </Badge>
+                                )}
+                                {riskLevel && riskLevel !== 'low' && (
+                                  <Badge
+                                    variant={riskLevel === 'critical' || riskLevel === 'high' ? 'destructive' : 'secondary'}
+                                    className="text-xs"
+                                    title={riskReasons.join(', ')}
+                                  >
+                                    {riskLevel === 'critical' ? '🔴 Critical' :
+                                      riskLevel === 'high' ? '🟠 High Risk' :
+                                        '🟡 Medium Risk'}
+                                  </Badge>
+                                )}
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 pt-2 border-t text-sm">
+                              {container.bookingReference && (
+                                <div>
+                                  <p className="text-xs text-muted-foreground">Booking</p>
+                                  <p className="font-mono text-xs">{container.bookingReference}</p>
+                                </div>
+                              )}
+                              {container.weight && (
+                                <div>
+                                  <p className="text-xs text-muted-foreground">Weight</p>
+                                  <p className="text-xs">{container.weight} lbs</p>
+                                </div>
+                              )}
+                              {container.voyageNumber && (
+                                <div>
+                                  <p className="text-xs text-muted-foreground">Voyage</p>
+                                  <p className="font-mono text-xs">{container.voyageNumber}</p>
+                                </div>
+                              )}
+                              {container.sealNumber && (
+                                <div>
+                                  <p className="text-xs text-muted-foreground">Seal</p>
+                                  <p className="font-mono text-xs">{container.sealNumber}</p>
+                                </div>
+                              )}
+                              {container.containerEta && (
+                                <div>
+                                  <p className="text-xs text-muted-foreground">Container ETA</p>
+                                  <p className="text-xs">{formatDateOnly(container.containerEta)}</p>
+                                </div>
+                              )}
+                              {container.containerAta && (
+                                <div>
+                                  <p className="text-xs text-muted-foreground">Container ATA</p>
+                                  <p className="text-xs text-green-600 dark:text-green-400">{formatDateOnly(container.containerAta)}</p>
+                                </div>
+                              )}
+                              {container.lastFreeDay && (
+                                <div>
+                                  <p className="text-xs text-muted-foreground">Last Free Day</p>
+                                  <p className="text-xs">{formatDateOnly(container.lastFreeDay)}</p>
+                                </div>
+                              )}
+                              {container.dailyFeeRate && (
+                                <div>
+                                  <p className="text-xs text-muted-foreground">Daily Fee Rate</p>
+                                  <p className="text-xs">${container.dailyFeeRate}</p>
+                                </div>
+                              )}
+                              {container.detentionFee && (
+                                <div>
+                                  <p className="text-xs text-muted-foreground">Detention Fee</p>
+                                  <p className="text-xs">${container.detentionFee}</p>
+                                </div>
+                              )}
+                              {container.pickupChassis && (
+                                <div>
+                                  <p className="text-xs text-muted-foreground">Pickup Chassis</p>
+                                  <p className="text-xs">{container.pickupChassis}</p>
+                                </div>
+                              )}
+                              {container.yardLocation && (
+                                <div>
+                                  <p className="text-xs text-muted-foreground">Yard Location</p>
+                                  <p className="text-xs">{container.yardLocation}</p>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Rail Information Section removed as per user request */}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-12">
+                    <Package className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
+                    <p className="text-muted-foreground">No container information available</p>
+                  </div>
+                )}
               </CardContent>
             </Card>
-          )}
-        </div>
-      </TabsContent>
 
-      <TabsContent value="documents" className="mt-6">
-        <ShipmentDocuments shipmentId={shipment.id} />
-      </TabsContent>
+            {/* Milestone Events Overview */}
+            {shipment.milestones && (shipment.milestones as any[]).length > 0 && (
+              <Card data-testid="card-milestones-overview">
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <Calendar className="h-5 w-5" />
+                    Milestone Events ({(shipment.milestones as any[]).length})
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {(shipment.milestones as any[]).map((milestone: any, index: number) => (
+                      <div key={index} className="rounded-lg border p-4 space-y-3">
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex gap-3 flex-1">
+                            <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                              <Calendar className="h-5 w-5 text-primary" />
+                            </div>
+                            <div className="flex-1">
+                              <p className="font-medium">{milestone.type || milestone.eventType}</p>
+                              {milestone.location && (
+                                <p className="text-sm text-muted-foreground">{milestone.location}</p>
+                              )}
+                            </div>
+                          </div>
+                          <Badge
+                            variant={milestone.status === 'completed' ? 'default' : milestone.status === 'delayed' ? 'destructive' : 'outline'}
+                            className="text-xs"
+                          >
+                            {milestone.status || 'pending'}
+                          </Badge>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4 pt-2 border-t">
+                          {(milestone.plannedTimestamp || milestone.timestampPlanned) && (
+                            <div>
+                              <p className="text-xs text-muted-foreground">Planned</p>
+                              <p className="text-sm font-medium">
+                                {new Date(milestone.plannedTimestamp || milestone.timestampPlanned).toLocaleDateString()}
+                              </p>
+                            </div>
+                          )}
+                          {(milestone.actualTimestamp || milestone.timestampActual) && (
+                            <div>
+                              <p className="text-xs text-muted-foreground">Actual</p>
+                              <p className="text-sm font-medium text-green-600 dark:text-green-400">
+                                {new Date(milestone.actualTimestamp || milestone.timestampActual).toLocaleDateString()}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        </TabsContent>
 
-      <TabsContent value="raw" className="mt-6 space-y-6">
-        <MapLogsSection shipmentNumber={shipment.shipmentReference} />
+        <TabsContent value="documents" className="mt-6">
+          <ShipmentDocuments shipmentId={shipment.id} />
+        </TabsContent>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Raw API Data</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <pre className="bg-muted p-4 rounded-lg overflow-auto max-h-[600px] text-xs">
-              {JSON.stringify(rawData, null, 2)}
-            </pre>
-          </CardContent>
-        </Card>
-      </TabsContent>
-    </Tabs>
+        <TabsContent value="raw" className="mt-6 space-y-6">
+          <MapLogsSection shipmentNumber={shipment.shipmentReference} />
 
-      {/* Assign Users Dialog */ }
-  <Dialog open={assignUsersDialogOpen} onOpenChange={setAssignUsersDialogOpen}>
-    <DialogContent data-testid="dialog-assign-users">
-      <DialogHeader>
-        <DialogTitle>Assign Users</DialogTitle>
-        <DialogDescription>
-          Select users to assign to this shipment
-        </DialogDescription>
-      </DialogHeader>
-      <div className="space-y-4 max-h-[400px] overflow-y-auto">
-        {allUsers && allUsers.length > 0 ? (
-          allUsers.map((user) => (
-            <div key={user.id} className="flex items-center space-x-2">
-              <input
-                type="checkbox"
-                id={`user-${user.id}`}
-                checked={selectedUserIds.includes(user.id)}
-                onChange={(e) => {
-                  if (e.target.checked) {
-                    setSelectedUserIds([...selectedUserIds, user.id]);
-                  } else {
-                    setSelectedUserIds(selectedUserIds.filter(id => id !== user.id));
-                  }
-                }}
-                className="h-4 w-4 rounded border-gray-300"
-                data-testid={`checkbox-user-${user.id}`}
-              />
-              <Label htmlFor={`user-${user.id}`} className="flex items-center gap-2 cursor-pointer">
-                <span className="font-medium">{user.username}</span>
-                <Badge variant="outline" className="text-xs">{user.role}</Badge>
-              </Label>
-            </div>
-          ))
-        ) : (
-          <p className="text-sm text-muted-foreground">No users available</p>
-        )}
-      </div>
-      <DialogFooter>
-        <Button
-          variant="outline"
-          onClick={() => setAssignUsersDialogOpen(false)}
-          data-testid="button-cancel-assign-users"
-        >
-          Cancel
-        </Button>
-        <Button
-          onClick={() => assignUsersMutation.mutate(selectedUserIds)}
-          disabled={assignUsersMutation.isPending}
-          data-testid="button-save-assign-users"
-        >
-          {assignUsersMutation.isPending ? "Saving..." : "Save"}
-        </Button>
-      </DialogFooter>
-    </DialogContent>
-  </Dialog>
+          <Card>
+            <CardHeader>
+              <CardTitle>Raw API Data</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <pre className="bg-muted p-4 rounded-lg overflow-auto max-h-[600px] text-xs">
+                {JSON.stringify(rawData, null, 2)}
+              </pre>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
 
-  {/* Edit Terminal Dialog */ }
-  <Dialog open={addTerminalDialogOpen} onOpenChange={setAddTerminalDialogOpen}>
-    <DialogContent data-testid="dialog-edit-terminal" className="max-w-3xl max-h-[90vh] overflow-y-auto">
-      <DialogHeader>
-        <DialogTitle>Edit Terminal Information</DialogTitle>
-        <DialogDescription>
-          Update terminal details including port, pickup status, and logistics information
-        </DialogDescription>
-      </DialogHeader>
-      <div className="space-y-4">
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <Label htmlFor="terminal-port">Port</Label>
-            <Select
-              value={terminalForm.terminalPort}
-              onValueChange={(value) => setTerminalForm({
-                ...terminalForm,
-                terminalPort: value,
-                terminalName: "" // Reset terminal name when port changes
-              })}
-            >
-              <SelectTrigger data-testid="select-terminal-port">
-                <SelectValue placeholder="Select a port" />
-              </SelectTrigger>
-              <SelectContent>
-                {Object.keys(PORT_TERMINALS).map((port) => (
-                  <SelectItem key={port} value={port}>
-                    {port}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label htmlFor="terminal-name">Terminal Name</Label>
-            <Select
-              value={terminalForm.terminalName}
-              onValueChange={(value) => setTerminalForm({ ...terminalForm, terminalName: value })}
-              disabled={!terminalForm.terminalPort}
-            >
-              <SelectTrigger data-testid="select-terminal-name">
-                <SelectValue placeholder={
-                  terminalForm.terminalPort
-                    ? "Select a terminal"
-                    : "Select port first"
-                } />
-              </SelectTrigger>
-              <SelectContent>
-                {terminalForm.terminalPort &&
-                  PORT_TERMINALS[terminalForm.terminalPort]?.map((terminal) => (
-                    <SelectItem key={terminal} value={terminal}>
-                      {terminal}
-                    </SelectItem>
-                  ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label htmlFor="terminal-yard">Yard Location</Label>
-            <Input
-              id="terminal-yard"
-              placeholder="e.g., Block A, Row 12"
-              value={terminalForm.yardLocation}
-              onChange={(e) => setTerminalForm({ ...terminalForm, yardLocation: e.target.value })}
-              data-testid="input-terminal-yard"
-            />
-          </div>
-          <div>
-            <Label htmlFor="terminal-chassis">Pickup Chassis #</Label>
-            <Input
-              id="terminal-chassis"
-              placeholder="e.g., CH123456"
-              value={terminalForm.pickupChassis}
-              onChange={(e) => setTerminalForm({ ...terminalForm, pickupChassis: e.target.value })}
-              data-testid="input-terminal-chassis"
-            />
-          </div>
-          <div>
-            <Label htmlFor="terminal-lfd">Last Free Day (LFD)</Label>
-            <Input
-              type="date"
-              id="terminal-lfd"
-              value={terminalForm.lfd}
-              onChange={(e) => setTerminalForm({ ...terminalForm, lfd: e.target.value })}
-              data-testid="input-terminal-lfd"
-            />
-          </div>
-          <div>
-            <Label htmlFor="terminal-demurrage">Demurrage Cost</Label>
-            <Input
-              type="number"
-              id="terminal-demurrage"
-              placeholder="e.g., 150.00"
-              value={terminalForm.demurrage}
-              onChange={(e) => setTerminalForm({ ...terminalForm, demurrage: e.target.value })}
-              data-testid="input-terminal-demurrage"
-            />
-          </div>
-          <div>
-            <Label htmlFor="terminal-detention">Detention Cost</Label>
-            <Input
-              type="number"
-              id="terminal-detention"
-              placeholder="e.g., 200.00"
-              value={terminalForm.detention}
-              onChange={(e) => setTerminalForm({ ...terminalForm, detention: e.target.value })}
-              data-testid="input-terminal-detention"
-            />
-          </div>
-          {/* Full Out field removed - derived from events */}
-          <div>
-            <Label htmlFor="terminal-pickup-apt">Pickup Appointment</Label>
-            <Input
-              type="datetime-local"
-              id="terminal-pickup-apt"
-              value={terminalForm.pickupAppointment}
-              onChange={(e) => setTerminalForm({ ...terminalForm, pickupAppointment: e.target.value })}
-              data-testid="input-terminal-pickup-apt"
-            />
-          </div>
-          {/* Empty Returned field removed - derived from events */}
-        </div>
-        <div className="flex items-center space-x-2">
-          <Checkbox
-            id="terminal-available"
-            checked={terminalForm.availableForPickup}
-            onCheckedChange={(checked) => setTerminalForm({ ...terminalForm, availableForPickup: checked as boolean })}
-            data-testid="checkbox-terminal-available"
-          />
-          <Label htmlFor="terminal-available" className="text-sm font-medium cursor-pointer">
-            Available For Pickup
-          </Label>
-        </div>
-      </div>
-      <DialogFooter>
-        <Button
-          variant="outline"
-          onClick={() => setAddTerminalDialogOpen(false)}
-          data-testid="button-cancel-terminal"
-        >
-          Cancel
-        </Button>
-        <Button
-          onClick={() => addTerminalMutation.mutate({
-            terminalName: terminalForm.terminalName,
-            terminalPort: terminalForm.terminalPort,
-            lastFreeDay: terminalForm.lfd,
-            demurrage: terminalForm.demurrage,
-            detention: terminalForm.detention,
-            terminalYardLocation: terminalForm.yardLocation,
-            terminalPickupChassis: terminalForm.pickupChassis,
-            terminalPickupAppointment: terminalForm.pickupAppointment,
-            terminalAvailableForPickup: terminalForm.availableForPickup,
-            // terminalFullOut and terminalEmptyReturned are now derived from events
-          })}
-          disabled={addTerminalMutation.isPending}
-          data-testid="button-save-terminal"
-        >
-          {addTerminalMutation.isPending ? "Saving..." : "Save Terminal Info"}
-        </Button>
-      </DialogFooter>
-    </DialogContent>
-  </Dialog>
-
-  {/* Add Rail Dialog - Hidden since rail data is now handled in Transport Segments */ }
-  {
-    false && (
-      <Dialog open={addRailDialogOpen} onOpenChange={setAddRailDialogOpen}>
-        <DialogContent data-testid="dialog-add-rail" className="max-w-4xl max-h-[90vh] overflow-y-auto">
+      {/* Assign Users Dialog */}
+      <Dialog open={assignUsersDialogOpen} onOpenChange={setAssignUsersDialogOpen}>
+        <DialogContent data-testid="dialog-assign-users">
           <DialogHeader>
-            <DialogTitle>Add Rail Information</DialogTitle>
+            <DialogTitle>Assign Users</DialogTitle>
             <DialogDescription>
-              Add rail tracking and milestone information for this container
+              Select users to assign to this shipment
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 max-h-[400px] overflow-y-auto">
+            {allUsers && allUsers.length > 0 ? (
+              allUsers.map((user) => (
+                <div key={user.id} className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id={`user-${user.id}`}
+                    checked={selectedUserIds.includes(user.id)}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setSelectedUserIds([...selectedUserIds, user.id]);
+                      } else {
+                        setSelectedUserIds(selectedUserIds.filter(id => id !== user.id));
+                      }
+                    }}
+                    className="h-4 w-4 rounded border-gray-300"
+                    data-testid={`checkbox-user-${user.id}`}
+                  />
+                  <Label htmlFor={`user-${user.id}`} className="flex items-center gap-2 cursor-pointer">
+                    <span className="font-medium">{user.username}</span>
+                    <Badge variant="outline" className="text-xs">{user.role}</Badge>
+                  </Label>
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-muted-foreground">No users available</p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setAssignUsersDialogOpen(false)}
+              data-testid="button-cancel-assign-users"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => assignUsersMutation.mutate(selectedUserIds)}
+              disabled={assignUsersMutation.isPending}
+              data-testid="button-save-assign-users"
+            >
+              {assignUsersMutation.isPending ? "Saving..." : "Save"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Terminal Dialog */}
+      <Dialog open={addTerminalDialogOpen} onOpenChange={setAddTerminalDialogOpen}>
+        <DialogContent data-testid="dialog-edit-terminal" className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Terminal Information</DialogTitle>
+            <DialogDescription>
+              Update terminal details including port, pickup status, and logistics information
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="grid grid-cols-3 gap-4">
-              <div>
-                <Label htmlFor="rail-number">Rail Number</Label>
-                <Input
-                  id="rail-number"
-                  placeholder="e.g., RAIL123456"
-                  value={railForm.railNumber}
-                  onChange={(e) => setRailForm({ ...railForm, railNumber: e.target.value })}
-                  data-testid="input-rail-number"
-                />
-              </div>
-              <div>
-                <Label htmlFor="pod-rail-carrier">POD Rail Carrier</Label>
-                <Input
-                  id="pod-rail-carrier"
-                  placeholder="e.g., Union Pacific"
-                  value={railForm.podRailCarrier}
-                  onChange={(e) => setRailForm({ ...railForm, podRailCarrier: e.target.value })}
-                  data-testid="input-pod-rail-carrier"
-                />
-              </div>
-              <div>
-                <Label htmlFor="dest-rail-carrier">Destination Rail Carrier</Label>
-                <Input
-                  id="dest-rail-carrier"
-                  placeholder="e.g., BNSF"
-                  value={railForm.destinationRailCarrier}
-                  onChange={(e) => setRailForm({ ...railForm, destinationRailCarrier: e.target.value })}
-                  data-testid="input-dest-rail-carrier"
-                />
-              </div>
-            </div>
-
-            <Separator />
-            <h4 className="font-semibold text-sm">Rail Milestones</h4>
-
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="rail-loaded">Rail Loaded</Label>
+                <Label htmlFor="terminal-port">Port</Label>
+                <Select
+                  value={terminalForm.terminalPort}
+                  onValueChange={(value) => setTerminalForm({
+                    ...terminalForm,
+                    terminalPort: value,
+                    terminalName: "" // Reset terminal name when port changes
+                  })}
+                >
+                  <SelectTrigger data-testid="select-terminal-port">
+                    <SelectValue placeholder="Select a port" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.keys(PORT_TERMINALS).map((port) => (
+                      <SelectItem key={port} value={port}>
+                        {port}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="terminal-name">Terminal Name</Label>
+                <Select
+                  value={terminalForm.terminalName}
+                  onValueChange={(value) => setTerminalForm({ ...terminalForm, terminalName: value })}
+                  disabled={!terminalForm.terminalPort}
+                >
+                  <SelectTrigger data-testid="select-terminal-name">
+                    <SelectValue placeholder={
+                      terminalForm.terminalPort
+                        ? "Select a terminal"
+                        : "Select port first"
+                    } />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {terminalForm.terminalPort &&
+                      PORT_TERMINALS[terminalForm.terminalPort]?.map((terminal) => (
+                        <SelectItem key={terminal} value={terminal}>
+                          {terminal}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="terminal-yard">Yard Location</Label>
                 <Input
-                  type="datetime-local"
-                  id="rail-loaded"
-                  value={railForm.railLoaded}
-                  onChange={(e) => setRailForm({ ...railForm, railLoaded: e.target.value })}
-                  data-testid="input-rail-loaded"
+                  id="terminal-yard"
+                  placeholder="e.g., Block A, Row 12"
+                  value={terminalForm.yardLocation}
+                  onChange={(e) => setTerminalForm({ ...terminalForm, yardLocation: e.target.value })}
+                  data-testid="input-terminal-yard"
                 />
               </div>
               <div>
-                <Label htmlFor="rail-departed">Rail Departed</Label>
+                <Label htmlFor="terminal-chassis">Pickup Chassis #</Label>
                 <Input
-                  type="datetime-local"
-                  id="rail-departed"
-                  value={railForm.railDeparted}
-                  onChange={(e) => setRailForm({ ...railForm, railDeparted: e.target.value })}
-                  data-testid="input-rail-departed"
+                  id="terminal-chassis"
+                  placeholder="e.g., CH123456"
+                  value={terminalForm.pickupChassis}
+                  onChange={(e) => setTerminalForm({ ...terminalForm, pickupChassis: e.target.value })}
+                  data-testid="input-terminal-chassis"
                 />
               </div>
               <div>
-                <Label htmlFor="rail-arrived">Rail Arrived</Label>
-                <Input
-                  type="datetime-local"
-                  id="rail-arrived"
-                  value={railForm.railArrived}
-                  onChange={(e) => setRailForm({ ...railForm, railArrived: e.target.value })}
-                  data-testid="input-rail-arrived"
-                />
-              </div>
-              <div>
-                <Label htmlFor="rail-unloaded">Rail Unloaded</Label>
-                <Input
-                  type="datetime-local"
-                  id="rail-unloaded"
-                  value={railForm.railUnloaded}
-                  onChange={(e) => setRailForm({ ...railForm, railUnloaded: e.target.value })}
-                  data-testid="input-rail-unloaded"
-                />
-              </div>
-              <div>
-                <Label htmlFor="arrived-at-dest">Arrived At Destination</Label>
-                <Input
-                  type="datetime-local"
-                  id="arrived-at-dest"
-                  value={railForm.arrivedAtDestination}
-                  onChange={(e) => setRailForm({ ...railForm, arrivedAtDestination: e.target.value })}
-                  data-testid="input-arrived-at-dest"
-                />
-              </div>
-              <div>
-                <Label htmlFor="full-out">Full Out</Label>
-                <Input
-                  type="datetime-local"
-                  id="full-out"
-                  value={railForm.fullOut}
-                  onChange={(e) => setRailForm({ ...railForm, fullOut: e.target.value })}
-                  data-testid="input-full-out"
-                />
-              </div>
-              <div>
-                <Label htmlFor="empty-returned">Empty Returned</Label>
-                <Input
-                  type="datetime-local"
-                  id="empty-returned"
-                  value={railForm.emptyReturned}
-                  onChange={(e) => setRailForm({ ...railForm, emptyReturned: e.target.value })}
-                  data-testid="input-empty-returned"
-                />
-              </div>
-              <div>
-                <Label htmlFor="est-arrival-final">Estimated Arrival at Final Destination</Label>
-                <Input
-                  type="datetime-local"
-                  id="est-arrival-final"
-                  value={railForm.estimatedArrivalAtFinalDestination}
-                  onChange={(e) => setRailForm({ ...railForm, estimatedArrivalAtFinalDestination: e.target.value })}
-                  data-testid="input-est-arrival-final"
-                />
-              </div>
-              <div>
-                <Label htmlFor="rail-lfd">LFD (Last Free Day)</Label>
+                <Label htmlFor="terminal-lfd">Last Free Day (LFD)</Label>
                 <Input
                   type="date"
-                  id="rail-lfd"
-                  value={railForm.lfd}
-                  onChange={(e) => setRailForm({ ...railForm, lfd: e.target.value })}
-                  data-testid="input-rail-lfd"
+                  id="terminal-lfd"
+                  value={terminalForm.lfd}
+                  onChange={(e) => setTerminalForm({ ...terminalForm, lfd: e.target.value })}
+                  data-testid="input-terminal-lfd"
                 />
               </div>
+              <div>
+                <Label htmlFor="terminal-demurrage">Demurrage Cost</Label>
+                <Input
+                  type="number"
+                  id="terminal-demurrage"
+                  placeholder="e.g., 150.00"
+                  value={terminalForm.demurrage}
+                  onChange={(e) => setTerminalForm({ ...terminalForm, demurrage: e.target.value })}
+                  data-testid="input-terminal-demurrage"
+                />
+              </div>
+              <div>
+                <Label htmlFor="terminal-detention">Detention Cost</Label>
+                <Input
+                  type="number"
+                  id="terminal-detention"
+                  placeholder="e.g., 200.00"
+                  value={terminalForm.detention}
+                  onChange={(e) => setTerminalForm({ ...terminalForm, detention: e.target.value })}
+                  data-testid="input-terminal-detention"
+                />
+              </div>
+              {/* Full Out field removed - derived from events */}
+              <div>
+                <Label htmlFor="terminal-pickup-apt">Pickup Appointment</Label>
+                <Input
+                  type="datetime-local"
+                  id="terminal-pickup-apt"
+                  value={terminalForm.pickupAppointment}
+                  onChange={(e) => setTerminalForm({ ...terminalForm, pickupAppointment: e.target.value })}
+                  data-testid="input-terminal-pickup-apt"
+                />
+              </div>
+              {/* Empty Returned field removed - derived from events */}
             </div>
-
             <div className="flex items-center space-x-2">
               <Checkbox
-                id="rail-available"
-                checked={railForm.available}
-                onCheckedChange={(checked) => setRailForm({ ...railForm, available: checked as boolean })}
-                data-testid="checkbox-rail-available"
+                id="terminal-available"
+                checked={terminalForm.availableForPickup}
+                onCheckedChange={(checked) => setTerminalForm({ ...terminalForm, availableForPickup: checked as boolean })}
+                data-testid="checkbox-terminal-available"
               />
-              <Label htmlFor="rail-available" className="text-sm font-medium cursor-pointer">
-                Available
+              <Label htmlFor="terminal-available" className="text-sm font-medium cursor-pointer">
+                Available For Pickup
               </Label>
+            </div>
+
+            <div className="space-y-3 pt-2 border-t">
+              <Label className="text-sm font-medium">Terminal Holds</Label>
+              <div className="grid grid-cols-1 gap-2">
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="hold-freight"
+                    checked={terminalForm.holds?.includes("Freight Hold") || false}
+                    onCheckedChange={(checked) => {
+                      const newHolds = checked
+                        ? [...(terminalForm.holds || []), "Freight Hold"]
+                        : (terminalForm.holds || []).filter(h => h !== "Freight Hold");
+                      setTerminalForm({ ...terminalForm, holds: newHolds });
+                    }}
+                  />
+                  <Label htmlFor="hold-freight" className="text-sm font-normal cursor-pointer">
+                    Freight Hold (Freight unpaid)
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="hold-customs"
+                    checked={terminalForm.holds?.includes("Customs Hold") || false}
+                    onCheckedChange={(checked) => {
+                      const newHolds = checked
+                        ? [...(terminalForm.holds || []), "Customs Hold"]
+                        : (terminalForm.holds || []).filter(h => h !== "Customs Hold");
+                      setTerminalForm({ ...terminalForm, holds: newHolds });
+                    }}
+                  />
+                  <Label htmlFor="hold-customs" className="text-sm font-normal cursor-pointer">
+                    Customs Hold (Inspection/clearance)
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="hold-terminal"
+                    checked={terminalForm.holds?.includes("Terminal Hold") || false}
+                    onCheckedChange={(checked) => {
+                      const newHolds = checked
+                        ? [...(terminalForm.holds || []), "Terminal Hold"]
+                        : (terminalForm.holds || []).filter(h => h !== "Terminal Hold");
+                      setTerminalForm({ ...terminalForm, holds: newHolds });
+                    }}
+                  />
+                  <Label htmlFor="hold-terminal" className="text-sm font-normal cursor-pointer">
+                    Terminal Hold (Terminal restriction)
+                  </Label>
+                </div>
+              </div>
             </div>
           </div>
           <DialogFooter>
             <Button
               variant="outline"
-              onClick={() => setAddRailDialogOpen(false)}
-              data-testid="button-cancel-rail"
+              onClick={() => setAddTerminalDialogOpen(false)}
+              data-testid="button-cancel-terminal"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => addTerminalMutation.mutate({
+                terminalName: terminalForm.terminalName,
+                terminalPort: terminalForm.terminalPort,
+                lastFreeDay: terminalForm.lfd,
+                demurrage: terminalForm.demurrage,
+                detention: terminalForm.detention,
+                terminalYardLocation: terminalForm.yardLocation,
+                terminalPickupChassis: terminalForm.pickupChassis,
+                terminalPickupAppointment: terminalForm.pickupAppointment,
+                terminalAvailableForPickup: terminalForm.availableForPickup,
+                terminalHolds: terminalForm.holds,
+                // terminalFullOut and terminalEmptyReturned are now derived from events
+              })}
+              disabled={addTerminalMutation.isPending}
+              data-testid="button-save-terminal"
+            >
+              {addTerminalMutation.isPending ? "Saving..." : "Save Terminal Info"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Rail Dialog - Hidden since rail data is now handled in Transport Segments */}
+      {
+        false && (
+          <Dialog open={addRailDialogOpen} onOpenChange={setAddRailDialogOpen}>
+            <DialogContent data-testid="dialog-add-rail" className="max-w-4xl max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Add Rail Information</DialogTitle>
+                <DialogDescription>
+                  Add rail tracking and milestone information for this container
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <Label htmlFor="rail-number">Rail Number</Label>
+                    <Input
+                      id="rail-number"
+                      placeholder="e.g., RAIL123456"
+                      value={railForm.railNumber}
+                      onChange={(e) => setRailForm({ ...railForm, railNumber: e.target.value })}
+                      data-testid="input-rail-number"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="pod-rail-carrier">POD Rail Carrier</Label>
+                    <Input
+                      id="pod-rail-carrier"
+                      placeholder="e.g., Union Pacific"
+                      value={railForm.podRailCarrier}
+                      onChange={(e) => setRailForm({ ...railForm, podRailCarrier: e.target.value })}
+                      data-testid="input-pod-rail-carrier"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="dest-rail-carrier">Destination Rail Carrier</Label>
+                    <Input
+                      id="dest-rail-carrier"
+                      placeholder="e.g., BNSF"
+                      value={railForm.destinationRailCarrier}
+                      onChange={(e) => setRailForm({ ...railForm, destinationRailCarrier: e.target.value })}
+                      data-testid="input-dest-rail-carrier"
+                    />
+                  </div>
+                </div>
+
+                <Separator />
+                <h4 className="font-semibold text-sm">Rail Milestones</h4>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="rail-loaded">Rail Loaded</Label>
+                    <Input
+                      type="datetime-local"
+                      id="rail-loaded"
+                      value={railForm.railLoaded}
+                      onChange={(e) => setRailForm({ ...railForm, railLoaded: e.target.value })}
+                      data-testid="input-rail-loaded"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="rail-departed">Rail Departed</Label>
+                    <Input
+                      type="datetime-local"
+                      id="rail-departed"
+                      value={railForm.railDeparted}
+                      onChange={(e) => setRailForm({ ...railForm, railDeparted: e.target.value })}
+                      data-testid="input-rail-departed"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="rail-arrived">Rail Arrived</Label>
+                    <Input
+                      type="datetime-local"
+                      id="rail-arrived"
+                      value={railForm.railArrived}
+                      onChange={(e) => setRailForm({ ...railForm, railArrived: e.target.value })}
+                      data-testid="input-rail-arrived"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="rail-unloaded">Rail Unloaded</Label>
+                    <Input
+                      type="datetime-local"
+                      id="rail-unloaded"
+                      value={railForm.railUnloaded}
+                      onChange={(e) => setRailForm({ ...railForm, railUnloaded: e.target.value })}
+                      data-testid="input-rail-unloaded"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="arrived-at-dest">Arrived At Destination</Label>
+                    <Input
+                      type="datetime-local"
+                      id="arrived-at-dest"
+                      value={railForm.arrivedAtDestination}
+                      onChange={(e) => setRailForm({ ...railForm, arrivedAtDestination: e.target.value })}
+                      data-testid="input-arrived-at-dest"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="full-out">Full Out</Label>
+                    <Input
+                      type="datetime-local"
+                      id="full-out"
+                      value={railForm.fullOut}
+                      onChange={(e) => setRailForm({ ...railForm, fullOut: e.target.value })}
+                      data-testid="input-full-out"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="empty-returned">Empty Returned</Label>
+                    <Input
+                      type="datetime-local"
+                      id="empty-returned"
+                      value={railForm.emptyReturned}
+                      onChange={(e) => setRailForm({ ...railForm, emptyReturned: e.target.value })}
+                      data-testid="input-empty-returned"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="est-arrival-final">Estimated Arrival at Final Destination</Label>
+                    <Input
+                      type="datetime-local"
+                      id="est-arrival-final"
+                      value={railForm.estimatedArrivalAtFinalDestination}
+                      onChange={(e) => setRailForm({ ...railForm, estimatedArrivalAtFinalDestination: e.target.value })}
+                      data-testid="input-est-arrival-final"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="rail-lfd">LFD (Last Free Day)</Label>
+                    <Input
+                      type="date"
+                      id="rail-lfd"
+                      value={railForm.lfd}
+                      onChange={(e) => setRailForm({ ...railForm, lfd: e.target.value })}
+                      data-testid="input-rail-lfd"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="rail-available"
+                    checked={railForm.available}
+                    onCheckedChange={(checked) => setRailForm({ ...railForm, available: checked as boolean })}
+                    data-testid="checkbox-rail-available"
+                  />
+                  <Label htmlFor="rail-available" className="text-sm font-medium cursor-pointer">
+                    Available
+                  </Label>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => setAddRailDialogOpen(false)}
+                  data-testid="button-cancel-rail"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={() => {
+                    if (selectedContainerId) {
+                      addRailMutation.mutate({
+                        containerId: selectedContainerId,
+                        containerNumber: selectedContainerNumber || undefined,
+                        rail: railForm,
+                      });
+                    }
+                  }}
+                  disabled={addRailMutation.isPending || !selectedContainerId}
+                  data-testid="button-save-rail"
+                >
+                  {addRailMutation.isPending ? "Saving..." : "Save Rail Info"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        )
+      }
+
+      {/* Add Milestone Dialog */}
+      <Dialog open={addMilestoneDialogOpen} onOpenChange={setAddMilestoneDialogOpen}>
+        <DialogContent data-testid="dialog-add-milestone">
+          <DialogHeader>
+            <DialogTitle>Add Milestone</DialogTitle>
+            <DialogDescription>
+              Create a new milestone for this shipment's journey.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="eventType">Event Type *</Label>
+              <Input
+                id="eventType"
+                placeholder="e.g., Departure from Port, Arrival at Terminal"
+                value={milestoneForm.eventType}
+                onChange={(e) => setMilestoneForm({ ...milestoneForm, eventType: e.target.value })}
+                data-testid="input-event-type"
+              />
+            </div>
+            <div>
+              <Label htmlFor="location">Location *</Label>
+              <Input
+                id="location"
+                placeholder="e.g., Port of Los Angeles"
+                value={milestoneForm.location}
+                onChange={(e) => setMilestoneForm({ ...milestoneForm, location: e.target.value })}
+                data-testid="input-location"
+              />
+            </div>
+            <div>
+              <Label htmlFor="timestampPlanned">Planned Timestamp</Label>
+              <Input
+                id="timestampPlanned"
+                type="datetime-local"
+                value={milestoneForm.timestampPlanned}
+                onChange={(e) => setMilestoneForm({ ...milestoneForm, timestampPlanned: e.target.value })}
+                data-testid="input-timestamp-planned"
+              />
+            </div>
+            <div>
+              <Label htmlFor="status">Status</Label>
+              <Select
+                value={milestoneForm.status}
+                onValueChange={(value) => setMilestoneForm({ ...milestoneForm, status: value })}
+              >
+                <SelectTrigger data-testid="select-status">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="pending">Pending</SelectItem>
+                  <SelectItem value="completed">Completed</SelectItem>
+                  <SelectItem value="delayed">Delayed</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="notes">Notes (Optional)</Label>
+              <Input
+                id="notes"
+                placeholder="Additional notes"
+                value={milestoneForm.notes}
+                onChange={(e) => setMilestoneForm({ ...milestoneForm, notes: e.target.value })}
+                data-testid="input-notes"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setAddMilestoneDialogOpen(false)}
+              data-testid="button-cancel-milestone"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => addMilestoneMutation.mutate(milestoneForm)}
+              disabled={!milestoneForm.eventType || !milestoneForm.location || addMilestoneMutation.isPending}
+              data-testid="button-save-milestone"
+            >
+              {addMilestoneMutation.isPending ? "Adding..." : "Add Milestone"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Event Dialog */}
+      <Dialog open={editEventDialogOpen} onOpenChange={setEditEventDialogOpen}>
+        <DialogContent data-testid="dialog-edit-event">
+          <DialogHeader>
+            <DialogTitle>Edit Event</DialogTitle>
+            <DialogDescription>
+              Update the event information for this shipment.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="edit-event-name">Event Name</Label>
+              <Input
+                id="edit-event-name"
+                placeholder="e.g., Empty Container Gate Out"
+                value={editEventForm.name}
+                onChange={(e) => setEditEventForm({ ...editEventForm, name: e.target.value })}
+                data-testid="input-edit-event-name"
+              />
+            </div>
+            <div>
+              <Label htmlFor="edit-event-location">Location</Label>
+              <Input
+                id="edit-event-location"
+                placeholder="e.g., Port of Los Angeles"
+                value={editEventForm.location}
+                onChange={(e) => setEditEventForm({ ...editEventForm, location: e.target.value })}
+                data-testid="input-edit-event-location"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="edit-estimate-time">Estimated Time</Label>
+                <Input
+                  id="edit-estimate-time"
+                  type="datetime-local"
+                  value={editEventForm.estimateTime}
+                  onChange={(e) => setEditEventForm({ ...editEventForm, estimateTime: e.target.value })}
+                  data-testid="input-edit-estimate-time"
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-actual-time">Actual Time</Label>
+                <Input
+                  id="edit-actual-time"
+                  type="datetime-local"
+                  value={editEventForm.actualTime}
+                  onChange={(e) => setEditEventForm({ ...editEventForm, actualTime: e.target.value })}
+                  data-testid="input-edit-actual-time"
+                />
+              </div>
+            </div>
+            <div>
+              <Label htmlFor="edit-event-code">Event Code (Optional)</Label>
+              <Input
+                id="edit-event-code"
+                placeholder="e.g., GATE_OUT"
+                value={editEventForm.code}
+                onChange={(e) => setEditEventForm({ ...editEventForm, code: e.target.value })}
+                data-testid="input-edit-event-code"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setEditEventDialogOpen(false);
+                setEditingEventIndex(null);
+              }}
+              data-testid="button-cancel-edit-event"
             >
               Cancel
             </Button>
             <Button
               onClick={() => {
-                if (selectedContainerId) {
-                  addRailMutation.mutate({
-                    containerId: selectedContainerId,
-                    containerNumber: selectedContainerNumber || undefined,
-                    rail: railForm,
-                  });
-                }
+                // For now, just close the dialog
+                // In a real implementation, this would call an API to update the event
+                toast({
+                  title: "Event updated",
+                  description: "The event has been updated successfully.",
+                });
+                setEditEventDialogOpen(false);
+                setEditingEventIndex(null);
               }}
-              disabled={addRailMutation.isPending || !selectedContainerId}
-              data-testid="button-save-rail"
+              data-testid="button-save-edit-event"
             >
-              {addRailMutation.isPending ? "Saving..." : "Save Rail Info"}
+              Save Changes
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    )
-  }
 
-  {/* Add Milestone Dialog */ }
-  <Dialog open={addMilestoneDialogOpen} onOpenChange={setAddMilestoneDialogOpen}>
-    <DialogContent data-testid="dialog-add-milestone">
-      <DialogHeader>
-        <DialogTitle>Add Milestone</DialogTitle>
-        <DialogDescription>
-          Create a new milestone for this shipment's journey.
-        </DialogDescription>
-      </DialogHeader>
-      <div className="space-y-4">
-        <div>
-          <Label htmlFor="eventType">Event Type *</Label>
-          <Input
-            id="eventType"
-            placeholder="e.g., Departure from Port, Arrival at Terminal"
-            value={milestoneForm.eventType}
-            onChange={(e) => setMilestoneForm({ ...milestoneForm, eventType: e.target.value })}
-            data-testid="input-event-type"
-          />
-        </div>
-        <div>
-          <Label htmlFor="location">Location *</Label>
-          <Input
-            id="location"
-            placeholder="e.g., Port of Los Angeles"
-            value={milestoneForm.location}
-            onChange={(e) => setMilestoneForm({ ...milestoneForm, location: e.target.value })}
-            data-testid="input-location"
-          />
-        </div>
-        <div>
-          <Label htmlFor="timestampPlanned">Planned Timestamp</Label>
-          <Input
-            id="timestampPlanned"
-            type="datetime-local"
-            value={milestoneForm.timestampPlanned}
-            onChange={(e) => setMilestoneForm({ ...milestoneForm, timestampPlanned: e.target.value })}
-            data-testid="input-timestamp-planned"
-          />
-        </div>
-        <div>
-          <Label htmlFor="status">Status</Label>
-          <Select
-            value={milestoneForm.status}
-            onValueChange={(value) => setMilestoneForm({ ...milestoneForm, status: value })}
-          >
-            <SelectTrigger data-testid="select-status">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="pending">Pending</SelectItem>
-              <SelectItem value="completed">Completed</SelectItem>
-              <SelectItem value="delayed">Delayed</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div>
-          <Label htmlFor="notes">Notes (Optional)</Label>
-          <Input
-            id="notes"
-            placeholder="Additional notes"
-            value={milestoneForm.notes}
-            onChange={(e) => setMilestoneForm({ ...milestoneForm, notes: e.target.value })}
-            data-testid="input-notes"
-          />
-        </div>
-      </div>
-      <DialogFooter>
-        <Button
-          variant="outline"
-          onClick={() => setAddMilestoneDialogOpen(false)}
-          data-testid="button-cancel-milestone"
-        >
-          Cancel
-        </Button>
-        <Button
-          onClick={() => addMilestoneMutation.mutate(milestoneForm)}
-          disabled={!milestoneForm.eventType || !milestoneForm.location || addMilestoneMutation.isPending}
-          data-testid="button-save-milestone"
-        >
-          {addMilestoneMutation.isPending ? "Adding..." : "Add Milestone"}
-        </Button>
-      </DialogFooter>
-    </DialogContent>
-  </Dialog>
-
-  {/* Edit Event Dialog */ }
-  <Dialog open={editEventDialogOpen} onOpenChange={setEditEventDialogOpen}>
-    <DialogContent data-testid="dialog-edit-event">
-      <DialogHeader>
-        <DialogTitle>Edit Event</DialogTitle>
-        <DialogDescription>
-          Update the event information for this shipment.
-        </DialogDescription>
-      </DialogHeader>
-      <div className="space-y-4">
-        <div>
-          <Label htmlFor="edit-event-name">Event Name</Label>
-          <Input
-            id="edit-event-name"
-            placeholder="e.g., Empty Container Gate Out"
-            value={editEventForm.name}
-            onChange={(e) => setEditEventForm({ ...editEventForm, name: e.target.value })}
-            data-testid="input-edit-event-name"
-          />
-        </div>
-        <div>
-          <Label htmlFor="edit-event-location">Location</Label>
-          <Input
-            id="edit-event-location"
-            placeholder="e.g., Port of Los Angeles"
-            value={editEventForm.location}
-            onChange={(e) => setEditEventForm({ ...editEventForm, location: e.target.value })}
-            data-testid="input-edit-event-location"
-          />
-        </div>
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <Label htmlFor="edit-estimate-time">Estimated Time</Label>
-            <Input
-              id="edit-estimate-time"
-              type="datetime-local"
-              value={editEventForm.estimateTime}
-              onChange={(e) => setEditEventForm({ ...editEventForm, estimateTime: e.target.value })}
-              data-testid="input-edit-estimate-time"
-            />
+      {/* Edit Container Dialog */}
+      <Dialog open={editContainerDialogOpen} onOpenChange={setEditContainerDialogOpen}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto" data-testid="dialog-edit-container">
+          <DialogHeader>
+            <DialogTitle>Edit Container Information</DialogTitle>
+            <DialogDescription>
+              Update the primary container details for this shipment
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="container-number">Container Number</Label>
+              <Input
+                id="container-number"
+                placeholder="e.g., MAEU1234567"
+                value={containerForm.containerNumber}
+                onChange={(e) => setContainerForm({ ...containerForm, containerNumber: e.target.value })}
+                data-testid="input-container-number"
+              />
+            </div>
+            <div>
+              <Label htmlFor="container-type">Container Type</Label>
+              <Select
+                value={containerForm.containerType}
+                onValueChange={(value) => setContainerForm({ ...containerForm, containerType: value })}
+              >
+                <SelectTrigger id="container-type" data-testid="select-container-type">
+                  <SelectValue placeholder="Select type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="40HC">40HC (40ft High Cube)</SelectItem>
+                  <SelectItem value="40GP">40GP (40ft General Purpose)</SelectItem>
+                  <SelectItem value="20GP">20GP (20ft General Purpose)</SelectItem>
+                  <SelectItem value="20HC">20HC (20ft High Cube)</SelectItem>
+                  <SelectItem value="45HC">45HC (45ft High Cube)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="container-status">Container Status</Label>
+              <Select
+                value={containerForm.containerStatus}
+                onValueChange={(value) => setContainerForm({ ...containerForm, containerStatus: value })}
+              >
+                <SelectTrigger id="container-status" data-testid="select-container-status">
+                  <SelectValue placeholder="Select status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="booking-confirmed">Booking Confirmed</SelectItem>
+                  <SelectItem value="gate-in">Gate In</SelectItem>
+                  <SelectItem value="loaded">Loaded on Vessel</SelectItem>
+                  <SelectItem value="departed">Departed</SelectItem>
+                  <SelectItem value="in-transit">In Transit</SelectItem>
+                  <SelectItem value="arrived">Arrived at Port</SelectItem>
+                  <SelectItem value="unloaded">Unloaded</SelectItem>
+                  <SelectItem value="at-terminal">At Terminal</SelectItem>
+                  <SelectItem value="customs-clearance">Customs Clearance</SelectItem>
+                  <SelectItem value="gate-out">Gate Out</SelectItem>
+                  <SelectItem value="on-rail">On Rail</SelectItem>
+                  <SelectItem value="delivered">Delivered</SelectItem>
+                  <SelectItem value="delayed">Delayed</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="voyage-number">Voyage Number</Label>
+              <Input
+                id="voyage-number"
+                placeholder="e.g., 123E"
+                value={containerForm.voyageNumber}
+                onChange={(e) => setContainerForm({ ...containerForm, voyageNumber: e.target.value })}
+                data-testid="input-voyage-number"
+              />
+            </div>
+            <div>
+              <Label htmlFor="booking-reference">Booking Reference</Label>
+              <Input
+                id="booking-reference"
+                placeholder="e.g., BKG456789"
+                value={containerForm.bookingReference}
+                onChange={(e) => setContainerForm({ ...containerForm, bookingReference: e.target.value })}
+                data-testid="input-booking-reference"
+              />
+            </div>
+            <div>
+              <Label htmlFor="seal-number">Seal Number</Label>
+              <Input
+                id="seal-number"
+                placeholder="e.g., SEAL123456"
+                value={containerForm.sealNumber}
+                onChange={(e) => setContainerForm({ ...containerForm, sealNumber: e.target.value })}
+                data-testid="input-seal-number"
+              />
+            </div>
+            <div>
+              <Label htmlFor="weight">Weight (lbs)</Label>
+              <Input
+                id="weight"
+                type="number"
+                placeholder="e.g., 52910"
+                value={containerForm.weight}
+                onChange={(e) => setContainerForm({ ...containerForm, weight: e.target.value })}
+                data-testid="input-weight"
+              />
+            </div>
+            <div>
+              <Label htmlFor="container-eta">Container ETA</Label>
+              <Input
+                id="container-eta"
+                type="datetime-local"
+                value={containerForm.containerEta}
+                onChange={(e) => setContainerForm({ ...containerForm, containerEta: e.target.value })}
+                data-testid="input-container-eta"
+              />
+            </div>
+            <div>
+              <Label htmlFor="container-ata">Container ATA</Label>
+              <Input
+                id="container-ata"
+                type="datetime-local"
+                value={containerForm.containerAta}
+                onChange={(e) => setContainerForm({ ...containerForm, containerAta: e.target.value })}
+                data-testid="input-container-ata"
+              />
+            </div>
+            <div>
+              <Label htmlFor="last-free-day">Last Free Day</Label>
+              <Input
+                id="last-free-day"
+                type="date"
+                value={containerForm.lastFreeDay}
+                onChange={(e) => setContainerForm({ ...containerForm, lastFreeDay: e.target.value })}
+                data-testid="input-last-free-day"
+              />
+            </div>
+            <div>
+              <Label htmlFor="daily-fee-rate">Daily Demurrage Rate ($)</Label>
+              <Input
+                id="daily-fee-rate"
+                type="number"
+                step="0.01"
+                placeholder="150"
+                value={containerForm.dailyFeeRate}
+                onChange={(e) => setContainerForm({ ...containerForm, dailyFeeRate: e.target.value })}
+                data-testid="input-daily-fee-rate"
+              />
+            </div>
+            <div>
+              <Label htmlFor="detention-fee">Detention Fee ($)</Label>
+              <Input
+                id="detention-fee"
+                type="number"
+                step="0.01"
+                placeholder="0"
+                value={containerForm.detentionFee}
+                onChange={(e) => setContainerForm({ ...containerForm, detentionFee: e.target.value })}
+                data-testid="input-detention-fee"
+              />
+            </div>
+            <div>
+              <Label htmlFor="pickup-chassis">Pickup Chassis</Label>
+              <Input
+                id="pickup-chassis"
+                placeholder="Enter chassis number"
+                value={containerForm.pickupChassis}
+                onChange={(e) => setContainerForm({ ...containerForm, pickupChassis: e.target.value })}
+                data-testid="input-pickup-chassis"
+              />
+            </div>
+            <div>
+              <Label htmlFor="yard-location">Yard Location</Label>
+              <Input
+                id="yard-location"
+                placeholder="Enter yard location"
+                value={containerForm.yardLocation}
+                onChange={(e) => setContainerForm({ ...containerForm, yardLocation: e.target.value })}
+                data-testid="input-yard-location"
+              />
+            </div>
           </div>
-          <div>
-            <Label htmlFor="edit-actual-time">Actual Time</Label>
-            <Input
-              id="edit-actual-time"
-              type="datetime-local"
-              value={editEventForm.actualTime}
-              onChange={(e) => setEditEventForm({ ...editEventForm, actualTime: e.target.value })}
-              data-testid="input-edit-actual-time"
-            />
-          </div>
-        </div>
-        <div>
-          <Label htmlFor="edit-event-code">Event Code (Optional)</Label>
-          <Input
-            id="edit-event-code"
-            placeholder="e.g., GATE_OUT"
-            value={editEventForm.code}
-            onChange={(e) => setEditEventForm({ ...editEventForm, code: e.target.value })}
-            data-testid="input-edit-event-code"
-          />
-        </div>
-      </div>
-      <DialogFooter>
-        <Button
-          variant="outline"
-          onClick={() => {
-            setEditEventDialogOpen(false);
-            setEditingEventIndex(null);
-          }}
-          data-testid="button-cancel-edit-event"
-        >
-          Cancel
-        </Button>
-        <Button
-          onClick={() => {
-            // For now, just close the dialog
-            // In a real implementation, this would call an API to update the event
-            toast({
-              title: "Event updated",
-              description: "The event has been updated successfully.",
-            });
-            setEditEventDialogOpen(false);
-            setEditingEventIndex(null);
-          }}
-          data-testid="button-save-edit-event"
-        >
-          Save Changes
-        </Button>
-      </DialogFooter>
-    </DialogContent>
-  </Dialog>
-
-  {/* Edit Container Dialog */ }
-  <Dialog open={editContainerDialogOpen} onOpenChange={setEditContainerDialogOpen}>
-    <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto" data-testid="dialog-edit-container">
-      <DialogHeader>
-        <DialogTitle>Edit Container Information</DialogTitle>
-        <DialogDescription>
-          Update the primary container details for this shipment
-        </DialogDescription>
-      </DialogHeader>
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <Label htmlFor="container-number">Container Number</Label>
-          <Input
-            id="container-number"
-            placeholder="e.g., MAEU1234567"
-            value={containerForm.containerNumber}
-            onChange={(e) => setContainerForm({ ...containerForm, containerNumber: e.target.value })}
-            data-testid="input-container-number"
-          />
-        </div>
-        <div>
-          <Label htmlFor="container-type">Container Type</Label>
-          <Select
-            value={containerForm.containerType}
-            onValueChange={(value) => setContainerForm({ ...containerForm, containerType: value })}
-          >
-            <SelectTrigger id="container-type" data-testid="select-container-type">
-              <SelectValue placeholder="Select type" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="40HC">40HC (40ft High Cube)</SelectItem>
-              <SelectItem value="40GP">40GP (40ft General Purpose)</SelectItem>
-              <SelectItem value="20GP">20GP (20ft General Purpose)</SelectItem>
-              <SelectItem value="20HC">20HC (20ft High Cube)</SelectItem>
-              <SelectItem value="45HC">45HC (45ft High Cube)</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div>
-          <Label htmlFor="container-status">Container Status</Label>
-          <Select
-            value={containerForm.containerStatus}
-            onValueChange={(value) => setContainerForm({ ...containerForm, containerStatus: value })}
-          >
-            <SelectTrigger id="container-status" data-testid="select-container-status">
-              <SelectValue placeholder="Select status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="booking-confirmed">Booking Confirmed</SelectItem>
-              <SelectItem value="gate-in">Gate In</SelectItem>
-              <SelectItem value="loaded">Loaded on Vessel</SelectItem>
-              <SelectItem value="departed">Departed</SelectItem>
-              <SelectItem value="in-transit">In Transit</SelectItem>
-              <SelectItem value="arrived">Arrived at Port</SelectItem>
-              <SelectItem value="unloaded">Unloaded</SelectItem>
-              <SelectItem value="at-terminal">At Terminal</SelectItem>
-              <SelectItem value="customs-clearance">Customs Clearance</SelectItem>
-              <SelectItem value="gate-out">Gate Out</SelectItem>
-              <SelectItem value="on-rail">On Rail</SelectItem>
-              <SelectItem value="delivered">Delivered</SelectItem>
-              <SelectItem value="delayed">Delayed</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div>
-          <Label htmlFor="voyage-number">Voyage Number</Label>
-          <Input
-            id="voyage-number"
-            placeholder="e.g., 123E"
-            value={containerForm.voyageNumber}
-            onChange={(e) => setContainerForm({ ...containerForm, voyageNumber: e.target.value })}
-            data-testid="input-voyage-number"
-          />
-        </div>
-        <div>
-          <Label htmlFor="booking-reference">Booking Reference</Label>
-          <Input
-            id="booking-reference"
-            placeholder="e.g., BKG456789"
-            value={containerForm.bookingReference}
-            onChange={(e) => setContainerForm({ ...containerForm, bookingReference: e.target.value })}
-            data-testid="input-booking-reference"
-          />
-        </div>
-        <div>
-          <Label htmlFor="seal-number">Seal Number</Label>
-          <Input
-            id="seal-number"
-            placeholder="e.g., SEAL123456"
-            value={containerForm.sealNumber}
-            onChange={(e) => setContainerForm({ ...containerForm, sealNumber: e.target.value })}
-            data-testid="input-seal-number"
-          />
-        </div>
-        <div>
-          <Label htmlFor="weight">Weight (lbs)</Label>
-          <Input
-            id="weight"
-            type="number"
-            placeholder="e.g., 52910"
-            value={containerForm.weight}
-            onChange={(e) => setContainerForm({ ...containerForm, weight: e.target.value })}
-            data-testid="input-weight"
-          />
-        </div>
-        <div>
-          <Label htmlFor="container-eta">Container ETA</Label>
-          <Input
-            id="container-eta"
-            type="datetime-local"
-            value={containerForm.containerEta}
-            onChange={(e) => setContainerForm({ ...containerForm, containerEta: e.target.value })}
-            data-testid="input-container-eta"
-          />
-        </div>
-        <div>
-          <Label htmlFor="container-ata">Container ATA</Label>
-          <Input
-            id="container-ata"
-            type="datetime-local"
-            value={containerForm.containerAta}
-            onChange={(e) => setContainerForm({ ...containerForm, containerAta: e.target.value })}
-            data-testid="input-container-ata"
-          />
-        </div>
-        <div>
-          <Label htmlFor="last-free-day">Last Free Day</Label>
-          <Input
-            id="last-free-day"
-            type="date"
-            value={containerForm.lastFreeDay}
-            onChange={(e) => setContainerForm({ ...containerForm, lastFreeDay: e.target.value })}
-            data-testid="input-last-free-day"
-          />
-        </div>
-        <div>
-          <Label htmlFor="daily-fee-rate">Daily Demurrage Rate ($)</Label>
-          <Input
-            id="daily-fee-rate"
-            type="number"
-            step="0.01"
-            placeholder="150"
-            value={containerForm.dailyFeeRate}
-            onChange={(e) => setContainerForm({ ...containerForm, dailyFeeRate: e.target.value })}
-            data-testid="input-daily-fee-rate"
-          />
-        </div>
-        <div>
-          <Label htmlFor="detention-fee">Detention Fee ($)</Label>
-          <Input
-            id="detention-fee"
-            type="number"
-            step="0.01"
-            placeholder="0"
-            value={containerForm.detentionFee}
-            onChange={(e) => setContainerForm({ ...containerForm, detentionFee: e.target.value })}
-            data-testid="input-detention-fee"
-          />
-        </div>
-        <div>
-          <Label htmlFor="pickup-chassis">Pickup Chassis</Label>
-          <Input
-            id="pickup-chassis"
-            placeholder="Enter chassis number"
-            value={containerForm.pickupChassis}
-            onChange={(e) => setContainerForm({ ...containerForm, pickupChassis: e.target.value })}
-            data-testid="input-pickup-chassis"
-          />
-        </div>
-        <div>
-          <Label htmlFor="yard-location">Yard Location</Label>
-          <Input
-            id="yard-location"
-            placeholder="Enter yard location"
-            value={containerForm.yardLocation}
-            onChange={(e) => setContainerForm({ ...containerForm, yardLocation: e.target.value })}
-            data-testid="input-yard-location"
-          />
-        </div>
-      </div>
-      <DialogFooter>
-        <Button
-          variant="outline"
-          onClick={() => setEditContainerDialogOpen(false)}
-          data-testid="button-cancel-edit-container"
-        >
-          Cancel
-        </Button>
-        <Button
-          onClick={() => updateContainerMutation.mutate(containerForm)}
-          disabled={updateContainerMutation.isPending}
-          data-testid="button-save-edit-container"
-        >
-          {updateContainerMutation.isPending ? "Saving..." : "Save Changes"}
-        </Button>
-      </DialogFooter>
-    </DialogContent>
-  </Dialog>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setEditContainerDialogOpen(false)}
+              data-testid="button-cancel-edit-container"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => updateContainerMutation.mutate(containerForm)}
+              disabled={updateContainerMutation.isPending}
+              data-testid="button-save-edit-container"
+            >
+              {updateContainerMutation.isPending ? "Saving..." : "Save Changes"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div >
   );
 }

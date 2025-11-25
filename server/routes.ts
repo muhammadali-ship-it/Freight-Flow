@@ -3788,8 +3788,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // For each vessel, get container count from shipments
       const vesselsWithStats = await Promise.all(
         result.data.map(async (vessel) => {
-          // Count containers from cargoes_flow_shipments where vessel appears in segments
-          const searchPattern = `%"transportName":"${vessel.name}"%`;
+          // Count containers from cargoes_flow_shipments where vessel appears in raw_data
+          // Simple search for vessel name in the JSON text
+          const searchPattern = `%${vessel.name}%`;
           const containerCountQuery = sql`
             SELECT COUNT(*) as count
             FROM cargoes_flow_shipments
@@ -3822,8 +3823,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Vessel not found" });
       }
 
-      // Get all shipments for this vessel from rawData segments
-      const searchPattern = `%"transportName":"${vessel.name}"%`;
+      // Get all shipments for this vessel from rawData
+      const searchPattern = `%${vessel.name}%`;
       const shipmentsQuery = sql`
         SELECT *
         FROM cargoes_flow_shipments

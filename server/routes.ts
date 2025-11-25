@@ -3788,11 +3788,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // For each vessel, get container count from shipments
       const vesselsWithStats = await Promise.all(
         result.data.map(async (vessel) => {
-          // Count containers from cargoes_flow_shipments where vessel name matches
+          // Count containers from cargoes_flow_shipments where vessel appears in segments
+          // The vessel name is stored in rawData.shipmentLegs.portToPort.segments[].transportName
           const containerCountQuery = sql`
             SELECT COUNT(*) as count
             FROM cargoes_flow_shipments
-            WHERE vessel_name = ${vessel.name}
+            WHERE raw_data->'shipmentLegs'->'portToPort'->'segments' @> 
+              jsonb_build_array(jsonb_build_object('transportName', ${vessel.name}))
           `;
           const countResult = await db.execute(containerCountQuery);
           const containerCount = Number(countResult.rows[0]?.count || 0);
@@ -3821,11 +3823,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Vessel not found" });
       }
 
-      // Get all shipments for this vessel
+      // Get all shipments for this vessel from rawData segments
       const shipmentsQuery = sql`
         SELECT *
         FROM cargoes_flow_shipments
-        WHERE vessel_name = ${vessel.name}
+        WHERE raw_data->'shipmentLegs'->'portToPort'->'segments' @> 
+          jsonb_build_array(jsonb_build_object('transportName', ${vessel.name}))
         ORDER BY created_at DESC
       `;
       const shipmentsResult = await db.execute(shipmentsQuery);

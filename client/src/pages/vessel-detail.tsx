@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useRoute, useLocation } from "wouter";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Ship, Package } from "lucide-react";
 import { ContainerCard } from "@/components/container-card";
@@ -62,7 +62,9 @@ export default function VesselDetail() {
 
     // Map shipments to container format for ContainerCard
     const containers = (vessel.shipments || []).map((shipment: any) => {
-        const rawData = shipment.rawData || {};
+        const rawData = shipment.raw_data || shipment.rawData || {};
+
+        // Extract terminal data
         const terminalData = {
             terminalName: rawData.terminalName,
             terminalPort: rawData.terminalPort,
@@ -75,10 +77,12 @@ export default function VesselDetail() {
             detention: rawData.detention,
         };
 
+        // Extract rail data
         const containersArray = rawData.containers || [];
         const firstContainer = containersArray[0] || {};
         const railData = firstContainer.rawData?.rail || {};
 
+        // Determine terminal status
         let terminalStatus: string | undefined = undefined;
         if (terminalData.terminalFullOut) {
             terminalStatus = 'available';
@@ -90,22 +94,28 @@ export default function VesselDetail() {
 
         const emptyReturned = !!(terminalData.terminalEmptyReturned || railData.emptyReturned);
 
+        // Use database column names (snake_case) for shipment data
+        const containerNumber = shipment.container_number || rawData.containerNumber || 'N/A';
+        const mblNumber = shipment.mbl_number || rawData.mblNumber || rawData.blNumber || '';
+        const origin = shipment.origin_port || rawData.originOceanPort || rawData.originPort || 'Unknown';
+        const destination = shipment.destination_port || rawData.destinationOceanPort || rawData.destinationPort || 'Unknown';
+
         return {
             id: shipment.id,
-            containerNumber: shipment.containerNumber || shipment.shipmentReference || 'N/A',
-            status: shipment.status || 'unknown',
-            origin: shipment.originPort || 'Unknown',
-            destination: shipment.destinationPort || 'Unknown',
-            carrier: shipment.carrier || 'Unknown',
+            containerNumber,
+            status: shipment.status || rawData.status || 'unknown',
+            origin,
+            destination,
+            carrier: shipment.carrier || rawData.carrierScac || rawData.carrier || 'Unknown',
             vesselName: vessel.name,
-            bookingNumber: shipment.bookingNumber || '',
-            masterBillOfLading: shipment.mblNumber || '',
+            bookingNumber: shipment.booking_number || rawData.bookingNumber || '',
+            masterBillOfLading: mblNumber,
             weight: '',
             volume: '',
-            eta: shipment.eta || '',
-            estimatedArrival: shipment.eta || '',
+            eta: shipment.eta || rawData.eta || rawData.promisedEta || '',
+            estimatedArrival: shipment.eta || rawData.eta || rawData.promisedEta || '',
             progress: 50,
-            reference: shipment.taiShipmentId || shipment.shipmentReference,
+            reference: shipment.tai_shipment_id || shipment.shipment_reference || shipment.shipment_number,
             riskLevel: rawData.riskLevel,
             riskReason: rawData.riskReasons?.join(', '),
             terminalStatus,

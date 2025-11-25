@@ -474,7 +474,10 @@ export default function CargoesFlowShipmentDetail() {
     pickupChassis: "",
     pickupAppointment: "",
     availableForPickup: false,
+    pickupAppointment: "",
+    availableForPickup: false,
     holds: [] as string[],
+    customTerminalName: "", // Add field for custom terminal name
   });
   const [milestoneForm, setMilestoneForm] = useState({
     eventType: "",
@@ -1584,9 +1587,62 @@ export default function CargoesFlowShipmentDetail() {
                     const events = rawData.shipmentEvents || [];
                     const gateOutEvent = events.find((e: any) => e.code === "gateOutWithContainerFull");
 
+                    // Extract terminal name from segments if not in rawData
+                    let terminalName = rawData.terminalName;
+                    if (!terminalName) {
+                      const legs = rawData.shipmentLegs || {};
+                      const segments = legs.portToPort?.segments || rawData.segments || legs.segments;
+                      if (Array.isArray(segments) && segments.length > 0) {
+                        // Use the last segment's destination terminal as default
+                        const lastSegment = segments[segments.length - 1];
+                        terminalName = lastSegment?.destinationTerminalName;
+                      }
+                    }
+
+                    // Helper to find matching port and terminal in our predefined list
+                    const findMatchingData = (tName: string | undefined, pName: string | undefined) => {
+                      // 1. Try to find by terminal name (most reliable)
+                      if (tName) {
+                        const normalizedSearch = tName.toLowerCase().replace(/[^a-z0-9]/g, "");
+                        for (const [port, terminals] of Object.entries(PORT_TERMINALS)) {
+                          for (const terminal of terminals) {
+                            const normalizedStored = terminal.toLowerCase().replace(/[^a-z0-9]/g, "");
+                            // Check for loose match
+                            if (normalizedSearch === normalizedStored ||
+                              (normalizedSearch.length > 4 && normalizedStored.includes(normalizedSearch)) ||
+                              (normalizedStored.length > 4 && normalizedSearch.includes(normalizedStored))) {
+                              return { port, terminal };
+                            }
+                          }
+                        }
+                      }
+
+                      // 2. If no terminal match, try to find port
+                      if (pName) {
+                        const normalizedSearchPort = pName.toLowerCase();
+                        // Try exact match first
+                        if (PORT_TERMINALS[pName]) return { port: pName, terminal: "Other" };
+
+                        // Try fuzzy match on city name
+                        const portKey = Object.keys(PORT_TERMINALS).find(p => {
+                          const city = p.split(',')[0].toLowerCase();
+                          return normalizedSearchPort.includes(city) || city.includes(normalizedSearchPort);
+                        });
+
+                        if (portKey) {
+                          return { port: portKey, terminal: "Other" };
+                        }
+                      }
+
+                      return { port: pName || "", terminal: tName ? "Other" : "" };
+                    };
+
+                    const { port: matchedPort, terminal: matchedTerminal } = findMatchingData(terminalName, rawData.terminalPort);
+                    const isCustomTerminal = matchedTerminal === "Other";
+
                     setTerminalForm({
-                      terminalName: rawData.terminalName || "",
-                      terminalPort: rawData.terminalPort || "",
+                      terminalName: matchedTerminal,
+                      terminalPort: matchedPort,
                       lfd: rawData.lastFreeDay || "",
                       demurrage: rawData.demurrage || "",
                       detention: rawData.detention || "",
@@ -1595,6 +1651,7 @@ export default function CargoesFlowShipmentDetail() {
                       pickupAppointment: rawData.terminalPickupAppointment || "",
                       availableForPickup: rawData.terminalAvailableForPickup || !!gateOutEvent,
                       holds: rawData.terminalHolds || [],
+                      customTerminalName: isCustomTerminal ? (terminalName || "") : "",
                     });
                     setAddTerminalDialogOpen(true);
                   }}
@@ -1611,7 +1668,18 @@ export default function CargoesFlowShipmentDetail() {
                   const gateOutEvent = events.find((e: any) => e.code === "gateOutWithContainerFull");
                   const customsReleaseEvent = events.find((e: any) => e.code === "customsRelease" || e.code === "customsHoldReleased");
 
-                  const hasTerminalInfo = rawData.terminalName || rawData.terminalPort || rawData.lastFreeDay || rawData.demurrage ||
+                  // Extract terminal name from segments if not in rawData
+                  let terminalName = rawData.terminalName;
+                  if (!terminalName) {
+                    const legs = rawData.shipmentLegs || {};
+                    const segments = legs.portToPort?.segments || rawData.segments || legs.segments;
+                    if (Array.isArray(segments) && segments.length > 0) {
+                      const lastSegment = segments[segments.length - 1];
+                      terminalName = lastSegment?.destinationTerminalName;
+                    }
+                  }
+
+                  const hasTerminalInfo = terminalName || rawData.terminalPort || rawData.lastFreeDay || rawData.demurrage ||
                     rawData.detention || rawData.terminalYardLocation || rawData.terminalPickupChassis || rawData.terminalFullOut ||
                     rawData.terminalPickupAppointment || rawData.terminalEmptyReturned || rawData.terminalAvailableForPickup !== undefined ||
                     (rawData.terminalHolds && rawData.terminalHolds.length > 0) ||
@@ -1642,10 +1710,10 @@ export default function CargoesFlowShipmentDetail() {
                         </div>
                       )}
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        {rawData.terminalName && (
+                        {terminalName && (
                           <div>
                             <p className="text-xs text-muted-foreground">Terminal Name</p>
-                            <p className="text-sm font-medium">{rawData.terminalName}</p>
+                            <p className="text-sm font-medium">{terminalName}</p>
                           </div>
                         )}
                         {rawData.terminalPort && (
@@ -2063,9 +2131,22 @@ export default function CargoesFlowShipmentDetail() {
                           {terminal}
                         </SelectItem>
                       ))}
+                    <SelectItem value="Other">Other (Enter manually)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
+              {terminalForm.terminalName === "Other" && (
+                <div>
+                  <Label htmlFor="custom-terminal-name">Custom Terminal Name</Label>
+                  <Input
+                    id="custom-terminal-name"
+                    placeholder="Enter terminal name"
+                    value={terminalForm.customTerminalName}
+                    onChange={(e) => setTerminalForm({ ...terminalForm, customTerminalName: e.target.value })}
+                    data-testid="input-custom-terminal-name"
+                  />
+                </div>
+              )}
               <div>
                 <Label htmlFor="terminal-yard">Yard Location</Label>
                 <Input
@@ -2204,7 +2285,7 @@ export default function CargoesFlowShipmentDetail() {
             </Button>
             <Button
               onClick={() => addTerminalMutation.mutate({
-                terminalName: terminalForm.terminalName,
+                terminalName: terminalForm.terminalName === "Other" ? terminalForm.customTerminalName : terminalForm.terminalName,
                 terminalPort: terminalForm.terminalPort,
                 lastFreeDay: terminalForm.lfd,
                 demurrage: terminalForm.demurrage,

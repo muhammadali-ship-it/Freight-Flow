@@ -1991,6 +1991,7 @@ export class DbStorage implements IStorage {
       // Check for active holds (excluding Customs Hold if customsRelease event exists)
       const events = rawData.shipmentEvents || [];
       const customsReleaseEvent = events.find((e: any) => e.code === 'customsRelease' || e.code === 'customsHoldReleased');
+      const gateOutEvent = events.find((e: any) => e.code === 'gateOutWithContainerFull');
       let activeHolds = rawData.terminalHolds || [];
       if (customsReleaseEvent) {
         activeHolds = activeHolds.filter((h: string) => h !== 'Customs Hold');
@@ -2017,6 +2018,7 @@ export class DbStorage implements IStorage {
       const awaitingFullOut = terminalData.terminalName &&
         !isAvailableForPickup &&
         !terminalData.terminalFullOut &&
+        !gateOutEvent &&
         !isEmptyReturned;
 
       if (awaitingFullOut) {
@@ -2024,7 +2026,7 @@ export class DbStorage implements IStorage {
       }
 
       // POD full out - multiply by container count
-      if ((terminalData.terminalFullOut || railData.fullOut) && !isEmptyReturned) {
+      if ((terminalData.terminalFullOut || railData.fullOut || gateOutEvent) && !isEmptyReturned) {
         podFullOut += containerCount;
         console.log(`[DEBUG] POD Full Out found: ${containerCount} containers`, {
           terminalFullOut: terminalData.terminalFullOut,
@@ -2060,6 +2062,8 @@ export class DbStorage implements IStorage {
 
     return shipments.filter(shipment => {
       const rawData = shipment.rawData || {};
+      const events = rawData.shipmentEvents || [];
+      const gateOutEvent = events.find((e: any) => e.code === 'gateOutWithContainerFull');
 
       // Determine if empty returned based on events or legacy flags
       let isEmptyReturned = false;
@@ -2132,7 +2136,8 @@ export class DbStorage implements IStorage {
             rawData.terminalAvailableForPickup === 'true';
           return rawData.terminalName &&
             !isAvailable &&
-            !rawData.terminalFullOut;
+            !rawData.terminalFullOut &&
+            !gateOutEvent;
         }
 
         case 'pod-full-out': {
@@ -2140,7 +2145,7 @@ export class DbStorage implements IStorage {
           const containersArray = rawData.containers || [];
           const firstContainer = containersArray[0] || {};
           const railData = firstContainer.rawData?.rail || {};
-          return !!(rawData.terminalFullOut || railData.fullOut);
+          return !!(rawData.terminalFullOut || railData.fullOut || gateOutEvent);
         }
 
         case 'empty-returned': {

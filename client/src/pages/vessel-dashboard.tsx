@@ -10,12 +10,27 @@ interface Vessel {
     destination: string | null;
     eta: string | null;
     atd: string | null;
+import { useQuery } from "@tanstack/react-query";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Ship, Package, TrendingUp } from "lucide-react";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { useLocation } from "react-router-dom";
+
+interface Vessel {
+    id: string;
+    name: string;
+    tripNumber: string | null;
+    destination: string | null;
+    eta: string | null;
+    atd: string | null;
     containerCount: number;
     lastUpdated: string;
     createdAt: string;
 }
 
 export default function VesselDashboard() {
+    const [, navigate] = useLocation();
+
     const { data: vesselsData, isLoading } = useQuery<{
         data: Vessel[];
         pagination: { page: number; pageSize: number; total: number; totalPages: number };
@@ -33,8 +48,21 @@ export default function VesselDashboard() {
         .slice(0, 10)
         .map(v => ({
             name: v.name.length > 20 ? v.name.substring(0, 20) + '...' : v.name,
+            fullName: v.name,
+            vesselId: v.id,
             containers: v.containerCount,
         }));
+
+    const handleVesselClick = (vesselId: string) => {
+        navigate(`/vessel-dashboard/${vesselId}`);
+    };
+
+    const handleChartClick = (data: any) => {
+        if (data && data.activePayload && data.activePayload[0]) {
+            const vesselId = data.activePayload[0].payload.vesselId;
+            handleVesselClick(vesselId);
+        }
+    };
 
     return (
         <div className="p-6 space-y-6">
@@ -87,7 +115,7 @@ export default function VesselDashboard() {
             <Card>
                 <CardHeader>
                     <CardTitle>Containers per Vessel (Top 10)</CardTitle>
-                    <CardDescription>Number of containers arriving on each vessel</CardDescription>
+                    <CardDescription>Number of containers arriving on each vessel - Click to view details</CardDescription>
                 </CardHeader>
                 <CardContent>
                     {isLoading ? (
@@ -96,11 +124,11 @@ export default function VesselDashboard() {
                         </div>
                     ) : chartData.length > 0 ? (
                         <ResponsiveContainer width="100%" height={400}>
-                            <BarChart data={chartData}>
+                            <BarChart data={chartData} onClick={handleChartClick} className="cursor-pointer">
                                 <CartesianGrid strokeDasharray="3 3" />
                                 <XAxis dataKey="name" angle={-45} textAnchor="end" height={100} />
                                 <YAxis />
-                                <Tooltip />
+                                <Tooltip cursor={{ fill: 'rgba(59, 130, 246, 0.1)' }} />
                                 <Legend />
                                 <Bar dataKey="containers" fill="#3b82f6" name="Containers" />
                             </BarChart>
@@ -117,7 +145,7 @@ export default function VesselDashboard() {
             <Card>
                 <CardHeader>
                     <CardTitle>All Vessels</CardTitle>
-                    <CardDescription>Complete list of tracked vessels</CardDescription>
+                    <CardDescription>Complete list of tracked vessels - Click to view containers</CardDescription>
                 </CardHeader>
                 <CardContent>
                     {isLoading ? (
@@ -138,14 +166,18 @@ export default function VesselDashboard() {
                                 </thead>
                                 <tbody>
                                     {vessels.map((vessel) => (
-                                        <tr key={vessel.id} className="border-b hover:bg-muted/50">
-                                            <td className="p-2 font-medium">{vessel.name}</td>
+                                        <tr
+                                            key={vessel.id}
+                                            className="border-b hover:bg-muted/50 cursor-pointer transition-colors"
+                                            onClick={() => handleVesselClick(vessel.id)}
+                                        >
+                                            <td className="p-2 font-medium text-primary hover:underline">{vessel.name}</td>
                                             <td className="p-2">{vessel.tripNumber || '-'}</td>
                                             <td className="p-2">{vessel.destination || '-'}</td>
                                             <td className="p-2">
                                                 {vessel.eta ? new Date(vessel.eta).toLocaleDateString() : '-'}
                                             </td>
-                                            <td className="p-2 text-right">{vessel.containerCount}</td>
+                                            <td className="p-2 text-right font-semibold">{vessel.containerCount}</td>
                                         </tr>
                                     ))}
                                 </tbody>

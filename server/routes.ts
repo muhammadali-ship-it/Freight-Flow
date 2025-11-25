@@ -3827,8 +3827,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const shipmentsQuery = sql`
         SELECT *
         FROM cargoes_flow_shipments
-        WHERE raw_data->'shipmentLegs'->'portToPort'->'segments' @> 
-          jsonb_build_array(jsonb_build_object('transportName', ${vessel.name}))
+        WHERE raw_data::text LIKE ${'%"transportName":"' + vessel.name + '"%'}
         ORDER BY created_at DESC
       `;
       const shipmentsResult = await db.execute(shipmentsQuery);

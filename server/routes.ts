@@ -3773,6 +3773,75 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Vessel Dashboard endpoints
+  app.get("/api/vessels", async (req, res) => {
+    try {
+      const page = parseInt(req.query.page as string) || 1;
+      const pageSize = parseInt(req.query.pageSize as string) || 50;
+      const search = req.query.search as string;
+
+      const result = await storage.getVessels(
+        { page, pageSize },
+        { search }
+      );
+
+      // For each vessel, get container count from shipments
+      const vesselsWithStats = await Promise.all(
+        result.data.map(async (vessel) => {
+          // Count containers from cargoes_flow_shipments where vessel name matches
+          const containerCountQuery = sql`
+            SELECT COUNT(*) as count
+            FROM cargoes_flow_shipments
+            WHERE vessel_name = ${vessel.name}
+          `;
+          const countResult = await db.execute(containerCountQuery);
+          const containerCount = Number(countResult.rows[0]?.count || 0);
+
+          return {
+            ...vessel,
+            containerCount,
+          };
+        })
+      );
+
+      res.json({
+        data: vesselsWithStats,
+        pagination: result.pagination,
+      });
+    } catch (error) {
+      console.error("Error fetching vessels:", error);
+      res.status(500).json({ error: "Failed to fetch vessels" });
+    }
+  });
+
+  app.get("/api/vessels/:id", async (req, res) => {
+    try {
+      const vessel = await storage.getVesselById(req.params.id);
+      if (!vessel) {
+        return res.status(404).json({ error: "Vessel not found" });
+      }
+
+      // Get all shipments for this vessel
+      const shipmentsQuery = sql`
+        SELECT *
+        FROM cargoes_flow_shipments
+        WHERE vessel_name = ${vessel.name}
+        ORDER BY created_at DESC
+      `;
+      const shipmentsResult = await db.execute(shipmentsQuery);
+      const shipments = shipmentsResult.rows;
+
+      res.json({
+        ...vessel,
+        shipments,
+        containerCount: shipments.length,
+      });
+    } catch (error) {
+      console.error("Error fetching vessel:", error);
+      res.status(500).json({ error: "Failed to fetch vessel" });
+    }
+  });
+
   integrationOrchestrator.startAllActiveIntegrations();
   riskScheduler.start();
   startCargoesFlowPolling();

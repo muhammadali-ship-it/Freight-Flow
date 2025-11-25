@@ -808,3 +808,24 @@ export const insertCargoesFlowCarrierSyncLogSchema = createInsertSchema(cargoesF
 
 export type InsertCargoesFlowCarrierSyncLog = z.infer<typeof insertCargoesFlowCarrierSyncLogSchema>;
 export type CargoesFlowCarrierSyncLog = typeof cargoesFlowCarrierSyncLogs.$inferSelect;
+
+// Vessels Table - for Vessel Dashboard
+export const vessels = pgTable("vessels", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull().unique(),
+  tripNumber: text("trip_number"),
+  destination: text("destination"),
+  eta: text("eta"),
+  atd: text("atd"),
+  lastUpdated: timestamp("last_updated").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertVesselSchema = createInsertSchema(vessels).omit({
+  id: true,
+  lastUpdated: true,
+  createdAt: true,
+});
+
+export type InsertVessel = z.infer<typeof insertVesselSchema>;
+export type Vessel = typeof vessels.$inferSelect;

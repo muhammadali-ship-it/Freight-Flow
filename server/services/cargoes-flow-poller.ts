@@ -442,6 +442,25 @@ async function processAndStoreShipmentsWithStats(shipments: CargoesFlowShipmentD
         }
         newCount++;
       }
+
+      // Extract and store vessel information
+      try {
+        const vesselInfo = extractLastVesselForDestination(shipment, destinationPort);
+        if (vesselInfo) {
+          await storage.upsertVessel({
+            name: vesselInfo.vesselName,
+            tripNumber: vesselInfo.tripNumber,
+            destination: destinationPort,
+            eta: vesselInfo.eta,
+            atd: vesselInfo.atd,
+          });
+          if (i < 3) {
+            console.log(`[Cargoes Flow Poller] 🚢 Upserted vessel: ${vesselInfo.vesselName}`);
+          }
+        }
+      } catch (vesselError: any) {
+        console.error(`[Cargoes Flow Poller] ⚠️ Error upserting vessel for shipment ${shipmentRef}:`, vesselError.message);
+      }
     } catch (error: any) {
       console.error(`[Cargoes Flow Poller] ❌ Error processing shipment ${shipment.shipmentNumber || shipment.referenceNumber}:`, error.message);
       if (i < 3) {
@@ -555,6 +574,36 @@ export function stopPolling() {
     clearInterval(pollingInterval);
     pollingInterval = null;
   }
+}
+
+// Helper function to extract vessel information for the last segment matching destination
+function extractLastVesselForDestination(shipment: any, destination: string | null): { vesselName: string; tripNumber: string | null; eta: string | null; atd: string | null } | null {
+  if (!shipment.shipmentLegs?.portToPort?.segments || !destination) {
+    return null;
+  }
+
+  const segments = shipment.shipmentLegs.portToPort.segments;
+
+  // Find the last vessel segment that goes to the destination
+  for (let i = segments.length - 1; i >= 0; i--) {
+    const segment = segments[i];
+    if (segment.transportMode === 'VESSEL' &&
+      segment.destinationPortCode &&
+      segment.transportName) {
+      // Check if this segment's destination matches the shipment destination
+      const segmentDest = segment.destination || segment.destinationPortCode;
+      if (segmentDest && segmentDest.toLowerCase().includes(destination.toLowerCase())) {
+        return {
+          vesselName: segment.transportName,
+          tripNumber: segment.tripNumber || null,
+          eta: segment.eta || null,
+          atd: segment.atd || null,
+        };
+      }
+    }
+  }
+
+  return null;
 }
 
 // Helper functions to extract data from shipmentLegs

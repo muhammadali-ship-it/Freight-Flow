@@ -1,4 +1,4 @@
-import { Home, Package, BarChart3, Settings, Plug, Users, LogOut, Upload, Webhook, Boxes, Activity, RefreshCw } from "lucide-react";
+import { Home, Package, BarChart3, Settings, Plug, Users, LogOut, Upload, Webhook, Boxes, Activity, RefreshCw, Ship } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -26,6 +26,12 @@ const menuItems = [
     title: "Active Shipments",
     url: "/shipments",
     icon: Package,
+    roles: ["User", "Manager", "Admin"],
+  },
+  {
+    title: "Vessel Dashboard",
+    url: "/vessel-dashboard",
+    icon: Ship,
     roles: ["User", "Manager", "Admin"],
   },
   {
@@ -131,7 +137,7 @@ export function AppSidebar() {
       <SidebarFooter className="p-4">
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton 
+            <SidebarMenuButton
               onClick={handleLogout}
               disabled={logoutMutation.isPending}
               data-testid="button-logout"

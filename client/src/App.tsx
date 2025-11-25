@@ -29,6 +29,7 @@ import CargoesFlowUpdateLogs from "@/pages/cargoes-flow-update-logs";
 import DocumentUploadLogs from "@/pages/document-upload-logs";
 import WebhookMonitor from "@/pages/webhook-monitor";
 import CarrierLogs from "@/pages/carrier-logs";
+import VesselDashboard from "@/pages/vessel-dashboard";
 import AuthPage from "@/pages/auth-page";
 import NotFound from "@/pages/not-found";
 
@@ -53,6 +54,7 @@ function Router() {
       <ProtectedRoute path="/webhook-monitor" component={WebhookMonitor} />
       <ProtectedRoute path="/integrations" component={Integrations} />
       <ProtectedRoute path="/users" component={Users} />
+      <ProtectedRoute path="/vessel-dashboard" component={VesselDashboard} />
       <ProtectedRoute path="/settings" component={Settings} />
       <Route path="/auth" component={AuthPage} />
       <Route component={NotFound} />

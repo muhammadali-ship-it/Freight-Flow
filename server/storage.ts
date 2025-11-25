@@ -83,6 +83,9 @@ import {
   shipmentDocuments,
   cargoesFlowDocumentUploads,
   cargoesFlowDocumentUploadLogs,
+  vessels,
+  type InsertVessel,
+  type Vessel,
 } from "./shared/schema.js";
 import { db, pool } from "./db.js";
 import { eq, or, like, desc, asc, sql, SQL, and, inArray } from "drizzle-orm";
@@ -333,6 +336,11 @@ export interface IStorage {
   // Cargoes Flow Filters - Distinct values for dropdowns
   getDistinctCarriers(): Promise<string[]>;
   getDistinctPorts(): Promise<string[]>;
+
+  // Vessels
+  upsertVessel(vessel: InsertVessel): Promise<Vessel>;
+  getVessels(params?: PaginationParams, filters?: { search?: string }): Promise<PaginatedResult<Vessel>>;
+  getVesselById(id: string): Promise<Vessel | undefined>;
 }
 
 const PostgresSessionStore = connectPg(session);
@@ -2609,6 +2617,72 @@ export class DbStorage implements IStorage {
       const normalized = port.toLowerCase().trim();
       return portMapping[normalized] || port;
     });
+  }
+
+  async upsertVessel(vessel: InsertVessel): Promise<Vessel> {
+    const result = await db.insert(vessels)
+      .values(vessel)
+      .onConflictDoUpdate({
+        target: vessels.name,
+        set: {
+          tripNumber: vessel.tripNumber,
+          destination: vessel.destination,
+          eta: vessel.eta,
+          atd: vessel.atd,
+          lastUpdated: new Date(),
+        }
+      })
+      .returning();
+    return result[0];
+  }
+
+  async getVessels(params?: PaginationParams, filters?: { search?: string }): Promise<PaginatedResult<Vessel>> {
+    const page = params?.page || 1;
+    const pageSize = params?.pageSize || 50;
+    const offset = (page - 1) * pageSize;
+
+    const whereClauses: SQL[] = [];
+
+    if (filters?.search) {
+      whereClauses.push(like(vessels.name, `%${filters.search}%`));
+    }
+
+    const whereClause = whereClauses.length > 0
+      ? sql`${whereClauses.reduce((acc, clause, idx) => {
+        return idx === 0 ? clause : sql`${acc} AND ${clause}`;
+      })}`
+      : undefined;
+
+    let query = db.select().from(vessels);
+    if (whereClause) {
+      query = query.where(whereClause) as typeof query;
+    }
+
+    const data = await query
+      .orderBy(desc(vessels.lastUpdated))
+      .limit(pageSize)
+      .offset(offset);
+
+    const baseCondition = whereClause || sql`TRUE`;
+    const totalResult = await db.select({ count: sql<number>`count(*)` })
+      .from(vessels)
+      .where(baseCondition);
+    const total = Number(totalResult[0]?.count || 0);
+
+    return {
+      data,
+      pagination: {
+        page,
+        pageSize,
+        total,
+        totalPages: Math.ceil(total / pageSize),
+      },
+    };
+  }
+
+  async getVesselById(id: string): Promise<Vessel | undefined> {
+    const result = await db.select().from(vessels).where(eq(vessels.id, id));
+    return result[0];
   }
 }
 

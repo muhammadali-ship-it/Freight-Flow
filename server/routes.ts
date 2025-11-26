@@ -1,4 +1,4 @@
-import type { Express } from "express";
+﻿import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage, db } from "./storage.js";
 import { sql } from "drizzle-orm";
@@ -113,8 +113,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           rawData: { userCreated: true, ...shipment },
         });
 
-        console.log(`[Create Shipment] ${result.success ? '✅' : '❌'} Cargoes Flow post result: ${result.success ? 'success' : result.error}`);
-        console.log(`[Create Shipment] ✅ Shipment added to active shipments tab`);
+        console.log(`[Create Shipment] ${result.success ? 'âœ…' : 'âŒ'} Cargoes Flow post result: ${result.success ? 'success' : result.error}`);
+        console.log(`[Create Shipment] âœ… Shipment added to active shipments tab`);
       }
 
       res.status(201).json(shipment);
@@ -1211,7 +1211,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         rawData: updatedRawData,
       });
 
-      console.log(`[Segment Update] ✅ Successfully updated ${transportMode} segment: ${origin} → ${destination}`);
+      console.log(`[Segment Update] âœ… Successfully updated ${transportMode} segment: ${origin} â†’ ${destination}`);
 
       res.json({
         success: true,
@@ -1325,7 +1325,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                   },
                 });
 
-                console.log(`[Rail Update] ✅ Saved rail data to container ${targetContainerNumber} in shipment ${shipment.id}`);
+                console.log(`[Rail Update] âœ… Saved rail data to container ${targetContainerNumber} in shipment ${shipment.id}`);
 
                 return res.json({
                   id: shipment.id,
@@ -1377,7 +1377,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                   },
                 });
 
-                console.log(`[Rail Update] ✅ Created container entry with rail data for ${targetContainerNumber} in shipment ${shipment.id}`);
+                console.log(`[Rail Update] âœ… Created container entry with rail data for ${targetContainerNumber} in shipment ${shipment.id}`);
 
                 return res.json({
                   id: shipment.id,
@@ -1812,7 +1812,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       await retryWebhook(log.id, log.rawPayload);
 
-      console.log(`[Webhook Retry] ✅ Successfully retried webhook ${log.id}`);
+      console.log(`[Webhook Retry] âœ… Successfully retried webhook ${log.id}`);
       res.json({ success: true, message: "Webhook reprocessed successfully" });
     } catch (error: any) {
       console.error("Error retrying webhook:", error);
@@ -1860,7 +1860,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/webhooks/shipnexus", async (req, res) => {
     try {
       console.log('='.repeat(80));
-      console.log('[ShipNexus Webhook] 🔔 WEBHOOK RECEIVED!');
+      console.log('[ShipNexus Webhook] ðŸ”” WEBHOOK RECEIVED!');
       console.log('[ShipNexus Webhook] Timestamp:', new Date().toISOString());
       console.log('[ShipNexus Webhook] Headers:', JSON.stringify(req.headers, null, 2));
       console.log('[ShipNexus Webhook] Body:', JSON.stringify(req.body, null, 2));
@@ -1876,7 +1876,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         processedAt: null,
       });
 
-      console.log('[ShipNexus Webhook] ✅ Webhook saved to database, ID:', webhook.id);
+      console.log('[ShipNexus Webhook] âœ… Webhook saved to database, ID:', webhook.id);
       console.log('[ShipNexus Webhook] Starting shipment import from ShipNexus API...');
 
       const shipnexusApiUrl = process.env.SHIPNEXUS_API_URL;
@@ -2334,7 +2334,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/shipnexus/sync-now", async (req, res) => {
     try {
-      console.log('[Manual Sync] 🔄 Starting manual sync from ShipNexus...');
+      console.log('[Manual Sync] ðŸ”„ Starting manual sync from ShipNexus...');
 
       const shipnexusApiUrl = process.env.SHIPNEXUS_API_URL;
 
@@ -2405,7 +2405,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      console.log(`[Manual Sync] ✅ Complete - Imported: ${importedCount}, Updated: ${updatedCount}, Errors: ${errorCount}`);
+      console.log(`[Manual Sync] âœ… Complete - Imported: ${importedCount}, Updated: ${updatedCount}, Errors: ${errorCount}`);
 
       res.json({
         success: true,
@@ -2415,7 +2415,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         total: allShipments.length
       });
     } catch (error) {
-      console.error("[Manual Sync] ❌ Error syncing from ShipNexus:", error);
+      console.error("[Manual Sync] âŒ Error syncing from ShipNexus:", error);
       res.status(500).json({ error: "Failed to sync from ShipNexus" });
     }
   });
@@ -3842,6 +3842,3 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   return httpServer;
 }
-/ /   T r i g g e r   r e s t a r t 
- 
- 

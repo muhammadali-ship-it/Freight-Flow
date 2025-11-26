@@ -1993,7 +1993,17 @@ export class DbStorage implements IStorage {
       const customsReleaseEvent = events.find((e: any) => e.code === 'customsRelease' || e.code === 'customsHoldReleased');
 
       const gateOutEvent = events.find((e: any) => e.code === 'gateOutWithContainerFull');
-      const arrivalEvent = events.find((e: any) => (e.code === 'vesselArrival' || e.code === 'dischargeFromVessel') && e.actualTime);
+
+      const arrivalEvent = events.find((e: any) =>
+        (e.code === 'vesselArrival' || e.code === 'dischargeFromVessel') &&
+        e.actualTime &&
+        (
+          !terminalData.terminalPort ||
+          (e.location && terminalData.terminalPort && e.location.toLowerCase().includes(terminalData.terminalPort.toLowerCase())) ||
+          (e.location && terminalData.terminalName && terminalData.terminalName.toLowerCase().includes(e.location.toLowerCase()))
+        )
+      );
+
       let activeHolds = rawData.terminalHolds || [];
       if (customsReleaseEvent) {
         activeHolds = activeHolds.filter((h: string) => h !== 'Customs Hold');
@@ -2135,7 +2145,15 @@ export class DbStorage implements IStorage {
         case 'pod-awaiting-full-out': {
           if (isEmptyReturned) return false;
           const events = rawData.shipmentEvents || [];
-          const arrivalEvent = events.find((e: any) => (e.code === 'vesselArrival' || e.code === 'dischargeFromVessel') && e.actualTime);
+          const arrivalEvent = events.find((e: any) =>
+            (e.code === 'vesselArrival' || e.code === 'dischargeFromVessel') &&
+            e.actualTime &&
+            (
+              !rawData.terminalPort ||
+              (e.location && rawData.terminalPort && e.location.toLowerCase().includes(rawData.terminalPort.toLowerCase())) ||
+              (e.location && rawData.terminalName && rawData.terminalName.toLowerCase().includes(e.location.toLowerCase()))
+            )
+          );
           return rawData.terminalName &&
             !rawData.terminalFullOut &&
             !(gateOutEvent && gateOutEvent.actualTime) &&

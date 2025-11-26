@@ -2093,15 +2093,19 @@ export class DbStorage implements IStorage {
       }
 
       // LFD Alert - multiply by container count
-      // Logic: Vessel Arrival event occurred BUT LFD NOT entered AND NOT empty returned
+      // Logic: Vessel ACTUALLY arrived (actualTime in past) BUT LFD NOT entered AND NOT empty returned
       if (!isEmptyReturned) {
         const events = rawData.shipmentEvents || rawData.milestones || rawData.events || [];
-        const arrivalEvent = events.find((e: any) =>
-          (e.code === 'vesselArrival' || e.code === 'dischargeFromVessel') &&
-          e.actualTime
-        );
+        const arrivalEvent = events.find((e: any) => {
+          if ((e.code === 'vesselArrival' || e.code === 'dischargeFromVessel') && e.actualTime) {
+            // Check if the actual arrival time is in the past (vessel has actually arrived)
+            const arrivalDate = new Date(e.actualTime);
+            return arrivalDate <= today;
+          }
+          return false;
+        });
 
-        // Check if vessel has arrived but LFD is not set
+        // Check if vessel has actually arrived but LFD is not set
         if (arrivalEvent && !rawData.lastFreeDay) {
           lfdAlert += containerCount;
           console.log(`[DEBUG] LFD Alert found: ${containerCount} containers`, {
@@ -2263,12 +2267,16 @@ export class DbStorage implements IStorage {
           if (isEmptyReturned) return false;
 
           const events = rawData.shipmentEvents || rawData.milestones || rawData.events || [];
-          const arrivalEvent = events.find((e: any) =>
-            (e.code === 'vesselArrival' || e.code === 'dischargeFromVessel') &&
-            e.actualTime
-          );
+          const arrivalEvent = events.find((e: any) => {
+            if ((e.code === 'vesselArrival' || e.code === 'dischargeFromVessel') && e.actualTime) {
+              // Check if the actual arrival time is in the past (vessel has actually arrived)
+              const arrivalDate = new Date(e.actualTime);
+              return arrivalDate <= today;
+            }
+            return false;
+          });
 
-          // Show only containers with vessel arrival but no LFD entered
+          // Show only containers with actual vessel arrival (in past) but no LFD entered
           return !!(arrivalEvent && !rawData.lastFreeDay);
         }
 

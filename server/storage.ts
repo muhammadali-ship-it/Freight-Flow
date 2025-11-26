@@ -1784,6 +1784,25 @@ export class DbStorage implements IStorage {
         const reasons = currentRawData.riskReasons || [];
         const allReasons = [...group.aggregatedRiskReasons, ...reasons];
         group.aggregatedRiskReasons = Array.from(new Set(allReasons));
+
+        // Merge rawData to capture manual edits (LFD, terminal info) from ANY shipment in the group
+        // This ensures that if a user edits one container/shipment, the data is reflected in the group view
+        const groupRawData = group.rawData || {};
+
+        // Fields to preserve/merge from current shipment if present
+        if (currentRawData.lastFreeDay) groupRawData.lastFreeDay = currentRawData.lastFreeDay;
+        if (currentRawData.terminalName) groupRawData.terminalName = currentRawData.terminalName;
+        if (currentRawData.terminalPort) groupRawData.terminalPort = currentRawData.terminalPort;
+        if (currentRawData.terminalYardLocation) groupRawData.terminalYardLocation = currentRawData.terminalYardLocation;
+        if (currentRawData.terminalPickupChassis) groupRawData.terminalPickupChassis = currentRawData.terminalPickupChassis;
+        if (currentRawData.terminalFullOut) groupRawData.terminalFullOut = currentRawData.terminalFullOut;
+        if (currentRawData.terminalPickupAppointment) groupRawData.terminalPickupAppointment = currentRawData.terminalPickupAppointment;
+        if (currentRawData.terminalEmptyReturned) groupRawData.terminalEmptyReturned = currentRawData.terminalEmptyReturned;
+        if (currentRawData.terminalAvailableForPickup !== undefined) groupRawData.terminalAvailableForPickup = currentRawData.terminalAvailableForPickup;
+        if (currentRawData.demurrage) groupRawData.demurrage = currentRawData.demurrage;
+        if (currentRawData.detention) groupRawData.detention = currentRawData.detention;
+
+        group.rawData = groupRawData;
       }
     }
 

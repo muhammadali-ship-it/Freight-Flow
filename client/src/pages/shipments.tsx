@@ -124,55 +124,55 @@ export default function Shipments() {
       console.log("[Sync] Response data:", data);
       const syncLog = data?.syncLog;
       console.log("[Sync] Sync log:", syncLog);
-      
+
       if (syncLog) {
         // Ensure createdAt is a string if it's a Date object
         // Use the createdAt from the sync log (when sync completed) or current time
-        let createdAtValue = syncLog.createdAt 
-          ? (typeof syncLog.createdAt === 'string' 
-              ? syncLog.createdAt 
-              : syncLog.createdAt instanceof Date 
-                ? syncLog.createdAt.toISOString() 
-                : new Date(syncLog.createdAt).toISOString())
+        let createdAtValue = syncLog.createdAt
+          ? (typeof syncLog.createdAt === 'string'
+            ? syncLog.createdAt
+            : syncLog.createdAt instanceof Date
+              ? syncLog.createdAt.toISOString()
+              : new Date(syncLog.createdAt).toISOString())
           : new Date().toISOString();
-        
+
         // If the createdAt is more than 10 seconds old, use current time instead
         // This handles cases where the sync log was created before the sync actually completed
         const createdAtTime = new Date(createdAtValue).getTime();
         const now = Date.now();
         const ageInSeconds = (now - createdAtTime) / 1000;
-        
+
         if (ageInSeconds > 10) {
           console.log(`[Sync] createdAt is ${ageInSeconds.toFixed(1)}s old, using current time instead`);
           createdAtValue = new Date().toISOString();
         }
-        
+
         const normalizedSyncLog = {
           ...syncLog,
           createdAt: createdAtValue,
         };
-        
+
         console.log("[Sync] Normalized sync log:", normalizedSyncLog);
         console.log("[Sync] Setting query data with createdAt:", normalizedSyncLog.createdAt);
         console.log("[Sync] Current time:", new Date().toISOString());
         console.log("[Sync] Time difference (ms):", new Date().getTime() - new Date(createdAtValue).getTime());
-        
+
         // Update the query cache directly with the new sync log
         // Create a completely new object to ensure React Query detects the change
         const newSyncLog = { ...normalizedSyncLog };
         queryClient.setQueryData(["/api/cargoes-flow/sync-status"], newSyncLog);
-        
+
         // Also update using setQueryData with a function to ensure it's seen as changed
         queryClient.setQueryData(["/api/cargoes-flow/sync-status"], (old: any) => {
           // Return new object to force React Query to see it as changed
           return { ...newSyncLog };
         });
-        
+
         // Verify the data was set correctly
         const cachedData = queryClient.getQueryData(["/api/cargoes-flow/sync-status"]);
         console.log("[Sync] Cached data after setQueryData:", cachedData);
         console.log("[Sync] Cached createdAt:", (cachedData as any)?.createdAt);
-        
+
         toast({
           title: "Sync completed",
           description: `Processed ${syncLog.shipmentsProcessed || 0} shipments (${syncLog.shipmentsCreated || 0} new, ${syncLog.shipmentsUpdated || 0} updated)`,
@@ -231,7 +231,7 @@ export default function Shipments() {
       if (destinationPortFilter && destinationPortFilter !== "all") params.append("destinationPort", destinationPortFilter);
       if (dateFrom) params.append("dateFrom", format(dateFrom, "yyyy-MM-dd"));
       if (dateTo) params.append("dateTo", format(dateTo, "yyyy-MM-dd"));
-      
+
       if (user?.id) params.append("userId", user.id);
       if (user?.role) params.append("userRole", user.role);
 
@@ -317,7 +317,7 @@ export default function Shipments() {
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
     const diffMins = Math.floor(diffMs / 60000);
-    
+
     if (diffMins < 1) return "Just now";
     if (diffMins < 60) return `${diffMins} min ago`;
     const diffHours = Math.floor(diffMins / 60);
@@ -713,16 +713,16 @@ export default function Shipments() {
                             <Badge
                               variant={
                                 shipment.rawData.riskLevel === 'critical' ? 'destructive' :
-                                shipment.rawData.riskLevel === 'high' ? 'destructive' :
-                                'secondary'
+                                  shipment.rawData.riskLevel === 'high' ? 'destructive' :
+                                    'secondary'
                               }
                               className="text-xs"
                               data-testid={`badge-risk-${shipment.id}`}
                               title={shipment.rawData.riskReasons?.join(', ')}
                             >
                               {shipment.rawData.riskLevel === 'critical' ? '🔴 Critical' :
-                               shipment.rawData.riskLevel === 'high' ? '🟠 High Risk' :
-                               '🟡 Medium Risk'}
+                                shipment.rawData.riskLevel === 'high' ? '🟠 High Risk' :
+                                  '🟡 Medium Risk'}
                             </Badge>
                           )}
                           {shipment.isUserCreated && (
@@ -789,8 +789,8 @@ export default function Shipments() {
               </TableBody>
             </Table>
           </div>
-        </CardContent>
-      </Card>
+        </CardContent >
+      </Card >
 
       {pagination && pagination.totalPages > 1 && (
         <Card>
@@ -846,7 +846,8 @@ export default function Shipments() {
             </div>
           </CardContent>
         </Card>
-      )}
+      )
+      }
 
       <AlertDialog open={!!deleteShipmentId} onOpenChange={() => setDeleteShipmentId(null)}>
         <AlertDialogContent>
@@ -869,6 +870,6 @@ export default function Shipments() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </div >
   );
 }

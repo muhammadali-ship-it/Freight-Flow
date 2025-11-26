@@ -138,6 +138,7 @@ export interface PaginatedResult<T> {
     podAwaitingFullOut: number;
     podFullOut: number;
     emptyReturned: number;
+    demurrageAlert: number;
   };
 }
 
@@ -1870,6 +1871,7 @@ export class DbStorage implements IStorage {
     let podAwaitingFullOut = 0;
     let podFullOut = 0;
     let emptyReturned = 0;
+    let demurrageAlert = 0;
 
     let shipmentsWithTerminalData = 0;
 
@@ -2046,6 +2048,28 @@ export class DbStorage implements IStorage {
           shipmentId: shipment.id
         });
       }
+
+      // Demurrage Alert - multiply by container count
+      // Logic: LFD passed AND container NOT full out AND NOT empty returned
+      if (rawData.lastFreeDay && !isEmptyReturned) {
+        const lfd = new Date(rawData.lastFreeDay);
+        lfd.setHours(0, 0, 0, 0);
+
+        // Check if LFD is in the past
+        if (lfd < today) {
+          // Check if NOT full out
+          const isFullOut = terminalData.terminalFullOut || railData.fullOut || (gateOutEvent && gateOutEvent.actualTime);
+
+          if (!isFullOut) {
+            demurrageAlert += containerCount;
+            console.log(`[DEBUG] Demurrage Alert found: ${containerCount} containers`, {
+              lastFreeDay: rawData.lastFreeDay,
+              isFullOut,
+              shipmentId: shipment.id
+            });
+          }
+        }
+      }
     }
 
     console.log(`[DEBUG] Statistics summary: ${shipmentsWithTerminalData}/${shipments.length} shipments have terminal data`);
@@ -2064,6 +2088,7 @@ export class DbStorage implements IStorage {
       podAwaitingFullOut,
       podFullOut,
       emptyReturned,
+      demurrageAlert,
     };
   }
 
@@ -2170,6 +2195,25 @@ export class DbStorage implements IStorage {
 
         case 'empty-returned': {
           return isEmptyReturned;
+        }
+
+        case 'demurrage-alert': {
+          if (isEmptyReturned) return false;
+          if (!rawData.lastFreeDay) return false;
+
+          const lfd = new Date(rawData.lastFreeDay);
+          lfd.setHours(0, 0, 0, 0);
+
+          // Check if LFD is in the past
+          if (lfd >= today) return false;
+
+          // Check if NOT full out
+          const containersArray = rawData.containers || [];
+          const firstContainer = containersArray[0] || {};
+          const railData = firstContainer.rawData?.rail || {};
+          const isFullOut = !!(rawData.terminalFullOut || railData.fullOut || (gateOutEvent && gateOutEvent.actualTime));
+
+          return !isFullOut;
         }
 
         default:

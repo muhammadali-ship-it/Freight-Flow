@@ -2,7 +2,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useRoute, Link } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Package, MapPin, Calendar, Ship, User, FileText, Truck, Weight, Box, Clock, CheckCircle2, XCircle, Plus, Edit, Users, AlertCircle } from "lucide-react";
+import { ArrowLeft, Package, MapPin, Calendar, Ship, User, FileText, Truck, Weight, Box, Clock, CheckCircle2, XCircle, Plus, Edit, Users, AlertCircle, Check, ChevronsUpDown } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -16,6 +16,9 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { cn } from "@/lib/utils";
 import { useState, useEffect } from "react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -476,6 +479,8 @@ export default function CargoesFlowShipmentDetail() {
     availableForPickup: false,
     holds: [] as string[],
     customTerminalName: "", // Add field for custom terminal name
+    isPortReadOnly: false,
+    isTerminalReadOnly: false,
   });
   const [milestoneForm, setMilestoneForm] = useState({
     eventType: "",
@@ -1646,6 +1651,8 @@ export default function CargoesFlowShipmentDetail() {
                       availableForPickup: !!(gateOutEvent && gateOutEvent.actualTime),
                       holds: rawData.terminalHolds || [],
                       customTerminalName: isCustomTerminal ? (terminalName || "") : "",
+                      isPortReadOnly: !!rawData.terminalPort,
+                      isTerminalReadOnly: !!rawData.terminalName,
                     });
                     setAddTerminalDialogOpen(true);
                   }}
@@ -2092,6 +2099,7 @@ export default function CargoesFlowShipmentDetail() {
                     terminalPort: value,
                     terminalName: "" // Reset terminal name when port changes
                   })}
+                  disabled={terminalForm.isPortReadOnly}
                 >
                   <SelectTrigger data-testid="select-terminal-port">
                     <SelectValue placeholder="Select a port" />
@@ -2107,41 +2115,56 @@ export default function CargoesFlowShipmentDetail() {
               </div>
               <div>
                 <Label htmlFor="terminal-name">Terminal Name</Label>
-                <Select
-                  value={terminalForm.terminalName}
-                  onValueChange={(value) => setTerminalForm({ ...terminalForm, terminalName: value })}
-                  disabled={!terminalForm.terminalPort}
-                >
-                  <SelectTrigger data-testid="select-terminal-name">
-                    <SelectValue placeholder={
-                      terminalForm.terminalPort
-                        ? "Select a terminal"
-                        : "Select port first"
-                    } />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {terminalForm.terminalPort &&
-                      PORT_TERMINALS[terminalForm.terminalPort]?.map((terminal) => (
-                        <SelectItem key={terminal} value={terminal}>
-                          {terminal}
-                        </SelectItem>
-                      ))}
-                    <SelectItem value="Other">Other (Enter manually)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              {terminalForm.terminalName === "Other" && (
-                <div>
-                  <Label htmlFor="custom-terminal-name">Custom Terminal Name</Label>
-                  <Input
-                    id="custom-terminal-name"
-                    placeholder="Enter terminal name"
-                    value={terminalForm.customTerminalName}
-                    onChange={(e) => setTerminalForm({ ...terminalForm, customTerminalName: e.target.value })}
-                    data-testid="input-custom-terminal-name"
-                  />
+                <div className="relative">
+                  <div className="flex gap-2">
+                    <Input
+                      id="terminal-name"
+                      placeholder="Enter terminal name"
+                      value={terminalForm.terminalName}
+                      onChange={(e) => setTerminalForm({ ...terminalForm, terminalName: e.target.value })}
+                      readOnly={terminalForm.isTerminalReadOnly}
+                      className={cn(terminalForm.isTerminalReadOnly && "bg-muted")}
+                      data-testid="input-terminal-name"
+                    />
+                    {!terminalForm.isTerminalReadOnly && terminalForm.terminalPort && PORT_TERMINALS[terminalForm.terminalPort] && (
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button variant="outline" size="icon" className="shrink-0">
+                            <ChevronsUpDown className="h-4 w-4 opacity-50" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[300px] p-0" align="end">
+                          <Command>
+                            <CommandInput placeholder="Search terminal..." />
+                            <CommandList>
+                              <CommandEmpty>No terminal found.</CommandEmpty>
+                              <CommandGroup>
+                                {PORT_TERMINALS[terminalForm.terminalPort].map((terminal) => (
+                                  <CommandItem
+                                    key={terminal}
+                                    value={terminal}
+                                    onSelect={(currentValue) => {
+                                      setTerminalForm({ ...terminalForm, terminalName: currentValue });
+                                    }}
+                                  >
+                                    <Check
+                                      className={cn(
+                                        "mr-2 h-4 w-4",
+                                        terminalForm.terminalName === terminal ? "opacity-100" : "opacity-0"
+                                      )}
+                                    />
+                                    {terminal}
+                                  </CommandItem>
+                                ))}
+                              </CommandGroup>
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
+                    )}
+                  </div>
                 </div>
-              )}
+              </div>
               <div>
                 <Label htmlFor="terminal-yard">Yard Location</Label>
                 <Input

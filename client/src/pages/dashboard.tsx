@@ -82,7 +82,7 @@ interface Container {
 type QuickFilter = "urgent" | "high-risk" | "exceptions" | "overdue" | null;
 type SortField = "eta" | "lastFreeDay" | "riskLevel" | "status" | "containerNumber";
 type SortDirection = "asc" | "desc";
-type KpiFilter = "total" | "in-transit" | "arriving-today" | "delayed" | "pod-needs-attention" | "pod-awaiting-full-out" | "pod-full-out" | "empty-returned" | null;
+type KpiFilter = "total" | "in-transit" | "arriving-today" | "delayed" | "pod-needs-attention" | "pod-awaiting-full-out" | "pod-full-out" | "empty-returned" | "demurrage-alert" | null;
 
 export default function Dashboard() {
   const [, navigate] = useLocation();
@@ -111,6 +111,21 @@ export default function Dashboard() {
   const { data: paginatedData, isLoading } = useQuery<{
     data: any[];
     pagination: { page: number; pageSize: number; total: number; totalPages: number };
+    stats?: {
+      total: number;
+      inTransit: number;
+      arrivingToday: number;
+      delayed: number;
+      urgent: number;
+      highRisk: number;
+      hasExceptions: number;
+      overdue: number;
+      podNeedsAttention: number;
+      podAwaitingFullOut: number;
+      podFullOut: number;
+      emptyReturned: number;
+      demurrageAlert: number;
+    };
   }>({
     queryKey: ["/api/shipments", { page, pageSize, search: searchQuery, filters, userId: user?.id, userRole: user?.role, kpiFilter }],
     queryFn: async ({ queryKey }) => {
@@ -289,6 +304,7 @@ export default function Dashboard() {
     podAwaitingFullOut: 0,
     podFullOut: 0,
     emptyReturned: 0,
+    demurrageAlert: 0,
   };
 
   // Debug logging
@@ -539,6 +555,14 @@ export default function Dashboard() {
           trend={{ value: -5, isPositive: false }}
           onClick={() => handleKpiFilter("delayed")}
           isActive={kpiFilter === "delayed"}
+        />
+        <StatsCard
+          title="Demurrage Alert"
+          value={stats.demurrageAlert}
+          icon={AlertCircle}
+          className="border-red-500/50 bg-red-500/5"
+          onClick={() => handleKpiFilter("demurrage-alert")}
+          isActive={kpiFilter === "demurrage-alert"}
         />
         <StatsCard
           title="POD needs Attention"

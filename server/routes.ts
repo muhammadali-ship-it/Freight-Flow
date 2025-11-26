@@ -2951,17 +2951,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const carriers = await db.select().from(cargoesFlowCarriers).orderBy(cargoesFlowCarriers.carrierName);
       res.json(carriers);
     } catch (error: any) {
-      console.error("Error fetching carriers:", error);
-      res.status(500).json({ error: error.message || "Failed to fetch carriers" });
-    }
-  });
-
-  // Trigger manual carrier sync
-  app.post("/api/cargoes-flow/carriers/sync", async (req, res) => {
-    try {
-      const result = await syncCarriersFromCargoesFlow();
-      res.json(result);
-    } catch (error: any) {
       console.error("Error syncing carriers:", error);
       res.status(500).json({ error: error.message || "Failed to sync carriers" });
     }
@@ -3853,3 +3842,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   return httpServer;
 }
+/ /   T r i g g e r   r e s t a r t 
+ 
+ 

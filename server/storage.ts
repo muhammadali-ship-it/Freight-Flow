@@ -1874,6 +1874,7 @@ export class DbStorage implements IStorage {
     podAwaitingFullOut: number;
     podFullOut: number;
     emptyReturned: number;
+    lfdAlert: number;
   } {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -1891,6 +1892,7 @@ export class DbStorage implements IStorage {
     let podFullOut = 0;
     let emptyReturned = 0;
     let demurrageAlert = 0;
+    let lfdAlert = 0;
 
     let shipmentsWithTerminalData = 0;
 
@@ -2089,6 +2091,27 @@ export class DbStorage implements IStorage {
           }
         }
       }
+
+      // LFD Alert - multiply by container count
+      // Logic: Vessel Arrival event occurred BUT LFD NOT entered AND NOT empty returned
+      if (!isEmptyReturned) {
+        const events = rawData.shipmentEvents || rawData.milestones || rawData.events || [];
+        const arrivalEvent = events.find((e: any) =>
+          (e.code === 'vesselArrival' || e.code === 'dischargeFromVessel') &&
+          e.actualTime
+        );
+
+        // Check if vessel has arrived but LFD is not set
+        if (arrivalEvent && !rawData.lastFreeDay) {
+          lfdAlert += containerCount;
+          console.log(`[DEBUG] LFD Alert found: ${containerCount} containers`, {
+            arrivalEvent: arrivalEvent.code,
+            arrivalTime: arrivalEvent.actualTime,
+            lastFreeDay: rawData.lastFreeDay,
+            shipmentId: shipment.id
+          });
+        }
+      }
     }
 
     console.log(`[DEBUG] Statistics summary: ${shipmentsWithTerminalData}/${shipments.length} shipments have terminal data`);
@@ -2108,6 +2131,7 @@ export class DbStorage implements IStorage {
       podFullOut,
       emptyReturned,
       demurrageAlert,
+      lfdAlert,
     };
   }
 
@@ -2233,6 +2257,19 @@ export class DbStorage implements IStorage {
           const isFullOut = !!(rawData.terminalFullOut || railData.fullOut || (gateOutEvent && gateOutEvent.actualTime));
 
           return !isFullOut;
+        }
+
+        case 'lfd-alert': {
+          if (isEmptyReturned) return false;
+
+          const events = rawData.shipmentEvents || rawData.milestones || rawData.events || [];
+          const arrivalEvent = events.find((e: any) =>
+            (e.code === 'vesselArrival' || e.code === 'dischargeFromVessel') &&
+            e.actualTime
+          );
+
+          // Show only containers with vessel arrival but no LFD entered
+          return !!(arrivalEvent && !rawData.lastFreeDay);
         }
 
         default:
@@ -2775,3 +2812,4 @@ export class DbStorage implements IStorage {
 }
 
 export const storage = new DbStorage();
+

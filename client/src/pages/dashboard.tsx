@@ -82,7 +82,7 @@ interface Container {
 type QuickFilter = "urgent" | "high-risk" | "exceptions" | "overdue" | null;
 type SortField = "eta" | "lastFreeDay" | "riskLevel" | "status" | "containerNumber";
 type SortDirection = "asc" | "desc";
-type KpiFilter = "total" | "in-transit" | "arriving-today" | "delayed" | "pod-needs-attention" | "pod-awaiting-full-out" | "pod-full-out" | "empty-returned" | "demurrage-alert" | null;
+type KpiFilter = "total" | "in-transit" | "arriving-today" | "delayed" | "pod-needs-attention" | "pod-awaiting-full-out" | "pod-full-out" | "empty-returned" | "demurrage-alert" | "lfd-alert" | null;
 
 export default function Dashboard() {
   const [, navigate] = useLocation();
@@ -125,6 +125,7 @@ export default function Dashboard() {
       podFullOut: number;
       emptyReturned: number;
       demurrageAlert: number;
+      lfdAlert: number;
     };
   }>({
     queryKey: ["/api/shipments", { page, pageSize, search: searchQuery, filters, userId: user?.id, userRole: user?.role, kpiFilter }],
@@ -305,6 +306,7 @@ export default function Dashboard() {
     podFullOut: 0,
     emptyReturned: 0,
     demurrageAlert: 0,
+    lfdAlert: 0,
   };
 
   // Debug logging
@@ -563,6 +565,14 @@ export default function Dashboard() {
           className="border-red-500/50 bg-red-500/5"
           onClick={() => handleKpiFilter("demurrage-alert")}
           isActive={kpiFilter === "demurrage-alert"}
+        />
+        <StatsCard
+          title="LFD Alert"
+          value={stats.lfdAlert}
+          icon={AlertCircle}
+          className="border-orange-500/50 bg-orange-500/5"
+          onClick={() => handleKpiFilter("lfd-alert")}
+          isActive={kpiFilter === "lfd-alert"}
         />
         <StatsCard
           title="POD needs Attention"

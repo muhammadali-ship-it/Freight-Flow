@@ -2093,14 +2093,20 @@ export class DbStorage implements IStorage {
       }
 
       // LFD Alert - multiply by container count
-      // Logic: Vessel ACTUALLY arrived (actualTime in past) BUT LFD NOT entered AND NOT empty returned
+      // Logic: Vessel ACTUALLY arrived (actualTime in past AND different from estimated) BUT LFD NOT entered AND NOT empty returned
       if (!isEmptyReturned) {
         const events = rawData.shipmentEvents || rawData.milestones || rawData.events || [];
         const arrivalEvent = events.find((e: any) => {
           if ((e.code === 'vesselArrival' || e.code === 'dischargeFromVessel') && e.actualTime) {
             // Check if the actual arrival time is in the past (vessel has actually arrived)
             const arrivalDate = new Date(e.actualTime);
-            return arrivalDate <= today;
+            const isPast = arrivalDate <= today;
+
+            // Also verify this is a true actual time, not an estimated one
+            // If estimatedTime exists and equals actualTime, it's likely just an estimate
+            const isRealActual = !e.estimatedTime || e.actualTime !== e.estimatedTime;
+
+            return isPast && isRealActual;
           }
           return false;
         });
@@ -2111,6 +2117,7 @@ export class DbStorage implements IStorage {
           console.log(`[DEBUG] LFD Alert found: ${containerCount} containers`, {
             arrivalEvent: arrivalEvent.code,
             arrivalTime: arrivalEvent.actualTime,
+            estimatedTime: arrivalEvent.estimatedTime,
             lastFreeDay: rawData.lastFreeDay,
             shipmentId: shipment.id
           });
@@ -2271,7 +2278,13 @@ export class DbStorage implements IStorage {
             if ((e.code === 'vesselArrival' || e.code === 'dischargeFromVessel') && e.actualTime) {
               // Check if the actual arrival time is in the past (vessel has actually arrived)
               const arrivalDate = new Date(e.actualTime);
-              return arrivalDate <= today;
+              const isPast = arrivalDate <= today;
+
+              // Also verify this is a true actual time, not an estimated one
+              // If estimatedTime exists and equals actualTime, it's likely just an estimate
+              const isRealActual = !e.estimatedTime || e.actualTime !== e.estimatedTime;
+
+              return isPast && isRealActual;
             }
             return false;
           });

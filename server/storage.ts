@@ -2016,7 +2016,6 @@ export class DbStorage implements IStorage {
 
       // POD awaiting full out - multiply by container count
       const awaitingFullOut = terminalData.terminalName &&
-        !isAvailableForPickup &&
         !terminalData.terminalFullOut &&
         !(gateOutEvent && gateOutEvent.actualTime) &&
         !isEmptyReturned;
@@ -2132,10 +2131,7 @@ export class DbStorage implements IStorage {
 
         case 'pod-awaiting-full-out': {
           if (isEmptyReturned) return false;
-          const isAvailable = rawData.terminalAvailableForPickup === true ||
-            rawData.terminalAvailableForPickup === 'true';
           return rawData.terminalName &&
-            !isAvailable &&
             !rawData.terminalFullOut &&
             !(gateOutEvent && gateOutEvent.actualTime);
         }

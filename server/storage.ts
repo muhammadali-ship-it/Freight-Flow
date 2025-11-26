@@ -1991,7 +1991,9 @@ export class DbStorage implements IStorage {
       // Check for active holds (excluding Customs Hold if customsRelease event exists)
       const events = rawData.shipmentEvents || [];
       const customsReleaseEvent = events.find((e: any) => e.code === 'customsRelease' || e.code === 'customsHoldReleased');
+
       const gateOutEvent = events.find((e: any) => e.code === 'gateOutWithContainerFull');
+      const arrivalEvent = events.find((e: any) => (e.code === 'vesselArrival' || e.code === 'dischargeFromVessel') && e.actualTime);
       let activeHolds = rawData.terminalHolds || [];
       if (customsReleaseEvent) {
         activeHolds = activeHolds.filter((h: string) => h !== 'Customs Hold');
@@ -2018,6 +2020,7 @@ export class DbStorage implements IStorage {
       const awaitingFullOut = terminalData.terminalName &&
         !terminalData.terminalFullOut &&
         !(gateOutEvent && gateOutEvent.actualTime) &&
+        !!arrivalEvent &&
         !isEmptyReturned;
 
       if (awaitingFullOut) {
@@ -2131,9 +2134,12 @@ export class DbStorage implements IStorage {
 
         case 'pod-awaiting-full-out': {
           if (isEmptyReturned) return false;
+          const events = rawData.shipmentEvents || [];
+          const arrivalEvent = events.find((e: any) => (e.code === 'vesselArrival' || e.code === 'dischargeFromVessel') && e.actualTime);
           return rawData.terminalName &&
             !rawData.terminalFullOut &&
-            !(gateOutEvent && gateOutEvent.actualTime);
+            !(gateOutEvent && gateOutEvent.actualTime) &&
+            !!arrivalEvent;
         }
 
         case 'pod-full-out': {

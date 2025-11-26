@@ -474,8 +474,6 @@ export default function CargoesFlowShipmentDetail() {
     pickupChassis: "",
     pickupAppointment: "",
     availableForPickup: false,
-    pickupAppointment: "",
-    availableForPickup: false,
     holds: [] as string[],
     customTerminalName: "", // Add field for custom terminal name
   });
@@ -728,12 +726,10 @@ export default function CargoesFlowShipmentDetail() {
   if (!shipment) {
     return (
       <div className="space-y-6">
-        <Link href="/shipments">
-          <Button variant="outline" data-testid="button-back">
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Shipments
-          </Button>
-        </Link>
+        <Button variant="outline" onClick={() => window.history.back()} data-testid="button-back">
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Back
+        </Button>
         <Card>
           <CardContent className="p-12 text-center">
             <p className="text-lg font-medium">Shipment not found</p>
@@ -751,12 +747,10 @@ export default function CargoesFlowShipmentDetail() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <Link href="/shipments">
-          <Button variant="outline" data-testid="button-back">
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Shipments
-          </Button>
-        </Link>
+        <Button variant="outline" onClick={() => window.history.back()} data-testid="button-back">
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Back
+        </Button>
       </div>
 
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -1015,7 +1009,7 @@ export default function CargoesFlowShipmentDetail() {
           if (!hasTerminalInfo) return null;
 
           const effectiveFullOut = rawData.terminalFullOut || (gateOutEvent ? gateOutEvent.actualTime : null);
-          const effectiveAvailable = rawData.terminalAvailableForPickup === true || !!gateOutEvent;
+          const effectiveAvailable = !!(gateOutEvent && gateOutEvent.actualTime);
 
           return (
             <Card>
@@ -1649,7 +1643,7 @@ export default function CargoesFlowShipmentDetail() {
                       yardLocation: rawData.terminalYardLocation || "",
                       pickupChassis: rawData.terminalPickupChassis || "",
                       pickupAppointment: rawData.terminalPickupAppointment || "",
-                      availableForPickup: rawData.terminalAvailableForPickup || !!gateOutEvent,
+                      availableForPickup: !!(gateOutEvent && gateOutEvent.actualTime),
                       holds: rawData.terminalHolds || [],
                       customTerminalName: isCustomTerminal ? (terminalName || "") : "",
                     });
@@ -1666,6 +1660,7 @@ export default function CargoesFlowShipmentDetail() {
                   const rawData = shipment.rawData as any || {};
                   const events = rawData.shipmentEvents || [];
                   const gateOutEvent = events.find((e: any) => e.code === "gateOutWithContainerFull");
+
                   const customsReleaseEvent = events.find((e: any) => e.code === "customsRelease" || e.code === "customsHoldReleased");
 
                   // Extract terminal name from segments if not in rawData
@@ -1686,7 +1681,7 @@ export default function CargoesFlowShipmentDetail() {
                     gateOutEvent;
 
                   const effectiveFullOut = rawData.terminalFullOut || (gateOutEvent ? gateOutEvent.actualTime : null);
-                  const effectiveAvailable = rawData.terminalAvailableForPickup === true || !!gateOutEvent;
+                  const effectiveAvailable = !!(gateOutEvent && gateOutEvent.actualTime);
 
                   // Calculate effective holds
                   let effectiveHolds = rawData.terminalHolds || [];
@@ -2212,17 +2207,7 @@ export default function CargoesFlowShipmentDetail() {
               </div>
               {/* Empty Returned field removed - derived from events */}
             </div>
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="terminal-available"
-                checked={terminalForm.availableForPickup}
-                onCheckedChange={(checked) => setTerminalForm({ ...terminalForm, availableForPickup: checked as boolean })}
-                data-testid="checkbox-terminal-available"
-              />
-              <Label htmlFor="terminal-available" className="text-sm font-medium cursor-pointer">
-                Available For Pickup
-              </Label>
-            </div>
+            {/* Available For Pickup field removed - derived from events */}
 
             <div className="space-y-3 pt-2 border-t">
               <Label className="text-sm font-medium">Terminal Holds</Label>
@@ -2293,7 +2278,7 @@ export default function CargoesFlowShipmentDetail() {
                 terminalYardLocation: terminalForm.yardLocation,
                 terminalPickupChassis: terminalForm.pickupChassis,
                 terminalPickupAppointment: terminalForm.pickupAppointment,
-                terminalAvailableForPickup: terminalForm.availableForPickup,
+                // terminalAvailableForPickup removed - derived from events
                 terminalHolds: terminalForm.holds,
                 // terminalFullOut and terminalEmptyReturned are now derived from events
               })}

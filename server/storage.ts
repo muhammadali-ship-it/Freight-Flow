@@ -2096,6 +2096,8 @@ export class DbStorage implements IStorage {
       // Logic: Vessel ACTUALLY arrived (actualTime in past AND different from estimated) BUT LFD NOT entered AND NOT empty returned
       if (!isEmptyReturned) {
         const events = rawData.shipmentEvents || rawData.milestones || rawData.events || [];
+        const destinationPort = shipment.destinationPort || '';
+        
         const arrivalEvent = events.find((e: any) => {
           if ((e.code === 'vesselArrival' || e.code === 'dischargeFromVessel') && e.actualTime) {
             // Check if the actual arrival time is in the past (vessel has actually arrived)
@@ -2105,8 +2107,13 @@ export class DbStorage implements IStorage {
             // Also verify this is a true actual time, not an estimated one
             // If estimatedTime exists and equals actualTime, it's likely just an estimate
             const isRealActual = !e.estimatedTime || e.actualTime !== e.estimatedTime;
+            
+            // Check if arrival is at the final destination port
+            const isAtDestination = !destinationPort || !e.location || 
+              e.location.toLowerCase().includes(destinationPort.toLowerCase()) ||
+              destinationPort.toLowerCase().includes(e.location.toLowerCase());
 
-            return isPast && isRealActual;
+            return isPast && isRealActual && isAtDestination;
           }
           return false;
         });
@@ -2117,6 +2124,8 @@ export class DbStorage implements IStorage {
           console.log(`[DEBUG] LFD Alert found: ${containerCount} containers`, {
             arrivalEvent: arrivalEvent.code,
             arrivalTime: arrivalEvent.actualTime,
+            arrivalLocation: arrivalEvent.location,
+            destinationPort,
             estimatedTime: arrivalEvent.estimatedTime,
             lastFreeDay: rawData.lastFreeDay,
             shipmentId: shipment.id
@@ -2274,6 +2283,8 @@ export class DbStorage implements IStorage {
           if (isEmptyReturned) return false;
 
           const events = rawData.shipmentEvents || rawData.milestones || rawData.events || [];
+          const destinationPort = shipment.destinationPort || '';
+          
           const arrivalEvent = events.find((e: any) => {
             if ((e.code === 'vesselArrival' || e.code === 'dischargeFromVessel') && e.actualTime) {
               // Check if the actual arrival time is in the past (vessel has actually arrived)
@@ -2283,13 +2294,18 @@ export class DbStorage implements IStorage {
               // Also verify this is a true actual time, not an estimated one
               // If estimatedTime exists and equals actualTime, it's likely just an estimate
               const isRealActual = !e.estimatedTime || e.actualTime !== e.estimatedTime;
+              
+              // Check if arrival is at the final destination port
+              const isAtDestination = !destinationPort || !e.location || 
+                e.location.toLowerCase().includes(destinationPort.toLowerCase()) ||
+                destinationPort.toLowerCase().includes(e.location.toLowerCase());
 
-              return isPast && isRealActual;
+              return isPast && isRealActual && isAtDestination;
             }
             return false;
           });
 
-          // Show only containers with actual vessel arrival (in past) but no LFD entered
+          // Show only containers with actual vessel arrival at destination but no LFD entered
           return !!(arrivalEvent && !rawData.lastFreeDay);
         }
 

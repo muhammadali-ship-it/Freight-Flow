@@ -1963,8 +1963,12 @@ export class DbStorage implements IStorage {
           const events = rawData.shipmentEvents || rawData.milestones || rawData.events || [];
           const hasArrivedAtDestination = events.some((e: any) => {
             if ((e.code === 'vesselArrival' || e.code === 'dischargeFromVessel') && e.actualTime) {
+              // Only consider arrived if we have both destination port and event location
+              if (!destinationPort || !e.location) {
+                return false;
+              }
               // Check if arrival is at the final destination port
-              const isAtDestination = !destinationPort || !e.location ||
+              const isAtDestination =
                 e.location.toLowerCase().includes(destinationPort.toLowerCase()) ||
                 destinationPort.toLowerCase().includes(e.location.toLowerCase());
               return isAtDestination;
@@ -2222,8 +2226,12 @@ export class DbStorage implements IStorage {
           const allEvents = rawData.shipmentEvents || rawData.milestones || rawData.events || [];
           const hasArrivedAtDestination = allEvents.some((e: any) => {
             if ((e.code === 'vesselArrival' || e.code === 'dischargeFromVessel') && e.actualTime) {
+              // Only consider arrived if we have both destination port and event location
+              if (!destinationPort || !e.location) {
+                return false;
+              }
               // Check if arrival is at the final destination port
-              const isAtDestination = !destinationPort || !e.location ||
+              const isAtDestination =
                 e.location.toLowerCase().includes(destinationPort.toLowerCase()) ||
                 destinationPort.toLowerCase().includes(e.location.toLowerCase());
               return isAtDestination;

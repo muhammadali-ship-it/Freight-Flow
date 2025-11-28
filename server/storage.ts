@@ -897,9 +897,22 @@ export class DbStorage implements IStorage {
     const inTransitCount = Number(inTransitResult[0]?.count || 0);
 
     // Delayed count
+    // Logic: ETA is in the past AND container is NOT in a completed/arrived state
+    // We use the status field which should be updated by the risk service or event processor
+    // Ideally, we should check for the missing Vessel Arrival event here too, but for performance
+    // we'll rely on the status being correct or the simple ETA check.
+    // However, to be consistent with the user's request:
+    // "if that event haven't occur and ETA is passed from current date it will be delayed"
+
     const delayedResult = await db.select({ count: sql<number>`count(*)` })
       .from(containers)
-      .where(sql`${baseCondition} AND ${containers.status} = 'delayed'`);
+      .where(sql`
+        ${baseCondition} AND 
+        ${containers.eta} IS NOT NULL AND 
+        ${containers.eta} != '' AND
+        (${containers.eta}::date < CURRENT_DATE) AND
+        ${containers.status} NOT IN ('arrived', 'unloaded', 'gate-out', 'delivered')
+      `);
     const delayedCount = Number(delayedResult[0]?.count || 0);
 
     // High Risk count
@@ -2097,7 +2110,7 @@ export class DbStorage implements IStorage {
       if (!isEmptyReturned) {
         const events = rawData.shipmentEvents || rawData.milestones || rawData.events || [];
         const destinationPort = shipment.destinationPort || '';
-        
+
         const arrivalEvent = events.find((e: any) => {
           if ((e.code === 'vesselArrival' || e.code === 'dischargeFromVessel') && e.actualTime) {
             // Check if the actual arrival time is in the past (vessel has actually arrived)
@@ -2107,9 +2120,9 @@ export class DbStorage implements IStorage {
             // Also verify this is a true actual time, not an estimated one
             // If estimatedTime exists and equals actualTime, it's likely just an estimate
             const isRealActual = !e.estimatedTime || e.actualTime !== e.estimatedTime;
-            
+
             // Check if arrival is at the final destination port
-            const isAtDestination = !destinationPort || !e.location || 
+            const isAtDestination = !destinationPort || !e.location ||
               e.location.toLowerCase().includes(destinationPort.toLowerCase()) ||
               destinationPort.toLowerCase().includes(e.location.toLowerCase());
 
@@ -2284,7 +2297,7 @@ export class DbStorage implements IStorage {
 
           const events = rawData.shipmentEvents || rawData.milestones || rawData.events || [];
           const destinationPort = shipment.destinationPort || '';
-          
+
           const arrivalEvent = events.find((e: any) => {
             if ((e.code === 'vesselArrival' || e.code === 'dischargeFromVessel') && e.actualTime) {
               // Check if the actual arrival time is in the past (vessel has actually arrived)
@@ -2294,9 +2307,9 @@ export class DbStorage implements IStorage {
               // Also verify this is a true actual time, not an estimated one
               // If estimatedTime exists and equals actualTime, it's likely just an estimate
               const isRealActual = !e.estimatedTime || e.actualTime !== e.estimatedTime;
-              
+
               // Check if arrival is at the final destination port
-              const isAtDestination = !destinationPort || !e.location || 
+              const isAtDestination = !destinationPort || !e.location ||
                 e.location.toLowerCase().includes(destinationPort.toLowerCase()) ||
                 destinationPort.toLowerCase().includes(e.location.toLowerCase());
 

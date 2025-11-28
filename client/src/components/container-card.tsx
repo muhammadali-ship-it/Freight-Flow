@@ -80,9 +80,9 @@ export function ContainerCard({
   const { toast } = useToast();
 
   const updateMutation = useMutation({
-    mutationFn: async (data: { 
-      status?: ContainerStatus; 
-      eta?: string; 
+    mutationFn: async (data: {
+      status?: ContainerStatus;
+      eta?: string;
       terminalStatus?: TerminalStatus | null;
       reference?: string;
       bookingNumber?: string;
@@ -109,16 +109,16 @@ export function ContainerCard({
   });
 
   const handleSave = () => {
-    const updates: { 
-      status?: ContainerStatus; 
-      eta?: string; 
+    const updates: {
+      status?: ContainerStatus;
+      eta?: string;
       terminalStatus?: TerminalStatus | null;
       reference?: string;
       bookingNumber?: string;
       lastFreeDay?: string;
       dailyFeeRate?: string;
     } = {};
-    
+
     if (editedStatus !== status) updates.status = editedStatus;
     if (editedEta !== eta) updates.eta = editedEta;
     if (editedTerminalStatus !== (terminalStatus || "none")) {
@@ -128,7 +128,7 @@ export function ContainerCard({
     if (editedBookingNumber !== (bookingNumber || "")) updates.bookingNumber = editedBookingNumber;
     if (editedLastFreeDay !== (lastFreeDay || "")) updates.lastFreeDay = editedLastFreeDay;
     if (editedDailyFeeRate !== (dailyFeeRate || "150")) updates.dailyFeeRate = editedDailyFeeRate;
-    
+
     if (Object.keys(updates).length > 0) {
       updateMutation.mutate(updates);
     } else {
@@ -200,7 +200,6 @@ export function ContainerCard({
               <SelectItem value="none">None</SelectItem>
               <SelectItem value="available">Available for Pickup</SelectItem>
               <SelectItem value="not-available">Not Available</SelectItem>
-              <SelectItem value="pending">Pending Release</SelectItem>
               <SelectItem value="hold">Customs Hold</SelectItem>
               <SelectItem value="customs-hold">Customs Hold (Legacy)</SelectItem>
             </SelectContent>

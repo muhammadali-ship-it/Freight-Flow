@@ -1,7 +1,7 @@
 import { Badge } from "@/components/ui/badge";
 import { CheckCircle2, XCircle, Clock, AlertCircle } from "lucide-react";
 
-export type TerminalStatus = "available" | "not-available" | "pending" | "hold" | "customs-hold";
+export type TerminalStatus = "available" | "not-available" | "hold" | "customs-hold";
 
 interface TerminalStatusBadgeProps {
   status: TerminalStatus;
@@ -19,11 +19,6 @@ const statusConfig = {
     icon: XCircle,
     className: "bg-muted text-muted-foreground",
   },
-  pending: {
-    label: "Pending Release",
-    icon: Clock,
-    className: "bg-status-at-port text-status-at-port-foreground",
-  },
   hold: {
     label: "Customs Hold",
     icon: AlertCircle,
@@ -38,12 +33,12 @@ const statusConfig = {
 
 export function TerminalStatusBadge({ status, className }: TerminalStatusBadgeProps) {
   const config = statusConfig[status];
-  
+
   if (!config) {
     console.warn(`Unknown terminal status: ${status}`);
     return null;
   }
-  
+
   const Icon = config.icon;
 
   return (

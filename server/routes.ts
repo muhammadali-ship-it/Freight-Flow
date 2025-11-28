@@ -1,4 +1,4 @@
-﻿import type { Express } from "express";
+import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage, db } from "./storage.js";
 import { sql } from "drizzle-orm";
@@ -533,7 +533,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         // Handle terminalHolds array
         if (terminalHolds !== undefined) {
-          updatedRawData.terminalHolds = terminalHolds;
+          // Check if Full Container Gate Out event exists
+          const existingRawData = cargoesFlowShipment.rawData as any || {};
+          const events = existingRawData.shipmentEvents || existingRawData.milestones || existingRawData.events || [];
+          const hasGateOut = events.some((e: any) => 
+            e.code === 'gateOutWithContainerFull' && e.actualTime
+          );
+          
+          // If gate out occurred, clear all holds regardless of input
+          updatedRawData.terminalHolds = hasGateOut ? [] : terminalHolds;
         }
 
         try {

@@ -29,11 +29,18 @@ export class CargoesFlowRiskAssessmentService {
     const terminalEmptyReturned = rawData.terminalEmptyReturned;
     const events = rawData.shipmentEvents || [];
     
-    const hasGateOutEvent = events.some((e: any) => 
-      e.code === 'fullContainerGateOut' || 
-      e.code === 'emptyContainerGateIn' ||
-      (e.description && e.description.toLowerCase().includes('gate out'))
-    );
+    const hasGateOutEvent = events.some((e: any) => {
+      const code = (e.code || '').toLowerCase();
+      const description = (e.description || '').toLowerCase();
+      
+      return code.includes('gateout') || 
+             code.includes('gate-out') || 
+             code.includes('gate_out') ||
+             code === 'fullcontainergateout' ||
+             code === 'emptycontainergatein' ||
+             description.includes('gate out') ||
+             description.includes('full container gate out');
+    });
     
     const isContainerCompleted = terminalFullOut || terminalEmptyReturned || hasGateOutEvent;
     
@@ -45,15 +52,39 @@ export class CargoesFlowRiskAssessmentService {
       
       if (daysPastEta > 0) {
         // Check if vessel has arrived at destination
-        const destinationPort = shipment.destinationPort || '';
+        const destinationPort = (shipment.destinationPort || '').toLowerCase().trim();
         const hasArrivedAtDestination = events.some((e: any) => {
-          if ((e.code === 'vesselArrival' || e.code === 'vesselArrivalAis' || e.code === 'dischargeFromVessel') && e.actualTime) {
-            if (!destinationPort || !e.location) {
-              return false;
+          const code = (e.code || '').toLowerCase();
+          const location = (e.location || '').toLowerCase().trim();
+          const description = (e.description || '').toLowerCase();
+          
+          // Check for arrival event codes
+          const isArrivalEvent = code.includes('vessalarrival') || 
+                                 code.includes('vessel-arrival') ||
+                                 code.includes('vessel_arrival') ||
+                                 code === 'vessalarrivalais' ||
+                                 code === 'dischargefromvessel' ||
+                                 code.includes('discharge') ||
+                                 description.includes('vessel arrival');
+          
+          if (isArrivalEvent && e.actualTime) {
+            // If no destination port specified, assume any arrival means it arrived
+            if (!destinationPort) {
+              return true;
             }
+            
+            // If no location in event, can't verify - be lenient and assume it's the destination
+            if (!location) {
+              return true;
+            }
+            
+            // Check if arrival is at the final destination port
             const isAtDestination =
-              e.location.toLowerCase().includes(destinationPort.toLowerCase()) ||
-              destinationPort.toLowerCase().includes(e.location.toLowerCase());
+              location.includes(destinationPort) ||
+              destinationPort.includes(location) ||
+              (destinationPort.split(/[\s,]/)[0].length > 3 && location.includes(destinationPort.split(/[\s,]/)[0])) ||
+              (location.split(/[\s,]/)[0].length > 3 && destinationPort.includes(location.split(/[\s,]/)[0]));
+            
             return isAtDestination;
           }
           return false;

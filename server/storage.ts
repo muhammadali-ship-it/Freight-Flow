@@ -1962,16 +1962,18 @@ export class DbStorage implements IStorage {
           const destinationPort = shipment.destinationPort || '';
           const events = rawData.shipmentEvents || rawData.milestones || rawData.events || [];
           const hasArrivedAtDestination = events.some((e: any) => {
-            if ((e.code === 'vesselArrival' || e.code === 'dischargeFromVessel') && e.actualTime) {
-              // Only consider arrived if we have both destination port and event location
-              if (!destinationPort || !e.location) {
-                return false;
+            if ((e.code === 'vesselArrival' || e.code === 'vesselArrivalWithContainer' || e.code === 'dischargeFromVessel') && e.actualTime) {
+              // Check if event explicitly marks this as destination port arrival
+              if (e.locationRole === 'destinationPort') {
+                return true;
               }
-              // Check if arrival is at the final destination port
-              const isAtDestination =
-                e.location.toLowerCase().includes(destinationPort.toLowerCase()) ||
-                destinationPort.toLowerCase().includes(e.location.toLowerCase());
-              return isAtDestination;
+              // Fallback: check if arrival is at the final destination port by location matching
+              if (destinationPort && e.location) {
+                const isAtDestination =
+                  e.location.toLowerCase().includes(destinationPort.toLowerCase()) ||
+                  destinationPort.toLowerCase().includes(e.location.toLowerCase());
+                return isAtDestination;
+              }
             }
             return false;
           });
@@ -2026,9 +2028,10 @@ export class DbStorage implements IStorage {
       const gateOutEvent = events.find((e: any) => e.code === 'gateOutWithContainerFull');
 
       const arrivalEvent = events.find((e: any) =>
-        (e.code === 'vesselArrival' || e.code === 'dischargeFromVessel') &&
+        (e.code === 'vesselArrival' || e.code === 'vesselArrivalWithContainer' || e.code === 'dischargeFromVessel') &&
         e.actualTime &&
         (
+          e.locationRole === 'destinationPort' || // Check locationRole first
           !terminalData.terminalPort ||
           (e.location && terminalData.terminalPort && e.location.toLowerCase().includes(terminalData.terminalPort.toLowerCase())) ||
           (e.location && terminalData.terminalName && terminalData.terminalName.toLowerCase().includes(e.location.toLowerCase()))
@@ -2107,7 +2110,7 @@ export class DbStorage implements IStorage {
         const destinationPort = shipment.destinationPort || '';
 
         const arrivalEvent = events.find((e: any) => {
-          if ((e.code === 'vesselArrival' || e.code === 'dischargeFromVessel') && e.actualTime) {
+          if ((e.code === 'vesselArrival' || e.code === 'vesselArrivalWithContainer' || e.code === 'dischargeFromVessel') && e.actualTime) {
             // Check if the actual arrival time is in the past (vessel has actually arrived)
             const arrivalDate = new Date(e.actualTime);
             const isPast = arrivalDate <= today;
@@ -2117,9 +2120,13 @@ export class DbStorage implements IStorage {
             const isRealActual = !e.estimatedTime || e.actualTime !== e.estimatedTime;
 
             // Check if arrival is at the final destination port
-            const isAtDestination = !destinationPort || !e.location ||
-              e.location.toLowerCase().includes(destinationPort.toLowerCase()) ||
-              destinationPort.toLowerCase().includes(e.location.toLowerCase());
+            // First check locationRole, then fallback to location matching
+            const isAtDestination = e.locationRole === 'destinationPort' ||
+              (!destinationPort && e.location) || // If no destinationPort specified but we have location, assume it's destination
+              (destinationPort && e.location && (
+                e.location.toLowerCase().includes(destinationPort.toLowerCase()) ||
+                destinationPort.toLowerCase().includes(e.location.toLowerCase())
+              ));
 
             return isPast && isRealActual && isAtDestination;
           }
@@ -2225,16 +2232,18 @@ export class DbStorage implements IStorage {
           const destinationPort = shipment.destinationPort || '';
           const allEvents = rawData.shipmentEvents || rawData.milestones || rawData.events || [];
           const hasArrivedAtDestination = allEvents.some((e: any) => {
-            if ((e.code === 'vesselArrival' || e.code === 'dischargeFromVessel') && e.actualTime) {
-              // Only consider arrived if we have both destination port and event location
-              if (!destinationPort || !e.location) {
-                return false;
+            if ((e.code === 'vesselArrival' || e.code === 'vesselArrivalWithContainer' || e.code === 'dischargeFromVessel') && e.actualTime) {
+              // Check if event explicitly marks this as destination port arrival
+              if (e.locationRole === 'destinationPort') {
+                return true;
               }
-              // Check if arrival is at the final destination port
-              const isAtDestination =
-                e.location.toLowerCase().includes(destinationPort.toLowerCase()) ||
-                destinationPort.toLowerCase().includes(e.location.toLowerCase());
-              return isAtDestination;
+              // Fallback: check if arrival is at the final destination port by location matching
+              if (destinationPort && e.location) {
+                const isAtDestination =
+                  e.location.toLowerCase().includes(destinationPort.toLowerCase()) ||
+                  destinationPort.toLowerCase().includes(e.location.toLowerCase());
+                return isAtDestination;
+              }
             }
             return false;
           });
@@ -2265,9 +2274,10 @@ export class DbStorage implements IStorage {
           if (isEmptyReturned) return false;
           const events = rawData.shipmentEvents || [];
           const arrivalEvent = events.find((e: any) =>
-            (e.code === 'vesselArrival' || e.code === 'dischargeFromVessel') &&
+            (e.code === 'vesselArrival' || e.code === 'vesselArrivalWithContainer' || e.code === 'dischargeFromVessel') &&
             e.actualTime &&
             (
+              e.locationRole === 'destinationPort' || // Check locationRole first
               !rawData.terminalPort ||
               (e.location && rawData.terminalPort && e.location.toLowerCase().includes(rawData.terminalPort.toLowerCase())) ||
               (e.location && rawData.terminalName && rawData.terminalName.toLowerCase().includes(e.location.toLowerCase()))
@@ -2317,7 +2327,7 @@ export class DbStorage implements IStorage {
           const destinationPort = shipment.destinationPort || '';
 
           const arrivalEvent = events.find((e: any) => {
-            if ((e.code === 'vesselArrival' || e.code === 'dischargeFromVessel') && e.actualTime) {
+            if ((e.code === 'vesselArrival' || e.code === 'vesselArrivalWithContainer' || e.code === 'dischargeFromVessel') && e.actualTime) {
               // Check if the actual arrival time is in the past (vessel has actually arrived)
               const arrivalDate = new Date(e.actualTime);
               const isPast = arrivalDate <= today;
@@ -2327,9 +2337,13 @@ export class DbStorage implements IStorage {
               const isRealActual = !e.estimatedTime || e.actualTime !== e.estimatedTime;
 
               // Check if arrival is at the final destination port
-              const isAtDestination = !destinationPort || !e.location ||
-                e.location.toLowerCase().includes(destinationPort.toLowerCase()) ||
-                destinationPort.toLowerCase().includes(e.location.toLowerCase());
+              // First check locationRole, then fallback to location matching
+              const isAtDestination = e.locationRole === 'destinationPort' ||
+                (!destinationPort && e.location) || // If no destinationPort specified but we have location, assume it's destination
+                (destinationPort && e.location && (
+                  e.location.toLowerCase().includes(destinationPort.toLowerCase()) ||
+                  destinationPort.toLowerCase().includes(e.location.toLowerCase())
+                ));
 
               return isPast && isRealActual && isAtDestination;
             }

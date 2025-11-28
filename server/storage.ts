@@ -1958,11 +1958,22 @@ export class DbStorage implements IStorage {
           const etaDate = new Date(shipment.eta);
           etaDate.setHours(0, 0, 0, 0);
 
+          // Check if container has been picked up (gate out or full out)
+          const terminalFullOut = rawData.terminalFullOut;
+          const events = rawData.shipmentEvents || rawData.milestones || rawData.events || [];
+          
+          const hasGateOutEvent = events.some((e: any) => 
+            e.code === 'fullContainerGateOut' || 
+            e.code === 'emptyContainerGateIn' ||
+            (e.description && e.description.toLowerCase().includes('gate out'))
+          );
+          
+          const isContainerCompleted = terminalFullOut || hasGateOutEvent;
+
           // Check if vessel has arrived at destination
           const destinationPort = shipment.destinationPort || '';
-          const events = rawData.shipmentEvents || rawData.milestones || rawData.events || [];
           const hasArrivedAtDestination = events.some((e: any) => {
-            if ((e.code === 'vesselArrival' || e.code === 'dischargeFromVessel') && e.actualTime) {
+            if ((e.code === 'vesselArrival' || e.code === 'vesselArrivalAis' || e.code === 'dischargeFromVessel') && e.actualTime) {
               // Only consider arrived if we have both destination port and event location
               if (!destinationPort || !e.location) {
                 return false;
@@ -1978,8 +1989,8 @@ export class DbStorage implements IStorage {
 
           if (etaDate.getTime() === today.getTime()) {
             arrivingToday += containerCount;
-          } else if (etaDate < today && !hasArrivedAtDestination) {
-            // Only count as delayed if ETA passed AND vessel hasn't arrived at destination
+          } else if (etaDate < today && !hasArrivedAtDestination && !isContainerCompleted) {
+            // Only count as delayed if ETA passed AND vessel hasn't arrived AND container hasn't been picked up
             delayed += containerCount;
           } else {
             inTransit += containerCount;
@@ -2221,11 +2232,23 @@ export class DbStorage implements IStorage {
           // Check if ETA has passed
           if (etaDate >= today) return false;
 
+          // Check if container has been picked up (gate out or full out)
+          const terminalFullOut = rawData.terminalFullOut;
+          const allEvents = rawData.shipmentEvents || rawData.milestones || rawData.events || [];
+          
+          const hasGateOutEvent = allEvents.some((e: any) => 
+            e.code === 'fullContainerGateOut' || 
+            e.code === 'emptyContainerGateIn' ||
+            (e.description && e.description.toLowerCase().includes('gate out'))
+          );
+          
+          // If container has been picked up, it's no longer delayed
+          if (terminalFullOut || hasGateOutEvent) return false;
+
           // Check if vessel has arrived at destination
           const destinationPort = shipment.destinationPort || '';
-          const allEvents = rawData.shipmentEvents || rawData.milestones || rawData.events || [];
           const hasArrivedAtDestination = allEvents.some((e: any) => {
-            if ((e.code === 'vesselArrival' || e.code === 'dischargeFromVessel') && e.actualTime) {
+            if ((e.code === 'vesselArrival' || e.code === 'vesselArrivalAis' || e.code === 'dischargeFromVessel') && e.actualTime) {
               // Only consider arrived if we have both destination port and event location
               if (!destinationPort || !e.location) {
                 return false;

@@ -22,15 +22,48 @@ export class CargoesFlowRiskAssessmentService {
     // Extract container data from rawData if available
     const containers = shipment.rawData?.containers || [];
     const container = containers[0]; // Use first container for risk assessment
+    const rawData = shipment.rawData || {};
+    
+    // Check if container has been picked up (gate out or empty returned)
+    const terminalFullOut = rawData.terminalFullOut;
+    const terminalEmptyReturned = rawData.terminalEmptyReturned;
+    const events = rawData.shipmentEvents || [];
+    
+    const hasGateOutEvent = events.some((e: any) => 
+      e.code === 'fullContainerGateOut' || 
+      e.code === 'emptyContainerGateIn' ||
+      (e.description && e.description.toLowerCase().includes('gate out'))
+    );
+    
+    const isContainerCompleted = terminalFullOut || terminalEmptyReturned || hasGateOutEvent;
     
     // Rule 1: ETA passed but container not arrived (CRITICAL)
-    if (shipment.eta && !["arrived", "unloaded", "gate-out", "delivered", "completed"].includes(shipment.status?.toLowerCase() || "")) {
+    // Don't flag as delayed if container has been picked up/completed
+    if (shipment.eta && !isContainerCompleted && !["arrived", "unloaded", "gate-out", "delivered", "completed"].includes(shipment.status?.toLowerCase() || "")) {
       const eta = new Date(shipment.eta);
       const daysPastEta = Math.floor((now.getTime() - eta.getTime()) / (1000 * 60 * 60 * 24));
       
       if (daysPastEta > 0) {
-        riskScore += 3;
-        riskReasons.push(`ETA passed ${daysPastEta} day(s) ago - container delayed`);
+        // Check if vessel has arrived at destination
+        const destinationPort = shipment.destinationPort || '';
+        const hasArrivedAtDestination = events.some((e: any) => {
+          if ((e.code === 'vesselArrival' || e.code === 'vesselArrivalAis' || e.code === 'dischargeFromVessel') && e.actualTime) {
+            if (!destinationPort || !e.location) {
+              return false;
+            }
+            const isAtDestination =
+              e.location.toLowerCase().includes(destinationPort.toLowerCase()) ||
+              destinationPort.toLowerCase().includes(e.location.toLowerCase());
+            return isAtDestination;
+          }
+          return false;
+        });
+        
+        // Only flag as delayed if vessel hasn't arrived at destination yet
+        if (!hasArrivedAtDestination) {
+          riskScore += 3;
+          riskReasons.push(`ETA passed ${daysPastEta} day(s) ago - container delayed`);
+        }
       }
     }
     

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { buildApiUrl } from "@/lib/env";
@@ -86,29 +86,8 @@ type KpiFilter = "total" | "in-transit" | "arriving-today" | "delayed" | "pod-ne
 
 export default function Dashboard() {
   const [, navigate] = useLocation();
-  const isRestoringRef = useRef(false);
-  
-  // Initialize state from sessionStorage if available
-  const initializeState = () => {
-    try {
-      const stored = sessionStorage.getItem('dashboardState');
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (parsed.timestamp && Date.now() - parsed.timestamp < 5 * 60 * 1000) {
-          isRestoringRef.current = true;
-          return parsed;
-        }
-      }
-    } catch (e) {
-      console.error('Failed to restore state:', e);
-    }
-    return null;
-  };
-  
-  const savedState = initializeState();
-  
-  const [searchQuery, setSearchQuery] = useState(savedState?.searchQuery || "");
-  const [filters, setFilters] = useState<FilterState>(savedState?.filters || {
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filters, setFilters] = useState<FilterState>({
     status: "all",
     carrier: "all",
     origin: "all",
@@ -116,13 +95,13 @@ export default function Dashboard() {
     etaFrom: undefined,
     etaTo: undefined,
   });
-  const [quickFilter, setQuickFilter] = useState<QuickFilter>(savedState?.quickFilter || null);
-  const [kpiFilter, setKpiFilter] = useState<KpiFilter>(savedState?.kpiFilter || null);
-  const [sortField, setSortField] = useState<SortField>(savedState?.sortField || "eta");
-  const [sortDirection, setSortDirection] = useState<SortDirection>(savedState?.sortDirection || "asc");
+  const [quickFilter, setQuickFilter] = useState<QuickFilter>(null);
+  const [kpiFilter, setKpiFilter] = useState<KpiFilter>(null);
+  const [sortField, setSortField] = useState<SortField>("eta");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
   const [showAnalytics, setShowAnalytics] = useState(false);
-  const [page, setPage] = useState(savedState?.page || 1);
-  const [pageSize, setPageSize] = useState(savedState?.pageSize || 20);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
 
   const { data: user } = useQuery<{ id: string; role: string; name: string; email: string; office: string }>({
     queryKey: ["/api/user"],
@@ -337,55 +316,14 @@ export default function Dashboard() {
   console.log(`[DEBUG Frontend] Final Stats Used:`, stats);
 
   const handleViewDetails = (containerId: string) => {
-    // Save state before navigation
-    const mainElement = document.querySelector('main');
-    const scrollPosition = mainElement?.scrollTop || 0;
-    
-    sessionStorage.setItem('dashboardState', JSON.stringify({
-      searchQuery,
-      filters,
-      quickFilter,
-      kpiFilter,
-      sortField,
-      sortDirection,
-      page,
-      pageSize,
-      scrollPosition,
-      timestamp: Date.now(),
-    }));
-    
     // Navigate to Cargoes Flow shipment detail page
     navigate(`/shipments/${containerId}`);
   };
 
-  // Reset page to 1 when filters, search, or sort changes (skip on initial restore)
+  // Reset page to 1 when filters, search, or sort changes
   useEffect(() => {
-    if (!isRestoringRef.current) {
-      setPage(1);
-    }
+    setPage(1);
   }, [searchQuery, sortField, sortDirection, filters, quickFilter, kpiFilter]);
-  
-  // Restore scroll position after component mounts and data loads
-  useEffect(() => {
-    if (savedState?.scrollPosition && !isLoading && paginatedData) {
-      const mainElement = document.querySelector('main');
-      if (mainElement) {
-        // Wait for DOM to be fully rendered
-        requestAnimationFrame(() => {
-          setTimeout(() => {
-            mainElement.scrollTop = savedState.scrollPosition;
-            console.log('Restored scroll to:', savedState.scrollPosition);
-            // Clear the flag and storage
-            isRestoringRef.current = false;
-            sessionStorage.removeItem('dashboardState');
-          }, 100);
-        });
-      }
-    } else if (isRestoringRef.current) {
-      // If no scroll position to restore, just clear the flag
-      isRestoringRef.current = false;
-    }
-  }, [isLoading, paginatedData]);
 
   const handleFilterChange = (key: keyof FilterState, value: string | string[]) => {
     setFilters((prev) => ({ ...prev, [key]: value }));

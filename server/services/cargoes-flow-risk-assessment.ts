@@ -22,79 +22,15 @@ export class CargoesFlowRiskAssessmentService {
     // Extract container data from rawData if available
     const containers = shipment.rawData?.containers || [];
     const container = containers[0]; // Use first container for risk assessment
-    const rawData = shipment.rawData || {};
-    
-    // Check if container has been picked up (gate out or empty returned)
-    const terminalFullOut = rawData.terminalFullOut;
-    const terminalEmptyReturned = rawData.terminalEmptyReturned;
-    const events = rawData.shipmentEvents || [];
-    
-    const hasGateOutEvent = events.some((e: any) => {
-      const code = (e.code || '').toLowerCase();
-      const description = (e.description || '').toLowerCase();
-      
-      return code.includes('gateout') || 
-             code.includes('gate-out') || 
-             code.includes('gate_out') ||
-             code === 'fullcontainergateout' ||
-             code === 'emptycontainergatein' ||
-             description.includes('gate out') ||
-             description.includes('full container gate out');
-    });
-    
-    const isContainerCompleted = terminalFullOut || terminalEmptyReturned || hasGateOutEvent;
     
     // Rule 1: ETA passed but container not arrived (CRITICAL)
-    // Don't flag as delayed if container has been picked up/completed
-    if (shipment.eta && !isContainerCompleted && !["arrived", "unloaded", "gate-out", "delivered", "completed"].includes(shipment.status?.toLowerCase() || "")) {
+    if (shipment.eta && !["arrived", "unloaded", "gate-out", "delivered", "completed"].includes(shipment.status?.toLowerCase() || "")) {
       const eta = new Date(shipment.eta);
       const daysPastEta = Math.floor((now.getTime() - eta.getTime()) / (1000 * 60 * 60 * 24));
       
       if (daysPastEta > 0) {
-        // Check if vessel has arrived at destination
-        const destinationPort = (shipment.destinationPort || '').toLowerCase().trim();
-        const hasArrivedAtDestination = events.some((e: any) => {
-          const code = (e.code || '').toLowerCase();
-          const location = (e.location || '').toLowerCase().trim();
-          const description = (e.description || '').toLowerCase();
-          
-          // Check for arrival event codes
-          const isArrivalEvent = code.includes('vessalarrival') || 
-                                 code.includes('vessel-arrival') ||
-                                 code.includes('vessel_arrival') ||
-                                 code === 'vessalarrivalais' ||
-                                 code === 'dischargefromvessel' ||
-                                 code.includes('discharge') ||
-                                 description.includes('vessel arrival');
-          
-          if (isArrivalEvent && e.actualTime) {
-            // If no destination port specified, assume any arrival means it arrived
-            if (!destinationPort) {
-              return true;
-            }
-            
-            // If no location in event, can't verify - be lenient and assume it's the destination
-            if (!location) {
-              return true;
-            }
-            
-            // Check if arrival is at the final destination port
-            const isAtDestination =
-              location.includes(destinationPort) ||
-              destinationPort.includes(location) ||
-              (destinationPort.split(/[\s,]/)[0].length > 3 && location.includes(destinationPort.split(/[\s,]/)[0])) ||
-              (location.split(/[\s,]/)[0].length > 3 && destinationPort.includes(location.split(/[\s,]/)[0]));
-            
-            return isAtDestination;
-          }
-          return false;
-        });
-        
-        // Only flag as delayed if vessel hasn't arrived at destination yet
-        if (!hasArrivedAtDestination) {
-          riskScore += 3;
-          riskReasons.push(`ETA passed ${daysPastEta} day(s) ago - container delayed`);
-        }
+        riskScore += 3;
+        riskReasons.push(`ETA passed ${daysPastEta} day(s) ago - container delayed`);
       }
     }
     

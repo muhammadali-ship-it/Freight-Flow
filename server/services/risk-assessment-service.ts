@@ -24,7 +24,10 @@ export class RiskAssessmentService {
     // Rule 1: ETA passed but container not arrived (CRITICAL)
     // Check for Vessel Arrival event to calculate actual delay if available
     const milestones = await storage.getMilestones(container.shipmentId);
-    const vesselArrival = milestones.find(m => m.eventType === "Vessel Arrival" && m.timestampActual);
+    const vesselArrival = milestones.find(m =>
+      (m.eventType === "Vessel Arrival" || m.eventType.toLowerCase().includes("vessel arrival")) &&
+      m.timestampActual
+    );
 
     // If vessel has arrived, we use that date for comparison. 
     // If not, we use now.

@@ -1958,9 +1958,24 @@ export class DbStorage implements IStorage {
           const etaDate = new Date(shipment.eta);
           etaDate.setHours(0, 0, 0, 0);
 
+          // Check if vessel has arrived at destination
+          const destinationPort = shipment.destinationPort || '';
+          const events = rawData.shipmentEvents || rawData.milestones || rawData.events || [];
+          const hasArrivedAtDestination = events.some((e: any) => {
+            if ((e.code === 'vesselArrival' || e.code === 'dischargeFromVessel') && e.actualTime) {
+              // Check if arrival is at the final destination port
+              const isAtDestination = !destinationPort || !e.location ||
+                e.location.toLowerCase().includes(destinationPort.toLowerCase()) ||
+                destinationPort.toLowerCase().includes(e.location.toLowerCase());
+              return isAtDestination;
+            }
+            return false;
+          });
+
           if (etaDate.getTime() === today.getTime()) {
             arrivingToday += containerCount;
-          } else if (etaDate < today) {
+          } else if (etaDate < today && !hasArrivedAtDestination) {
+            // Only count as delayed if ETA passed AND vessel hasn't arrived at destination
             delayed += containerCount;
           } else {
             inTransit += containerCount;
@@ -2198,7 +2213,26 @@ export class DbStorage implements IStorage {
           if (!shipment.eta) return false;
           const etaDate = new Date(shipment.eta);
           etaDate.setHours(0, 0, 0, 0);
-          return etaDate < today;
+
+          // Check if ETA has passed
+          if (etaDate >= today) return false;
+
+          // Check if vessel has arrived at destination
+          const destinationPort = shipment.destinationPort || '';
+          const allEvents = rawData.shipmentEvents || rawData.milestones || rawData.events || [];
+          const hasArrivedAtDestination = allEvents.some((e: any) => {
+            if ((e.code === 'vesselArrival' || e.code === 'dischargeFromVessel') && e.actualTime) {
+              // Check if arrival is at the final destination port
+              const isAtDestination = !destinationPort || !e.location ||
+                e.location.toLowerCase().includes(destinationPort.toLowerCase()) ||
+                destinationPort.toLowerCase().includes(e.location.toLowerCase());
+              return isAtDestination;
+            }
+            return false;
+          });
+
+          // Only show as delayed if ETA passed AND vessel hasn't arrived at destination
+          return !hasArrivedAtDestination;
         }
 
         case 'pod-needs-attention': {

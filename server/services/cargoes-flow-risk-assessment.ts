@@ -20,17 +20,43 @@ export class CargoesFlowRiskAssessmentService {
     const now = new Date();
     
     // Extract container data from rawData if available
-    const containers = shipment.rawData?.containers || [];
+    const rawData = shipment.rawData as any || {};
+    const containers = rawData.containers || [];
     const container = containers[0]; // Use first container for risk assessment
     
     // Rule 1: ETA passed but container not arrived (CRITICAL)
+    // Logic: If vessel has arrived at destination, we do NOT consider it delayed for ETA purposes
     if (shipment.eta && !["arrived", "unloaded", "gate-out", "delivered", "completed"].includes(shipment.status?.toLowerCase() || "")) {
       const eta = new Date(shipment.eta);
       const daysPastEta = Math.floor((now.getTime() - eta.getTime()) / (1000 * 60 * 60 * 24));
       
       if (daysPastEta > 0) {
-        riskScore += 3;
-        riskReasons.push(`ETA passed ${daysPastEta} day(s) ago - container delayed`);
+        // Check if vessel has arrived at destination
+        const destinationPort = shipment.destinationPort || '';
+        const events = rawData.shipmentEvents || rawData.milestones || rawData.events || [];
+        
+        const hasArrivedAtDestination = events.some((e: any) => {
+          if ((e.code === 'vesselArrival' || e.code === 'vesselArrivalWithContainer' || e.code === 'dischargeFromVessel') && e.actualTime) {
+            // Check if event explicitly marks this as destination port arrival
+            if (e.locationRole === 'destinationPort') {
+              return true;
+            }
+            // Fallback: check if arrival is at the final destination port by location matching
+            if (destinationPort && e.location) {
+              const isAtDestination =
+                e.location.toLowerCase().includes(destinationPort.toLowerCase()) ||
+                destinationPort.toLowerCase().includes(e.location.toLowerCase());
+              return isAtDestination;
+            }
+          }
+          return false;
+        });
+        
+        // Only add risk if vessel hasn't arrived at destination
+        if (!hasArrivedAtDestination) {
+          riskScore += 3;
+          riskReasons.push(`ETA passed ${daysPastEta} day(s) ago - container delayed`);
+        }
       }
     }
     

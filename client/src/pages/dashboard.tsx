@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { buildApiUrl } from "@/lib/env";
@@ -96,16 +96,55 @@ export default function Dashboard() {
     etaTo: undefined,
   });
   const [quickFilter, setQuickFilter] = useState<QuickFilter>(null);
-  const [kpiFilter, setKpiFilter] = useState<KpiFilter>(null);
+  
+  // Initialize KPI filter from sessionStorage
+  const [kpiFilter, setKpiFilter] = useState<KpiFilter>(() => {
+    const saved = sessionStorage.getItem('dashboardKpiFilter');
+    return saved ? (saved as KpiFilter) : null;
+  });
+  
   const [sortField, setSortField] = useState<SortField>("eta");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
   const [showAnalytics, setShowAnalytics] = useState(false);
-  const [page, setPage] = useState(1);
+  
+  // Initialize page from sessionStorage
+  const [page, setPage] = useState(() => {
+    const saved = sessionStorage.getItem('dashboardPage');
+    return saved ? parseInt(saved, 10) : 1;
+  });
+  
   const [pageSize, setPageSize] = useState(20);
+  
+  // Flag to track if scroll position has been restored
+  const scrollRestoredRef = useRef(false);
 
   const { data: user } = useQuery<{ id: string; role: string; name: string; email: string; office: string }>({
     queryKey: ["/api/user"],
   });
+
+  // Save KPI filter to sessionStorage whenever it changes
+  useEffect(() => {
+    if (kpiFilter) {
+      sessionStorage.setItem('dashboardKpiFilter', kpiFilter);
+    } else {
+      sessionStorage.removeItem('dashboardKpiFilter');
+    }
+  }, [kpiFilter]);
+
+  // Save page to sessionStorage whenever it changes
+  useEffect(() => {
+    sessionStorage.setItem('dashboardPage', page.toString());
+  }, [page]);
+
+  // Save scroll position before navigating away
+  useEffect(() => {
+    const handleScroll = () => {
+      sessionStorage.setItem('dashboardScrollPosition', window.scrollY.toString());
+    };
+
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   // Fetch shipments from Cargoes Flow (role-filtered)
   const { data: paginatedData, isLoading } = useQuery<{
@@ -325,6 +364,22 @@ export default function Dashboard() {
     setPage(1);
   }, [searchQuery, sortField, sortDirection, filters, quickFilter, kpiFilter]);
 
+  // Restore scroll position after data loads
+  useEffect(() => {
+    if (!isLoading && paginatedData && !scrollRestoredRef.current) {
+      const savedScrollPosition = sessionStorage.getItem('dashboardScrollPosition');
+      if (savedScrollPosition) {
+        // Use requestAnimationFrame to ensure DOM is fully rendered
+        requestAnimationFrame(() => {
+          window.scrollTo(0, parseInt(savedScrollPosition, 10));
+          scrollRestoredRef.current = true;
+        });
+      } else {
+        scrollRestoredRef.current = true;
+      }
+    }
+  }, [isLoading, paginatedData]);
+
   const handleFilterChange = (key: keyof FilterState, value: string | string[]) => {
     setFilters((prev) => ({ ...prev, [key]: value }));
   };
@@ -333,6 +388,11 @@ export default function Dashboard() {
     setFilters({ status: "all", carrier: "all", origin: "all", users: [], etaFrom: undefined, etaTo: undefined });
     setQuickFilter(null);
     setKpiFilter(null);
+    // Clear saved state when filters are cleared
+    sessionStorage.removeItem('dashboardKpiFilter');
+    sessionStorage.removeItem('dashboardPage');
+    sessionStorage.removeItem('dashboardScrollPosition');
+    scrollRestoredRef.current = false;
   };
 
   const handleKpiFilter = (filter: KpiFilter) => {

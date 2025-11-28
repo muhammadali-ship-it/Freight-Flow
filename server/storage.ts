@@ -893,30 +893,6 @@ export class DbStorage implements IStorage {
     // In Transit count
     const inTransitResult = await db.select({ count: sql<number>`count(*)` })
       .from(containers)
-      .where(sql`${baseCondition} AND ${containers.status} = 'in-transit'`);
-    const inTransitCount = Number(inTransitResult[0]?.count || 0);
-
-    // Delayed count
-    // Logic: ETA is in the past AND container is NOT in a completed/arrived state
-    // We use the status field which should be updated by the risk service or event processor
-    // Ideally, we should check for the missing Vessel Arrival event here too, but for performance
-    // we'll rely on the status being correct or the simple ETA check.
-    // However, to be consistent with the user's request:
-    // "if that event haven't occur and ETA is passed from current date it will be delayed"
-
-    const delayedResult = await db.select({ count: sql<number>`count(*)` })
-      .from(containers)
-      .where(sql`
-        ${baseCondition} AND 
-        ${containers.eta} IS NOT NULL AND 
-        ${containers.eta} != '' AND
-        (${containers.eta}::date < CURRENT_DATE) AND
-        ${containers.status} NOT IN ('arrived', 'unloaded', 'gate-out', 'delivered')
-      `);
-    const delayedCount = Number(delayedResult[0]?.count || 0);
-
-    // High Risk count
-    const highRiskResult = await db.select({ count: sql<number>`count(*)` })
       .from(containers)
       .where(sql`${baseCondition} AND ${containers.riskLevel} = 'high'`);
     const highRiskCount = Number(highRiskResult[0]?.count || 0);

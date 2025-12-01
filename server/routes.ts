@@ -11,6 +11,7 @@ import { sendShipmentToCargoesFlow, trackCargoesFlowPost, uploadDocumentsToCargo
 import { handleTmsWebhook, sendTestWebhook, retryWebhook } from "./webhooks/tms-webhook.js";
 import { getPollingStatus } from "./polling-scheduler.js";
 import { syncCarriersFromCargoesFlow } from "./services/cargoes-flow-carrier-sync.js";
+import { CargoesFlowRiskAssessmentService } from "./services/cargoes-flow-risk-assessment.js";
 
 function calculateShipmentStatus(milestones: Milestone[]): string {
   if (!milestones || milestones.length === 0) {
@@ -314,6 +315,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (cargoesFlowShipment.mblNumber) {
         const allShipmentsForMbl = await storage.getAllCargoesFlowShipmentsByMbl(cargoesFlowShipment.mblNumber);
         console.log(`[Shipment Detail] MBL ${cargoesFlowShipment.mblNumber} has ${allShipmentsForMbl.length} containers`);
+        
+        // Initialize risk assessment service
+        const riskAssessmentService = new CargoesFlowRiskAssessmentService(storage);
+        
         allContainers = allShipmentsForMbl.map(ship => {
           const shipRawData = ship.rawData as any || {};
           // Extract container-specific rawData from rawData.containers array if it exists
@@ -329,6 +334,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           // Debug: Log TMS reference lookup
           console.log(`[GET Shipment] Container ${ship.containerNumber}: tmsReference=${containerData.tmsReference || ship.taiShipmentId || 'NOT FOUND'}, containersArray.length=${containersArray.length}`);
+
+          // Calculate risk for THIS specific container/shipment
+          const individualRiskAssessment = riskAssessmentService.assessShipmentRisk(ship);
 
           return {
             id: ship.id,
@@ -351,9 +359,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
             rawData: {
               ...shipRawData,
               ...containerRawData, // Include container-specific rawData (including rail)
-              // Use individual shipment's risk data, not aggregated
-              riskLevel: shipRawData.riskLevel,
-              riskReasons: shipRawData.riskReasons,
+              // Use freshly calculated individual risk assessment for THIS container only
+              riskLevel: individualRiskAssessment.riskLevel,
+              riskReasons: individualRiskAssessment.riskReasons,
+              riskScore: individualRiskAssessment.riskScore,
             },
           };
         });

@@ -1424,18 +1424,7 @@ export default function CargoesFlowShipmentDetail() {
                     const containerData = container.rawData || {};
                     const containerEvents = containerData.shipmentEvents || [];
                     const riskLevel = containerData.riskLevel;
-                    // Deduplicate risk reasons and keep only unique messages
-                    const allRiskReasons = containerData.riskReasons || [];
-                    const riskReasons = Array.from(new Set(allRiskReasons));
-                    
-                    // Debug: Log container to check tmsReference
-                    if (containerIndex === 0) {
-                      console.log('[Events Tab Container]', {
-                        containerNumber: container.containerNumber,
-                        tmsReference: container.tmsReference,
-                        allKeys: Object.keys(container)
-                      });
-                    }
+                    const riskReasons = containerData.riskReasons || [];
                     
                     return (
                       <Collapsible key={container.id || containerIndex} defaultOpen={containerIndex === 0}>

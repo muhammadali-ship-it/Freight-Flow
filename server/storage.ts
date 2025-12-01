@@ -1744,7 +1744,7 @@ export class DbStorage implements IStorage {
         const rawData = shipment.rawData as any || {};
         const riskLevel = rawData.riskLevel || 'low';
         const riskReasons = rawData.riskReasons || [];
-        
+
         // Extract TMS reference from rawData.containers if available
         const containersArray = rawData.containers || [];
         const containerInfo = containersArray.find((c: any) => c.containerNumber === shipment.containerNumber);
@@ -1767,12 +1767,12 @@ export class DbStorage implements IStorage {
         // Add container to existing group
         const group = grouped.get(mbl)!;
         const rawData = shipment.rawData as any || {};
-        
+
         // Extract TMS reference from rawData.containers if available
         const containersArray = rawData.containers || [];
         const containerInfo = containersArray.find((c: any) => c.containerNumber === shipment.containerNumber);
         const tmsReference = containerInfo?.tmsReference || null;
-        
+
         group.containers.push({
           containerNumber: shipment.containerNumber,
           shipmentReference: shipment.shipmentReference,
@@ -1813,6 +1813,7 @@ export class DbStorage implements IStorage {
         if (currentRawData.terminalAvailableForPickup !== undefined) groupRawData.terminalAvailableForPickup = currentRawData.terminalAvailableForPickup;
         if (currentRawData.demurrage) groupRawData.demurrage = currentRawData.demurrage;
         if (currentRawData.detention) groupRawData.detention = currentRawData.detention;
+        if (currentRawData.emptyInEvent) groupRawData.emptyInEvent = currentRawData.emptyInEvent;
 
         group.rawData = groupRawData;
       }
@@ -1952,7 +1953,7 @@ export class DbStorage implements IStorage {
       if (terminalData.terminalEmptyReturned || railData.emptyReturned) {
         isEmptyReturned = true;
       }
-      
+
       // Check for custom Empty In event with actual date
       if (rawData.emptyInEvent?.actualDate) {
         isEmptyReturned = true;
@@ -2230,13 +2231,13 @@ export class DbStorage implements IStorage {
       if (rawData.terminalEmptyReturned || railData.emptyReturned) {
         isEmptyReturned = true;
       }
-      
+
       // Check for custom Empty In event with actual date
       if (rawData.emptyInEvent?.actualDate) {
         isEmptyReturned = true;
         console.log(`[Empty Returned Filter] Shipment ${shipment.id} (${shipment.containerNumber}) marked as empty returned due to emptyInEvent`);
       }
-      
+
       // Debug: Log when checking empty returned status
       if (kpiFilter === 'empty-returned' && shipment.containerNumber) {
         console.log(`[Empty Returned Filter] Checking ${shipment.containerNumber}:`, {

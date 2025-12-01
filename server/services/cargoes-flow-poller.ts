@@ -339,6 +339,16 @@ async function processAndStoreShipmentsWithStats(shipments: CargoesFlowShipmentD
             }
           });
 
+          // Look up TMS reference for each container in the merged list
+          for (const container of mergedContainers) {
+            if (container.containerNumber && !container.tmsReference) {
+              const containerPost = await storage.getCargoesFlowPostByContainer(container.containerNumber);
+              if (containerPost && containerPost.taiShipmentId) {
+                container.tmsReference = containerPost.taiShipmentId;
+              }
+            }
+          }
+
           mergedRawData.containers = mergedContainers;
         } else if (shipment.containerNumber) {
           // No existing containers array, but we have a containerNumber from API

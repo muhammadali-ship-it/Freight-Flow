@@ -506,6 +506,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log(`[Container Update] Updating shipment ${targetShipment.id} for container ${containerNumber}`);
         console.log(`[Container Update] Empty In Event being saved:`, JSON.stringify(updatedRawData.emptyInEvent, null, 2));
 
+        // Update subStatus if Empty In event is the latest
+        if (emptyInEvent && (emptyInEvent.actualDate || emptyInEvent.estimatedDate)) {
+          const existingEvents = updatedRawData.shipmentEvents || [];
+          const emptyInDate = new Date(emptyInEvent.actualDate || emptyInEvent.estimatedDate).getTime();
+          
+          // Find the latest existing event date
+          let latestEventDate = 0;
+          existingEvents.forEach((event: any) => {
+            const eventDate = new Date(event.actualTime || event.estimateTime || 0).getTime();
+            if (eventDate > latestEventDate) {
+              latestEventDate = eventDate;
+            }
+          });
+          
+          // If Empty In is the latest event, update subStatus
+          if (emptyInDate >= latestEventDate) {
+            updatedRawData.subStatus1 = 'Empty In';
+            updatedRawData.subStatus2 = emptyInEvent.location || '';
+            console.log(`[Container Update] Updated subStatus to Empty In`);
+          }
+        }
+
         // Helper function to set value only if it's not an empty string
         const setValueIfProvided = (key: string, value: any) => {
           if (value !== undefined && value !== null && value !== '') {
@@ -552,6 +574,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
 
           console.log(`[Container Update] Successfully updated shipment ${targetShipment.id}`);
+          
+          // If we updated a different shipment than the one being viewed, also update the main shipment's subStatus
+          if (targetShipment.id !== shipmentId && updatedRawData.subStatus1) {
+            const mainShipment = await storage.getCargoesFlowShipmentById(shipmentId);
+            if (mainShipment) {
+              const mainRawData = mainShipment.rawData as any || {};
+              await storage.updateCargoesFlowShipment(shipmentId, {
+                rawData: {
+                  ...mainRawData,
+                  subStatus1: updatedRawData.subStatus1,
+                  subStatus2: updatedRawData.subStatus2,
+                },
+              });
+              console.log(`[Container Update] Also updated main shipment ${shipmentId} subStatus`);
+            }
+          }
           
           // Return the originally requested shipment (which might be different from targetShipment)
           // This ensures the frontend gets the full MBL group data

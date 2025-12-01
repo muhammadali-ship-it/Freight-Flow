@@ -1496,12 +1496,35 @@ export default function CargoesFlowShipmentDetail() {
                     const riskLevel = containerData.riskLevel;
                     const riskReasons = containerData.riskReasons || [];
                     
+                    // Merge Empty In event with other events and sort by date (most recent first)
+                    let allEvents = [...containerEvents];
+                    
+                    // Add Empty In event if it exists
+                    if (containerData.emptyInEvent?.estimatedDate || containerData.emptyInEvent?.actualDate) {
+                      allEvents.push({
+                        name: 'Empty In',
+                        code: 'emptyIn',
+                        location: containerData.emptyInEvent.location,
+                        estimateTime: containerData.emptyInEvent.estimatedDate,
+                        actualTime: containerData.emptyInEvent.actualDate,
+                        isCustomEvent: true,
+                      });
+                    }
+                    
+                    // Sort events by date (most recent first)
+                    allEvents.sort((a, b) => {
+                      const dateA = new Date(a.actualTime || a.estimateTime || 0).getTime();
+                      const dateB = new Date(b.actualTime || b.estimateTime || 0).getTime();
+                      return dateB - dateA; // Descending order (newest first)
+                    });
+                    
                     // Debug: Log empty in event data
                     if (containerIndex === 0) {
                       console.log('[Empty In Event Debug]', {
                         containerNumber: container.containerNumber,
                         emptyInEvent: containerData.emptyInEvent,
                         hasEmptyIn: !!(containerData.emptyInEvent?.estimatedDate || containerData.emptyInEvent?.actualDate),
+                        allEvents: allEvents.length,
                         rawData: containerData
                       });
                     }
@@ -1637,83 +1660,64 @@ export default function CargoesFlowShipmentDetail() {
                               {/* Container Events */}
                               <div>
                                 <h4 className="text-sm font-medium mb-3">Events Timeline</h4>
-                                {containerEvents.length === 0 && !containerData.emptyInEvent?.estimatedDate && !containerData.emptyInEvent?.actualDate ? (
+                                {allEvents.length === 0 ? (
                                   <p className="text-sm text-muted-foreground">No events recorded for this container</p>
                                 ) : (
                                   <div className="space-y-4">
-                                    {/* Cargoes Flow Events */}
-                                    {containerEvents.map((event: any, eventIndex: number) => (
-                                      <div key={eventIndex} className="flex gap-4 pb-4 border-b">
-                                        <div className="flex-shrink-0">
-                                          <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                                            <MapPin className="h-5 w-5 text-primary" />
+                                    {allEvents.map((event: any, eventIndex: number) => {
+                                      const isCustomEvent = event.isCustomEvent;
+                                      const isActual = !!event.actualTime;
+                                      
+                                      return (
+                                        <div key={eventIndex} className={`flex gap-4 pb-4 ${eventIndex < allEvents.length - 1 ? 'border-b' : ''}`}>
+                                          <div className="flex-shrink-0">
+                                            <div className={`h-10 w-10 rounded-full flex items-center justify-center ${
+                                              isCustomEvent 
+                                                ? (isActual ? 'bg-green-500/10' : 'bg-blue-500/10')
+                                                : 'bg-primary/10'
+                                            }`}>
+                                              {isCustomEvent ? (
+                                                isActual ? (
+                                                  <CheckCircle2 className="h-5 w-5 text-green-600" />
+                                                ) : (
+                                                  <Clock className="h-5 w-5 text-blue-600" />
+                                                )
+                                              ) : (
+                                                <MapPin className="h-5 w-5 text-primary" />
+                                              )}
+                                            </div>
+                                          </div>
+                                          <div className="flex-1">
+                                            <p className="font-medium">{event.name || event.code}</p>
+                                            {event.location && (
+                                              <p className="text-sm text-muted-foreground">{event.location}</p>
+                                            )}
+                                            {event.locationTerminalName && (
+                                              <p className="text-xs text-muted-foreground">{event.locationTerminalName}</p>
+                                            )}
+                                            {event.transportName && (
+                                              <p className="text-xs text-muted-foreground">
+                                                {event.transportMode === 'vessel' ? '🚢' : event.transportMode === 'truck' ? '🚚' : ''}
+                                                {' '}{event.transportName}
+                                                {event.tripNumber && ` (${event.tripNumber})`}
+                                              </p>
+                                            )}
+                                            <div className="flex gap-4 mt-2 text-xs text-muted-foreground">
+                                              {event.estimateTime && !event.actualTime && (
+                                                <span className={isCustomEvent ? 'text-blue-600' : ''}>
+                                                  Estimated: {formatDateOnly(event.estimateTime)}
+                                                </span>
+                                              )}
+                                              {event.actualTime && (
+                                                <span className="text-green-600 dark:text-green-400">
+                                                  Actual: {formatDateOnly(event.actualTime)}
+                                                </span>
+                                              )}
+                                            </div>
                                           </div>
                                         </div>
-                                        <div className="flex-1">
-                                          <p className="font-medium">{event.name || event.code}</p>
-                                          {event.location && (
-                                            <p className="text-sm text-muted-foreground">{event.location}</p>
-                                          )}
-                                          {event.locationTerminalName && (
-                                            <p className="text-xs text-muted-foreground">{event.locationTerminalName}</p>
-                                          )}
-                                          {event.transportName && (
-                                            <p className="text-xs text-muted-foreground">
-                                              {event.transportMode === 'vessel' ? '🚢' : event.transportMode === 'truck' ? '🚚' : ''}
-                                              {' '}{event.transportName}
-                                              {event.tripNumber && ` (${event.tripNumber})`}
-                                            </p>
-                                          )}
-                                          <div className="flex gap-4 mt-2 text-xs text-muted-foreground">
-                                            {event.estimateTime && (
-                                              <span>Estimated: {formatDateOnly(event.estimateTime)}</span>
-                                            )}
-                                            {event.actualTime && (
-                                              <span className="text-green-600 dark:text-green-400">
-                                                Actual: {formatDateOnly(event.actualTime)}
-                                              </span>
-                                            )}
-                                          </div>
-                                        </div>
-                                      </div>
-                                    ))}
-                                    
-                                    {/* Empty In Event (Custom) - Always at the end */}
-                                    {(containerData.emptyInEvent?.estimatedDate || containerData.emptyInEvent?.actualDate) && (
-                                      <div className="flex gap-4 pb-4">
-                                        <div className="flex-shrink-0">
-                                          <div className={`h-10 w-10 rounded-full flex items-center justify-center ${
-                                            containerData.emptyInEvent.actualDate 
-                                              ? 'bg-green-500/10' 
-                                              : 'bg-blue-500/10'
-                                          }`}>
-                                            {containerData.emptyInEvent.actualDate ? (
-                                              <CheckCircle2 className="h-5 w-5 text-green-600" />
-                                            ) : (
-                                              <Clock className="h-5 w-5 text-blue-600" />
-                                            )}
-                                          </div>
-                                        </div>
-                                        <div className="flex-1">
-                                          <p className="font-medium">Empty In</p>
-                                          {containerData.emptyInEvent.location && (
-                                            <p className="text-sm text-muted-foreground">{containerData.emptyInEvent.location}</p>
-                                          )}
-                                          <div className="flex gap-4 mt-2 text-xs text-muted-foreground">
-                                            {containerData.emptyInEvent.estimatedDate && !containerData.emptyInEvent.actualDate && (
-                                              <span className="text-blue-600">
-                                                Estimated: {formatDateOnly(containerData.emptyInEvent.estimatedDate)}
-                                              </span>
-                                            )}
-                                            {containerData.emptyInEvent.actualDate && (
-                                              <span className="text-green-600 dark:text-green-400">
-                                                Actual: {formatDateOnly(containerData.emptyInEvent.actualDate)}
-                                              </span>
-                                            )}
-                                          </div>
-                                        </div>
-                                      </div>
-                                    )}
+                                      );
+                                    })}
                                   </div>
                                 )}
                               </div>

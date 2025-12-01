@@ -1823,6 +1823,15 @@ export default function CargoesFlowShipmentDetail() {
                         const containerData = container.rawData || {};
                         const riskLevel = containerData.riskLevel;
                         const riskReasons = containerData.riskReasons || [];
+                        
+                        // Debug: Log container data to see if tmsReference is present
+                        if (index === 0) {
+                          console.log('[Container Debug]', {
+                            containerNumber: container.containerNumber,
+                            tmsReference: container.tmsReference,
+                            allKeys: Object.keys(container)
+                          });
+                        }
 
                         return (
                           <div key={container.id || index} className="rounded-lg border p-4 space-y-3 hover-elevate">

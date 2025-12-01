@@ -327,10 +327,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
             console.log(`[GET Shipment] Rail data found for ${ship.containerNumber}: railNumber=${railInfo.railNumber || 'N/A'}, available=${railInfo.available !== undefined ? railInfo.available : 'N/A'}`);
           }
 
+          // Debug: Log TMS reference lookup
+          console.log(`[GET Shipment] Container ${ship.containerNumber}: tmsReference=${containerData.tmsReference || 'NOT FOUND'}, containersArray.length=${containersArray.length}`);
+
           return {
             id: ship.id,
             containerNumber: ship.containerNumber,
             shipmentReference: ship.shipmentReference,
+            tmsReference: containerData.tmsReference || null,
             containerType: ship.containerType,
             bookingReference: ship.bookingNumber,
             voyageNumber: ship.voyageNumber,

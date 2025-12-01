@@ -54,8 +54,8 @@ export class CargoesFlowRiskAssessmentService {
         
         // Only add risk if vessel hasn't arrived at destination
         if (!hasArrivedAtDestination) {
-          riskScore += 3;
-          riskReasons.push(`ETA passed ${daysPastEta} day(s) ago - container delayed`);
+        riskScore += 3;
+        riskReasons.push(`ETA passed ${daysPastEta} day(s) ago - container delayed`);
         }
       }
     }

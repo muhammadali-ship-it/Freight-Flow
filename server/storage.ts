@@ -1873,6 +1873,44 @@ export class DbStorage implements IStorage {
     };
   }
 
+  // Helper method to calculate demurrage cost based on LFD and Full Out date
+  public calculateDemurrageCost(
+    lastFreeDay: string | null | undefined,
+    demurrageCostPerDay: number | string | null | undefined,
+    terminalFullOut: string | null | undefined
+  ): number {
+    if (!lastFreeDay || !demurrageCostPerDay) {
+      return 0;
+    }
+
+    const costPerDay = typeof demurrageCostPerDay === 'string' ? parseFloat(demurrageCostPerDay) : demurrageCostPerDay;
+
+    if (isNaN(costPerDay) || costPerDay <= 0) {
+      return 0;
+    }
+
+    const lfdDate = new Date(lastFreeDay);
+    lfdDate.setHours(0, 0, 0, 0);
+
+    // Start counting from day AFTER LFD
+    const startDate = new Date(lfdDate);
+    startDate.setDate(startDate.getDate() + 1);
+
+    // End date is either Full Out date or today
+    const endDate = terminalFullOut ? new Date(terminalFullOut) : new Date();
+    endDate.setHours(0, 0, 0, 0);
+
+    // If Full Out happened before or on LFD, no demurrage
+    if (endDate <= lfdDate) {
+      return 0;
+    }
+
+    // Calculate days (inclusive)
+    const daysDiff = Math.max(0, Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+
+    return Math.round(daysDiff * costPerDay * 100) / 100; // Round to 2 decimal places
+  }
+
   // Helper method to calculate statistics from shipment data
   private calculateStats(shipments: any[]): {
     total: number;

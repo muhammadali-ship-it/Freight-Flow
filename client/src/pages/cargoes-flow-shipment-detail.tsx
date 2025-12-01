@@ -777,7 +777,7 @@ export default function CargoesFlowShipmentDetail() {
   };
 
   // Build containers list from containers array only (to avoid duplicates)
-  const availableContainers: any[] = shipment?.containers && (shipment.containers as any[]).length > 0 
+  const availableContainers: any[] = shipment?.containers && (shipment.containers as any[]).length > 0
     ? (shipment.containers as any[])
     : [];
 
@@ -1118,6 +1118,19 @@ export default function CargoesFlowShipmentDetail() {
                   <div>
                     <p className="text-xs text-muted-foreground">Demurrage</p>
                     <p className="text-sm font-medium">${rawData.demurrage}</p>
+                  </div>
+                )}
+                {rawData.calculatedDemurrageCost !== undefined && rawData.calculatedDemurrageCost > 0 && (
+                  <div>
+                    <p className="text-xs text-muted-foreground">Total Demurrage Cost</p>
+                    <p className="text-sm font-semibold text-red-600 dark:text-red-400">
+                      ${rawData.calculatedDemurrageCost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </p>
+                    {rawData.demurrageCost && (
+                      <p className="text-xs text-muted-foreground">
+                        (${rawData.demurrageCost}/day)
+                      </p>
+                    )}
                   </div>
                 )}
                 {rawData.detention && (
@@ -1495,10 +1508,10 @@ export default function CargoesFlowShipmentDetail() {
                     const containerEvents = containerData.shipmentEvents || [];
                     const riskLevel = containerData.riskLevel;
                     const riskReasons = containerData.riskReasons || [];
-                    
+
                     // Merge Empty In event with other events and sort by date (most recent first)
                     let allEvents = [...containerEvents];
-                    
+
                     // Add Empty In event if it exists
                     if (containerData.emptyInEvent?.estimatedDate || containerData.emptyInEvent?.actualDate) {
                       allEvents.push({
@@ -1510,14 +1523,14 @@ export default function CargoesFlowShipmentDetail() {
                         isCustomEvent: true,
                       });
                     }
-                    
+
                     // Sort events by date (most recent first)
                     allEvents.sort((a, b) => {
                       const dateA = new Date(a.actualTime || a.estimateTime || 0).getTime();
                       const dateB = new Date(b.actualTime || b.estimateTime || 0).getTime();
                       return dateB - dateA; // Descending order (newest first)
                     });
-                    
+
                     // Debug: Log empty in event data
                     if (containerIndex === 0) {
                       console.log('[Empty In Event Debug]', {
@@ -1528,7 +1541,7 @@ export default function CargoesFlowShipmentDetail() {
                         rawData: containerData
                       });
                     }
-                    
+
                     return (
                       <Collapsible key={container.id || containerIndex} defaultOpen={containerIndex === 0}>
                         <div className="rounded-lg border">
@@ -1667,15 +1680,14 @@ export default function CargoesFlowShipmentDetail() {
                                     {allEvents.map((event: any, eventIndex: number) => {
                                       const isCustomEvent = event.isCustomEvent;
                                       const isActual = !!event.actualTime;
-                                      
+
                                       return (
                                         <div key={eventIndex} className={`flex gap-4 pb-4 ${eventIndex < allEvents.length - 1 ? 'border-b' : ''}`}>
                                           <div className="flex-shrink-0">
-                                            <div className={`h-10 w-10 rounded-full flex items-center justify-center ${
-                                              isCustomEvent 
-                                                ? (isActual ? 'bg-green-500/10' : 'bg-blue-500/10')
-                                                : 'bg-primary/10'
-                                            }`}>
+                                            <div className={`h-10 w-10 rounded-full flex items-center justify-center ${isCustomEvent
+                                              ? (isActual ? 'bg-green-500/10' : 'bg-blue-500/10')
+                                              : 'bg-primary/10'
+                                              }`}>
                                               {isCustomEvent ? (
                                                 isActual ? (
                                                   <CheckCircle2 className="h-5 w-5 text-green-600" />
@@ -2025,6 +2037,19 @@ export default function CargoesFlowShipmentDetail() {
                           <div>
                             <p className="text-xs text-muted-foreground">Demurrage</p>
                             <p className="text-sm font-medium">${rawData.demurrage}</p>
+                          </div>
+                        )}
+                        {rawData.calculatedDemurrageCost !== undefined && rawData.calculatedDemurrageCost > 0 && (
+                          <div>
+                            <p className="text-xs text-muted-foreground">Total Demurrage Cost</p>
+                            <p className="text-sm font-semibold text-red-600 dark:text-red-400">
+                              ${rawData.calculatedDemurrageCost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </p>
+                            {rawData.demurrageCost && (
+                              <p className="text-xs text-muted-foreground">
+                                (${rawData.demurrageCost}/day)
+                              </p>
+                            )}
                           </div>
                         )}
                         {rawData.detention && (
@@ -2839,7 +2864,7 @@ export default function CargoesFlowShipmentDetail() {
             <p className="text-sm text-muted-foreground mb-4">
               Track when the empty container is returned. Enter estimated date if planned, or actual date if already returned.
             </p>
-            
+
             <div className="space-y-3 p-4 border rounded-lg bg-muted/20">
               <div>
                 <Label htmlFor="empty-in-location">Location</Label>

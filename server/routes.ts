@@ -315,10 +315,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (cargoesFlowShipment.mblNumber) {
         const allShipmentsForMbl = await storage.getAllCargoesFlowShipmentsByMbl(cargoesFlowShipment.mblNumber);
         console.log(`[Shipment Detail] MBL ${cargoesFlowShipment.mblNumber} has ${allShipmentsForMbl.length} containers`);
-        
+
         // Initialize risk assessment service
         const riskAssessmentService = new CargoesFlowRiskAssessmentService(storage);
-        
+
         allContainers = allShipmentsForMbl.map(ship => {
           const shipRawData = ship.rawData as any || {};
           // Extract container-specific rawData from rawData.containers array if it exists
@@ -366,6 +366,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
               riskLevel: individualRiskAssessment.riskLevel,
               riskReasons: individualRiskAssessment.riskReasons,
               riskScore: individualRiskAssessment.riskScore,
+              // Calculate total demurrage cost based on LFD and Full Out date
+              calculatedDemurrageCost: storage.calculateDemurrageCost(
+                shipRawData.lastFreeDay || containerRawData.lastFreeDay,
+                shipRawData.demurrageCost || containerRawData.demurrageCost,
+                shipRawData.terminalFullOut || containerRawData.terminalFullOut
+              ),
             },
           };
         });
@@ -413,7 +419,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           containerStatus: container.containerStatus || cargoesFlowShipment.status,
           rawData: container.rawData || {},
         }));
-        
+
         // Debug: Log empty in event data for first container
         if (allContainers.length > 0 && allContainers[0].rawData?.emptyInEvent) {
           console.log(`[GET Shipment] Empty In Event for ${allContainers[0].containerNumber}:`, JSON.stringify(allContainers[0].rawData.emptyInEvent, null, 2));
@@ -472,7 +478,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // If this is an MBL-grouped shipment and we're updating a specific container,
         // we need to find and update the specific shipment row for that container
         let targetShipment = cargoesFlowShipment;
-        
+
         if (containerNumber && cargoesFlowShipment.mblNumber) {
           // Get all shipments for this MBL
           const allShipmentsForMbl = await storage.getAllCargoesFlowShipmentsByMbl(cargoesFlowShipment.mblNumber);
@@ -483,7 +489,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             console.log(`[Container Update] Found specific shipment for container ${containerNumber}: ID ${containerShipment.id}`);
           }
         }
-        
+
         // Update the target shipment (either the specific container's shipment or the main one)
         await storage.updateCargoesFlowShipment(targetShipment.id, {
           containerNumber,
@@ -502,7 +508,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           pickupAppointment: pickupAppointment !== undefined ? pickupAppointment : targetShipment.rawData?.pickupAppointment,
           emptyInEvent: emptyInEvent !== undefined ? emptyInEvent : targetShipment.rawData?.emptyInEvent || {},
         };
-        
+
         console.log(`[Container Update] Updating shipment ${targetShipment.id} for container ${containerNumber}`);
         console.log(`[Container Update] Empty In Event being saved:`, JSON.stringify(updatedRawData.emptyInEvent, null, 2));
 
@@ -510,7 +516,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (emptyInEvent && (emptyInEvent.actualDate || emptyInEvent.estimatedDate)) {
           const existingEvents = updatedRawData.shipmentEvents || [];
           const emptyInDate = new Date(emptyInEvent.actualDate || emptyInEvent.estimatedDate).getTime();
-          
+
           // Find the latest existing event date
           let latestEventDate = 0;
           existingEvents.forEach((event: any) => {
@@ -519,7 +525,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               latestEventDate = eventDate;
             }
           });
-          
+
           // If Empty In is the latest event, update subStatus
           if (emptyInDate >= latestEventDate) {
             updatedRawData.subStatus1 = 'Empty In';
@@ -574,7 +580,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
 
           console.log(`[Container Update] Successfully updated shipment ${targetShipment.id}`);
-          
+
           // If we updated a different shipment than the one being viewed, also update the main shipment's subStatus
           if (targetShipment.id !== shipmentId && updatedRawData.subStatus1) {
             const mainShipment = await storage.getCargoesFlowShipmentById(shipmentId);
@@ -590,7 +596,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               console.log(`[Container Update] Also updated main shipment ${shipmentId} subStatus`);
             }
           }
-          
+
           // Return the originally requested shipment (which might be different from targetShipment)
           // This ensures the frontend gets the full MBL group data
           const updated = await storage.getCargoesFlowShipmentById(shipmentId);

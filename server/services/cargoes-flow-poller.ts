@@ -181,6 +181,13 @@ async function processAndStoreShipmentsWithStats(shipments: CargoesFlowShipmentD
           taiShipmentId = containerPost.taiShipmentId;
           office = containerPost.office;
           salesRepNames = containerPost.salesRepNames;
+          
+          // Debug log for first few containers
+          if (i < 3) {
+            console.log(`[Cargoes Flow Poller] Found TMS reference for container ${shipment.containerNumber}: ${containerTmsReference}`);
+          }
+        } else if (i < 3) {
+          console.log(`[Cargoes Flow Poller] No TMS reference found for container ${shipment.containerNumber}`);
         }
       }
 
@@ -191,6 +198,10 @@ async function processAndStoreShipmentsWithStats(shipments: CargoesFlowShipmentD
           taiShipmentId = cargoesFlowPost.taiShipmentId;
           office = cargoesFlowPost.office;
           salesRepNames = cargoesFlowPost.salesRepNames;
+          
+          if (i < 3) {
+            console.log(`[Cargoes Flow Poller] Using MBL lookup for ${mblNumber}, found TAI ID: ${taiShipmentId}`);
+          }
         }
       }
 

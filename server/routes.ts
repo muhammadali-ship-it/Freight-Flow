@@ -328,13 +328,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
 
           // Debug: Log TMS reference lookup
-          console.log(`[GET Shipment] Container ${ship.containerNumber}: tmsReference=${containerData.tmsReference || 'NOT FOUND'}, containersArray.length=${containersArray.length}`);
+          console.log(`[GET Shipment] Container ${ship.containerNumber}: tmsReference=${containerData.tmsReference || ship.taiShipmentId || 'NOT FOUND'}, containersArray.length=${containersArray.length}`);
 
           return {
             id: ship.id,
             containerNumber: ship.containerNumber,
             shipmentReference: ship.shipmentReference,
-            tmsReference: containerData.tmsReference || null,
+            tmsReference: containerData.tmsReference || ship.taiShipmentId || null,
             containerType: ship.containerType,
             bookingReference: ship.bookingNumber,
             voyageNumber: ship.voyageNumber,
@@ -351,6 +351,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
             rawData: {
               ...shipRawData,
               ...containerRawData, // Include container-specific rawData (including rail)
+              // Use individual shipment's risk data, not aggregated
+              riskLevel: shipRawData.riskLevel,
+              riskReasons: shipRawData.riskReasons,
             },
           };
         });

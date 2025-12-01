@@ -2,7 +2,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useRoute, Link } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Package, MapPin, Calendar, Ship, User, FileText, Truck, Weight, Box, Clock, CheckCircle2, XCircle, Plus, Edit, Users, AlertCircle, Check, ChevronsUpDown } from "lucide-react";
+import { ArrowLeft, Package, MapPin, Calendar, Ship, User, FileText, Truck, Weight, Box, Clock, CheckCircle2, XCircle, Plus, Edit, Users, AlertCircle, Check, ChevronsUpDown, ChevronDown } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -706,18 +706,10 @@ export default function CargoesFlowShipmentDetail() {
     },
   });
 
-  // Build containers list from both containerNumber field and containers array
-  const availableContainers: any[] = [];
-  if (shipment?.containerNumber) {
-    availableContainers.push({
-      id: shipment.containerNumber,
-      containerNumber: shipment.containerNumber,
-      containerType: shipment.containerType || "N/A"
-    });
-  }
-  if (shipment?.containers && (shipment.containers as any[]).length > 0) {
-    availableContainers.push(...(shipment.containers as any[]));
-  }
+  // Build containers list from containers array only (to avoid duplicates)
+  const availableContainers: any[] = shipment?.containers && (shipment.containers as any[]).length > 0 
+    ? (shipment.containers as any[])
+    : [];
 
   if (isLoading) {
     return (
@@ -1413,38 +1405,209 @@ export default function CargoesFlowShipmentDetail() {
         <TabsContent value="events" className="mt-6">
           <Card>
             <CardHeader>
-              <CardTitle>Shipment Events</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                <Package className="h-5 w-5" />
+                Container Events
+              </CardTitle>
+              {shipment.mblNumber && (
+                <p className="text-sm text-muted-foreground mt-1">
+                  MBL: {shipment.mblNumber}
+                </p>
+              )}
             </CardHeader>
             <CardContent>
-              {events.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No events recorded</p>
+              {availableContainers.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No container information available</p>
               ) : (
-                <div className="space-y-4">
-                  {events.map((event: any, index: number) => (
-                    <div key={index} className="flex gap-4 pb-4 border-b last:border-0">
-                      <div className="flex-shrink-0">
-                        <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                          <MapPin className="h-5 w-5 text-primary" />
+                <div className="space-y-3">
+                  {availableContainers.map((container: any, containerIndex: number) => {
+                    const containerData = container.rawData || {};
+                    const containerEvents = containerData.shipmentEvents || [];
+                    const riskLevel = containerData.riskLevel;
+                    // Deduplicate risk reasons and keep only unique messages
+                    const allRiskReasons = containerData.riskReasons || [];
+                    const riskReasons = Array.from(new Set(allRiskReasons));
+                    
+                    // Debug: Log container to check tmsReference
+                    if (containerIndex === 0) {
+                      console.log('[Events Tab Container]', {
+                        containerNumber: container.containerNumber,
+                        tmsReference: container.tmsReference,
+                        allKeys: Object.keys(container)
+                      });
+                    }
+                    
+                    return (
+                      <Collapsible key={container.id || containerIndex} defaultOpen={containerIndex === 0}>
+                        <div className="rounded-lg border">
+                          <CollapsibleTrigger className="w-full">
+                            <div className="flex items-center justify-between p-4 hover:bg-muted/50 transition-colors">
+                              <div className="flex items-center gap-3">
+                                <div className="h-10 w-10 rounded-full bg-blue-500/10 flex items-center justify-center flex-shrink-0">
+                                  <Package className="h-5 w-5 text-blue-600" />
+                                </div>
+                                <div className="text-left">
+                                  <p className="font-medium font-mono">{container.containerNumber || `Container ${containerIndex + 1}`}</p>
+                                  <div className="flex items-center gap-2 mt-1">
+                                    {container.containerType && (
+                                      <span className="text-xs text-muted-foreground">{container.containerType}</span>
+                                    )}
+                                    {container.tmsReference && (
+                                      <span className="text-xs text-muted-foreground">• Ref: {container.tmsReference}</span>
+                                    )}
+                                    {containerEvents.length > 0 && (
+                                      <span className="text-xs text-muted-foreground">• {containerEvents.length} events</span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                {container.containerStatus && (
+                                  <Badge variant="outline" className="text-xs">
+                                    {container.containerStatus}
+                                  </Badge>
+                                )}
+                                {riskLevel && riskLevel !== 'low' && (
+                                  <Badge
+                                    variant={riskLevel === 'critical' || riskLevel === 'high' ? 'destructive' : 'secondary'}
+                                    className="text-xs"
+                                    title={riskReasons.join(', ')}
+                                  >
+                                    {riskLevel === 'critical' ? '🔴 Critical' :
+                                      riskLevel === 'high' ? '🟠 High Risk' :
+                                        '🟡 Medium Risk'}
+                                  </Badge>
+                                )}
+                                <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform duration-200 group-data-[state=open]:rotate-180" />
+                              </div>
+                            </div>
+                          </CollapsibleTrigger>
+                          <CollapsibleContent>
+                            <div className="border-t p-4 bg-muted/20">
+                              {/* Container Details */}
+                              <div className="mb-4 pb-4 border-b">
+                                <h4 className="text-sm font-medium mb-3">Container Details</h4>
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                                  {container.bookingReference && (
+                                    <div>
+                                      <p className="text-xs text-muted-foreground">Booking</p>
+                                      <p className="font-mono text-xs">{container.bookingReference}</p>
+                                    </div>
+                                  )}
+                                  {container.weight && (
+                                    <div>
+                                      <p className="text-xs text-muted-foreground">Weight</p>
+                                      <p className="text-xs">{container.weight} lbs</p>
+                                    </div>
+                                  )}
+                                  {container.voyageNumber && (
+                                    <div>
+                                      <p className="text-xs text-muted-foreground">Voyage</p>
+                                      <p className="font-mono text-xs">{container.voyageNumber}</p>
+                                    </div>
+                                  )}
+                                  {container.sealNumber && (
+                                    <div>
+                                      <p className="text-xs text-muted-foreground">Seal</p>
+                                      <p className="font-mono text-xs">{container.sealNumber}</p>
+                                    </div>
+                                  )}
+                                  {container.containerEta && (
+                                    <div>
+                                      <p className="text-xs text-muted-foreground">Container ETA</p>
+                                      <p className="text-xs">{formatDateOnly(container.containerEta)}</p>
+                                    </div>
+                                  )}
+                                  {container.containerAta && (
+                                    <div>
+                                      <p className="text-xs text-muted-foreground">Container ATA</p>
+                                      <p className="text-xs text-green-600 dark:text-green-400">{formatDateOnly(container.containerAta)}</p>
+                                    </div>
+                                  )}
+                                  {container.lastFreeDay && (
+                                    <div>
+                                      <p className="text-xs text-muted-foreground">Last Free Day</p>
+                                      <p className="text-xs">{formatDateOnly(container.lastFreeDay)}</p>
+                                    </div>
+                                  )}
+                                  {container.dailyFeeRate && (
+                                    <div>
+                                      <p className="text-xs text-muted-foreground">Daily Fee Rate</p>
+                                      <p className="text-xs">${container.dailyFeeRate}</p>
+                                    </div>
+                                  )}
+                                  {container.detentionFee && (
+                                    <div>
+                                      <p className="text-xs text-muted-foreground">Detention Fee</p>
+                                      <p className="text-xs">${container.detentionFee}</p>
+                                    </div>
+                                  )}
+                                  {container.pickupChassis && (
+                                    <div>
+                                      <p className="text-xs text-muted-foreground">Pickup Chassis</p>
+                                      <p className="text-xs">{container.pickupChassis}</p>
+                                    </div>
+                                  )}
+                                  {container.yardLocation && (
+                                    <div>
+                                      <p className="text-xs text-muted-foreground">Yard Location</p>
+                                      <p className="text-xs">{container.yardLocation}</p>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Container Events */}
+                              <div>
+                                <h4 className="text-sm font-medium mb-3">Events Timeline</h4>
+                                {containerEvents.length === 0 ? (
+                                  <p className="text-sm text-muted-foreground">No events recorded for this container</p>
+                                ) : (
+                                  <div className="space-y-4">
+                                    {containerEvents.map((event: any, eventIndex: number) => (
+                                      <div key={eventIndex} className="flex gap-4 pb-4 border-b last:border-0">
+                                        <div className="flex-shrink-0">
+                                          <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                                            <MapPin className="h-5 w-5 text-primary" />
+                                          </div>
+                                        </div>
+                                        <div className="flex-1">
+                                          <p className="font-medium">{event.name || event.code}</p>
+                                          {event.location && (
+                                            <p className="text-sm text-muted-foreground">{event.location}</p>
+                                          )}
+                                          {event.locationTerminalName && (
+                                            <p className="text-xs text-muted-foreground">{event.locationTerminalName}</p>
+                                          )}
+                                          {event.transportName && (
+                                            <p className="text-xs text-muted-foreground">
+                                              {event.transportMode === 'vessel' ? '🚢' : event.transportMode === 'truck' ? '🚚' : ''}
+                                              {' '}{event.transportName}
+                                              {event.tripNumber && ` (${event.tripNumber})`}
+                                            </p>
+                                          )}
+                                          <div className="flex gap-4 mt-2 text-xs text-muted-foreground">
+                                            {event.estimateTime && (
+                                              <span>Estimated: {formatDateOnly(event.estimateTime)}</span>
+                                            )}
+                                            {event.actualTime && (
+                                              <span className="text-green-600 dark:text-green-400">
+                                                Actual: {formatDateOnly(event.actualTime)}
+                                              </span>
+                                            )}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </CollapsibleContent>
                         </div>
-                      </div>
-                      <div className="flex-1">
-                        <p className="font-medium">{event.name || event.code}</p>
-                        {event.location && (
-                          <p className="text-sm text-muted-foreground">{event.location}</p>
-                        )}
-                        <div className="flex gap-4 mt-2 text-xs text-muted-foreground">
-                          {event.estimateTime && (
-                            <span>Estimated: {formatDateOnly(event.estimateTime)}</span>
-                          )}
-                          {event.actualTime && (
-                            <span className="text-green-600 dark:text-green-400">
-                              Actual: {formatDateOnly(event.actualTime)}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+                      </Collapsible>
+                    );
+                  })}
                 </div>
               )}
             </CardContent>
@@ -1793,160 +1956,6 @@ export default function CargoesFlowShipmentDetail() {
                     </div>
                   );
                 })()}
-              </CardContent>
-            </Card>
-
-            {/* Container Information Section */}
-            <Card data-testid="card-container-info">
-              <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-4">
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <Package className="h-5 w-5" />
-                  Container Information
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {(shipment.containers && (shipment.containers as any[]).length > 0) ? (
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <h4 className="font-medium">
-                        {(shipment.containers as any[]).length === 1 ? 'Container Details' : `All Containers (${(shipment.containers as any[]).length})`}
-                      </h4>
-                      <Badge variant="outline" className="text-xs">
-                        MBL: {shipment.mblNumber}
-                      </Badge>
-                    </div>
-                    <div className="space-y-3">
-                      {(shipment.containers as any[]).map((container: any, index: number) => {
-                        const containerData = container.rawData || {};
-                        const riskLevel = containerData.riskLevel;
-                        const riskReasons = containerData.riskReasons || [];
-                        
-                        // Debug: Log container data to see if tmsReference is present
-                        if (index === 0) {
-                          console.log('[Container Debug]', {
-                            containerNumber: container.containerNumber,
-                            tmsReference: container.tmsReference,
-                            allKeys: Object.keys(container)
-                          });
-                        }
-
-                        return (
-                          <div key={container.id || index} className="rounded-lg border p-4 space-y-3 hover-elevate">
-                            <div className="flex items-start justify-between gap-4 flex-wrap">
-                              <div className="flex items-center gap-3">
-                                <div className="h-10 w-10 rounded-full bg-blue-500/10 flex items-center justify-center flex-shrink-0">
-                                  <Package className="h-5 w-5 text-blue-600" />
-                                </div>
-                                <div>
-                                  <p className="font-medium font-mono">{container.containerNumber || `Container ${index + 1}`}</p>
-                                  {container.containerType && (
-                                    <p className="text-xs text-muted-foreground">{container.containerType}</p>
-                                  )}
-                                  {container.tmsReference && (
-                                    <p className="text-xs text-muted-foreground">Ref: {container.tmsReference}</p>
-                                  )}
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-2 flex-wrap">
-                                {container.containerStatus && (
-                                  <Badge variant="outline" className="text-xs">
-                                    {container.containerStatus}
-                                  </Badge>
-                                )}
-                                {riskLevel && riskLevel !== 'low' && (
-                                  <Badge
-                                    variant={riskLevel === 'critical' || riskLevel === 'high' ? 'destructive' : 'secondary'}
-                                    className="text-xs"
-                                    title={riskReasons.join(', ')}
-                                  >
-                                    {riskLevel === 'critical' ? '🔴 Critical' :
-                                      riskLevel === 'high' ? '🟠 High Risk' :
-                                        '🟡 Medium Risk'}
-                                  </Badge>
-                                )}
-                              </div>
-                            </div>
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 pt-2 border-t text-sm">
-                              {container.bookingReference && (
-                                <div>
-                                  <p className="text-xs text-muted-foreground">Booking</p>
-                                  <p className="font-mono text-xs">{container.bookingReference}</p>
-                                </div>
-                              )}
-                              {container.weight && (
-                                <div>
-                                  <p className="text-xs text-muted-foreground">Weight</p>
-                                  <p className="text-xs">{container.weight} lbs</p>
-                                </div>
-                              )}
-                              {container.voyageNumber && (
-                                <div>
-                                  <p className="text-xs text-muted-foreground">Voyage</p>
-                                  <p className="font-mono text-xs">{container.voyageNumber}</p>
-                                </div>
-                              )}
-                              {container.sealNumber && (
-                                <div>
-                                  <p className="text-xs text-muted-foreground">Seal</p>
-                                  <p className="font-mono text-xs">{container.sealNumber}</p>
-                                </div>
-                              )}
-                              {container.containerEta && (
-                                <div>
-                                  <p className="text-xs text-muted-foreground">Container ETA</p>
-                                  <p className="text-xs">{formatDateOnly(container.containerEta)}</p>
-                                </div>
-                              )}
-                              {container.containerAta && (
-                                <div>
-                                  <p className="text-xs text-muted-foreground">Container ATA</p>
-                                  <p className="text-xs text-green-600 dark:text-green-400">{formatDateOnly(container.containerAta)}</p>
-                                </div>
-                              )}
-                              {container.lastFreeDay && (
-                                <div>
-                                  <p className="text-xs text-muted-foreground">Last Free Day</p>
-                                  <p className="text-xs">{formatDateOnly(container.lastFreeDay)}</p>
-                                </div>
-                              )}
-                              {container.dailyFeeRate && (
-                                <div>
-                                  <p className="text-xs text-muted-foreground">Daily Fee Rate</p>
-                                  <p className="text-xs">${container.dailyFeeRate}</p>
-                                </div>
-                              )}
-                              {container.detentionFee && (
-                                <div>
-                                  <p className="text-xs text-muted-foreground">Detention Fee</p>
-                                  <p className="text-xs">${container.detentionFee}</p>
-                                </div>
-                              )}
-                              {container.pickupChassis && (
-                                <div>
-                                  <p className="text-xs text-muted-foreground">Pickup Chassis</p>
-                                  <p className="text-xs">{container.pickupChassis}</p>
-                                </div>
-                              )}
-                              {container.yardLocation && (
-                                <div>
-                                  <p className="text-xs text-muted-foreground">Yard Location</p>
-                                  <p className="text-xs">{container.yardLocation}</p>
-                                </div>
-                              )}
-                            </div>
-
-                            {/* Rail Information Section removed as per user request */}
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="text-center py-12">
-                    <Package className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
-                    <p className="text-muted-foreground">No container information available</p>
-                  </div>
-                )}
               </CardContent>
             </Card>
 

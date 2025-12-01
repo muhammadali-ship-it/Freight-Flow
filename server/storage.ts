@@ -1956,6 +1956,7 @@ export class DbStorage implements IStorage {
       // Check for custom Empty In event with actual date
       if (rawData.emptyInEvent?.actualDate) {
         isEmptyReturned = true;
+        console.log(`[Stats] Shipment ${shipment.id} (${shipment.containerNumber}) counted as empty returned due to emptyInEvent:`, rawData.emptyInEvent.actualDate);
       }
 
       if (isEmptyReturned) {
@@ -2233,6 +2234,18 @@ export class DbStorage implements IStorage {
       // Check for custom Empty In event with actual date
       if (rawData.emptyInEvent?.actualDate) {
         isEmptyReturned = true;
+        console.log(`[Empty Returned Filter] Shipment ${shipment.id} (${shipment.containerNumber}) marked as empty returned due to emptyInEvent`);
+      }
+      
+      // Debug: Log when checking empty returned status
+      if (kpiFilter === 'empty-returned' && shipment.containerNumber) {
+        console.log(`[Empty Returned Filter] Checking ${shipment.containerNumber}:`, {
+          hasEmptyInEvent: !!rawData.emptyInEvent,
+          emptyInActualDate: rawData.emptyInEvent?.actualDate,
+          isEmptyReturned,
+          terminalEmptyReturned: rawData.terminalEmptyReturned,
+          railEmptyReturned: railData.emptyReturned
+        });
       }
 
       switch (kpiFilter) {

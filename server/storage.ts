@@ -1952,6 +1952,11 @@ export class DbStorage implements IStorage {
       if (terminalData.terminalEmptyReturned || railData.emptyReturned) {
         isEmptyReturned = true;
       }
+      
+      // Check for custom Empty In event with actual date
+      if (rawData.emptyInEvent?.actualDate) {
+        isEmptyReturned = true;
+      }
 
       if (isEmptyReturned) {
         emptyReturned += containerCount;
@@ -2222,6 +2227,11 @@ export class DbStorage implements IStorage {
       const firstContainer = containersArray[0] || {};
       const railData = firstContainer.rawData?.rail || {};
       if (rawData.terminalEmptyReturned || railData.emptyReturned) {
+        isEmptyReturned = true;
+      }
+      
+      // Check for custom Empty In event with actual date
+      if (rawData.emptyInEvent?.actualDate) {
         isEmptyReturned = true;
       }
 

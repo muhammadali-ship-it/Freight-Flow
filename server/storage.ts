@@ -1744,12 +1744,18 @@ export class DbStorage implements IStorage {
         const rawData = shipment.rawData as any || {};
         const riskLevel = rawData.riskLevel || 'low';
         const riskReasons = rawData.riskReasons || [];
+        
+        // Extract TMS reference from rawData.containers if available
+        const containersArray = rawData.containers || [];
+        const containerInfo = containersArray.find((c: any) => c.containerNumber === shipment.containerNumber);
+        const tmsReference = containerInfo?.tmsReference || null;
 
         grouped.set(mbl, {
           ...shipment,
           containers: [{
             containerNumber: shipment.containerNumber,
             shipmentReference: shipment.shipmentReference,
+            tmsReference: tmsReference,
             id: shipment.id,
           }],
           containerCount: 1,
@@ -1760,9 +1766,17 @@ export class DbStorage implements IStorage {
       } else {
         // Add container to existing group
         const group = grouped.get(mbl)!;
+        const rawData = shipment.rawData as any || {};
+        
+        // Extract TMS reference from rawData.containers if available
+        const containersArray = rawData.containers || [];
+        const containerInfo = containersArray.find((c: any) => c.containerNumber === shipment.containerNumber);
+        const tmsReference = containerInfo?.tmsReference || null;
+        
         group.containers.push({
           containerNumber: shipment.containerNumber,
           shipmentReference: shipment.shipmentReference,
+          tmsReference: tmsReference,
           id: shipment.id,
         });
         group.containerCount++;

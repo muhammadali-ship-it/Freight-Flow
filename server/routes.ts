@@ -378,6 +378,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           id: cargoesFlowShipment.id,
           containerNumber: container.containerNumber || cargoesFlowShipment.containerNumber,
           shipmentReference: cargoesFlowShipment.shipmentReference,
+          tmsReference: container.tmsReference || null,
           containerType: container.containerType || cargoesFlowShipment.containerType,
           bookingReference: container.bookingReference || cargoesFlowShipment.bookingNumber,
           voyageNumber: container.voyageNumber || cargoesFlowShipment.voyageNumber,

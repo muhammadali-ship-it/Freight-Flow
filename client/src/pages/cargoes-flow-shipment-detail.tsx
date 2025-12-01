@@ -760,9 +760,6 @@ export default function CargoesFlowShipmentDetail() {
 
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold" data-testid="heading-shipment-reference">
-            Shipment {shipment.taiShipmentId || shipment.shipmentReference}
-          </h1>
           <p className="text-muted-foreground">
             {shipment.mblNumber && `MBL: ${shipment.mblNumber}`}
             {rawData.blNumber && `BL: ${rawData.blNumber}`}
@@ -805,10 +802,6 @@ export default function CargoesFlowShipmentDetail() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
-            <div>
-              <p className="text-xs text-muted-foreground">Shipment Number</p>
-              <p className="font-mono text-sm">{shipment.taiShipmentId || shipment.shipmentReference}</p>
-            </div>
             {shipment.bookingNumber && (
               <div>
                 <p className="text-xs text-muted-foreground">Booking Number</p>
@@ -821,10 +814,14 @@ export default function CargoesFlowShipmentDetail() {
                 <p className="font-mono text-sm">{shipment.mblNumber || rawData.blNumber}</p>
               </div>
             )}
-            {shipment.containerNumber && (
+            {availableContainers.length > 0 && (
               <div>
-                <p className="text-xs text-muted-foreground">Container Number</p>
-                <p className="font-mono text-sm">{shipment.containerNumber}</p>
+                <p className="text-xs text-muted-foreground">Container Number{availableContainers.length > 1 ? 's' : ''}</p>
+                <div className="space-y-1">
+                  {availableContainers.map((container: any, index: number) => (
+                    <p key={index} className="font-mono text-sm">{container.containerNumber}</p>
+                  ))}
+                </div>
               </div>
             )}
           </CardContent>

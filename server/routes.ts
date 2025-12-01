@@ -436,14 +436,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         voyageNumber,
         bookingReference,
         sealNumber,
-        weight,
-        containerEta,
-        containerAta,
         lastFreeDay,
-        dailyFeeRate,
-        detentionFee,
-        pickupChassis,
-        yardLocation,
+        lastReturnDate,
+        demurrageCost,
+        detentionCost,
+        pickupAppointment,
+        emptyInEvent,
         // Terminal info fields
         terminalName,
         terminalPort,
@@ -476,25 +474,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
         let updatedContainers;
 
         if (existingContainers.length > 0) {
-          // Update existing first container
+          // Find the container to update by matching containerNumber or use first container
+          const containerToUpdateIndex = containerNumber 
+            ? existingContainers.findIndex((c: any) => c.containerNumber === containerNumber)
+            : 0;
+          const targetIndex = containerToUpdateIndex >= 0 ? containerToUpdateIndex : 0;
+          
+          // Update the specific container
           updatedContainers = [...existingContainers];
-          updatedContainers[0] = {
-            ...updatedContainers[0],
-            containerNumber: containerNumber !== undefined ? containerNumber : updatedContainers[0].containerNumber,
-            containerType: containerType !== undefined ? containerType : updatedContainers[0].containerType,
-            containerStatus: containerStatus !== undefined ? containerStatus : updatedContainers[0].containerStatus,
-            voyageNumber: voyageNumber !== undefined ? voyageNumber : updatedContainers[0].voyageNumber,
-            bookingReference: bookingReference !== undefined ? bookingReference : updatedContainers[0].bookingReference,
-            sealNumber: sealNumber !== undefined ? sealNumber : updatedContainers[0].sealNumber,
-            weight: weight !== undefined ? weight : updatedContainers[0].weight,
-            containerEta: containerEta !== undefined ? containerEta : updatedContainers[0].containerEta,
-            containerAta: containerAta !== undefined ? containerAta : updatedContainers[0].containerAta,
-            lastFreeDay: lastFreeDay !== undefined ? lastFreeDay : updatedContainers[0].lastFreeDay,
-            dailyFeeRate: dailyFeeRate !== undefined ? dailyFeeRate : updatedContainers[0].dailyFeeRate,
-            detentionFee: detentionFee !== undefined ? detentionFee : updatedContainers[0].detentionFee,
-            pickupChassis: pickupChassis !== undefined ? pickupChassis : updatedContainers[0].pickupChassis,
-            yardLocation: yardLocation !== undefined ? yardLocation : updatedContainers[0].yardLocation,
+          updatedContainers[targetIndex] = {
+            ...updatedContainers[targetIndex],
+            containerNumber: containerNumber !== undefined ? containerNumber : updatedContainers[targetIndex].containerNumber,
+            containerType: containerType !== undefined ? containerType : updatedContainers[targetIndex].containerType,
+            containerStatus: containerStatus !== undefined ? containerStatus : updatedContainers[targetIndex].containerStatus,
+            voyageNumber: voyageNumber !== undefined ? voyageNumber : updatedContainers[targetIndex].voyageNumber,
+            bookingReference: bookingReference !== undefined ? bookingReference : updatedContainers[targetIndex].bookingReference,
+            sealNumber: sealNumber !== undefined ? sealNumber : updatedContainers[targetIndex].sealNumber,
+            lastFreeDay: lastFreeDay !== undefined ? lastFreeDay : updatedContainers[targetIndex].lastFreeDay,
+            rawData: {
+              ...(updatedContainers[targetIndex].rawData || {}),
+              lastReturnDate: lastReturnDate !== undefined ? lastReturnDate : updatedContainers[targetIndex].rawData?.lastReturnDate,
+              demurrageCost: demurrageCost !== undefined ? demurrageCost : updatedContainers[targetIndex].rawData?.demurrageCost,
+              detentionCost: detentionCost !== undefined ? detentionCost : updatedContainers[targetIndex].rawData?.detentionCost,
+              pickupAppointment: pickupAppointment !== undefined ? pickupAppointment : updatedContainers[targetIndex].rawData?.pickupAppointment,
+              emptyInEvent: emptyInEvent !== undefined ? emptyInEvent : updatedContainers[targetIndex].rawData?.emptyInEvent || {},
+            },
           };
+          
+          console.log(`[Container Update] Updated container at index ${targetIndex} (${containerNumber || 'first container'})`);
         } else {
           // Create new container from shipment data
           updatedContainers = [{
@@ -504,14 +511,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
             voyageNumber: voyageNumber || cargoesFlowShipment.voyageNumber || "",
             bookingReference: bookingReference || cargoesFlowShipment.bookingNumber || "",
             sealNumber: sealNumber || "",
-            weight: weight || "",
-            containerEta: containerEta || "",
-            containerAta: containerAta || "",
             lastFreeDay: lastFreeDay || "",
-            dailyFeeRate: dailyFeeRate || "",
-            detentionFee: detentionFee || "",
-            pickupChassis: pickupChassis || "",
-            yardLocation: yardLocation || "",
+            rawData: {
+              lastReturnDate: lastReturnDate || "",
+              demurrageCost: demurrageCost || "",
+              detentionCost: detentionCost || "",
+              pickupAppointment: pickupAppointment || "",
+              emptyInEvent: emptyInEvent || {},
+            },
           }];
         }
 

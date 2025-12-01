@@ -314,7 +314,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (cargoesFlowShipment.mblNumber) {
         const allShipmentsForMbl = await storage.getAllCargoesFlowShipmentsByMbl(cargoesFlowShipment.mblNumber);
         console.log(`[Shipment Detail] MBL ${cargoesFlowShipment.mblNumber} has ${allShipmentsForMbl.length} containers`);
-        allContainers = allShipmentsForMbl.map(ship => {
+
+        allContainers = await Promise.all(allShipmentsForMbl.map(async (ship) => {
           const shipRawData = ship.rawData as any || {};
           // Extract container-specific rawData from rawData.containers array if it exists
           const containersArray = shipRawData.containers || [];
@@ -327,10 +328,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
             console.log(`[GET Shipment] Rail data found for ${ship.containerNumber}: railNumber=${railInfo.railNumber || 'N/A'}, available=${railInfo.available !== undefined ? railInfo.available : 'N/A'}`);
           }
 
+          // Look up local container to get TMS reference
+          let tmsReference = null;
+          if (ship.containerNumber) {
+            const localContainer = await storage.getContainerByNumber(ship.containerNumber);
+            if (localContainer) {
+              tmsReference = localContainer.reference;
+            }
+          }
+
           return {
             id: ship.id,
             containerNumber: ship.containerNumber,
             shipmentReference: ship.shipmentReference,
+            tmsReference, // Add TMS reference from local DB
             containerType: ship.containerType,
             bookingReference: ship.bookingNumber,
             voyageNumber: ship.voyageNumber,
@@ -349,7 +360,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               ...containerRawData, // Include container-specific rawData (including rail)
             },
           };
-        });
+        }));
       }
 
       // Extract milestones from rawData if they exist
@@ -374,25 +385,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // If no containers from MBL grouping, use containers from rawData.containers
       if (allContainers.length === 0 && rawData.containers && Array.isArray(rawData.containers)) {
-        allContainers = rawData.containers.map((container: any, index: number) => ({
-          id: cargoesFlowShipment.id,
-          containerNumber: container.containerNumber || cargoesFlowShipment.containerNumber,
-          shipmentReference: cargoesFlowShipment.shipmentReference,
-          tmsReference: container.tmsReference || null,
-          containerType: container.containerType || cargoesFlowShipment.containerType,
-          bookingReference: container.bookingReference || cargoesFlowShipment.bookingNumber,
-          voyageNumber: container.voyageNumber || cargoesFlowShipment.voyageNumber,
-          weight: container.weight,
-          sealNumber: container.sealNumber,
-          containerEta: container.containerEta || cargoesFlowShipment.eta,
-          containerAta: container.containerAta,
-          lastFreeDay: container.lastFreeDay,
-          dailyFeeRate: container.dailyFeeRate,
-          detentionFee: container.detentionFee,
-          pickupChassis: container.pickupChassis,
-          yardLocation: container.yardLocation,
-          containerStatus: container.containerStatus || cargoesFlowShipment.status,
-          rawData: container.rawData || {},
+        allContainers = await Promise.all(rawData.containers.map(async (container: any, index: number) => {
+          // Look up local container to get TMS reference
+          let tmsReference = container.tmsReference || null;
+          const containerNum = container.containerNumber || cargoesFlowShipment.containerNumber;
+
+          if (!tmsReference && containerNum) {
+            const localContainer = await storage.getContainerByNumber(containerNum);
+            if (localContainer) {
+              tmsReference = localContainer.reference;
+            }
+          }
+
+          return {
+            id: cargoesFlowShipment.id,
+            containerNumber: containerNum,
+            shipmentReference: cargoesFlowShipment.shipmentReference,
+            tmsReference,
+            containerType: container.containerType || cargoesFlowShipment.containerType,
+            bookingReference: container.bookingReference || cargoesFlowShipment.bookingNumber,
+            voyageNumber: container.voyageNumber || cargoesFlowShipment.voyageNumber,
+            weight: container.weight,
+            sealNumber: container.sealNumber,
+            containerEta: container.containerEta || cargoesFlowShipment.eta,
+            containerAta: container.containerAta,
+            lastFreeDay: container.lastFreeDay,
+            dailyFeeRate: container.dailyFeeRate,
+            detentionFee: container.detentionFee,
+            pickupChassis: container.pickupChassis,
+            yardLocation: container.yardLocation,
+            containerStatus: container.containerStatus || cargoesFlowShipment.status,
+            rawData: container.rawData || {},
+          };
         }));
       }
 
@@ -537,10 +561,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Check if Full Container Gate Out event exists
           const existingRawData = cargoesFlowShipment.rawData as any || {};
           const events = existingRawData.shipmentEvents || existingRawData.milestones || existingRawData.events || [];
-          const hasGateOut = events.some((e: any) => 
+          const hasGateOut = events.some((e: any) =>
             e.code === 'gateOutWithContainerFull' && e.actualTime
           );
-          
+
           // If gate out occurred, clear all holds regardless of input
           updatedRawData.terminalHolds = hasGateOut ? [] : terminalHolds;
         }

@@ -332,8 +332,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
             console.log(`[GET Shipment] Rail data found for ${ship.containerNumber}: railNumber=${railInfo.railNumber || 'N/A'}, available=${railInfo.available !== undefined ? railInfo.available : 'N/A'}`);
           }
 
-          // Debug: Log TMS reference lookup
+          // Debug: Log TMS reference lookup and emptyInEvent
           console.log(`[GET Shipment] Container ${ship.containerNumber}: tmsReference=${containerData.tmsReference || ship.taiShipmentId || 'NOT FOUND'}, containersArray.length=${containersArray.length}`);
+          console.log(`[GET Shipment] Container ${ship.containerNumber} - shipRawData.emptyInEvent:`, shipRawData.emptyInEvent);
+          console.log(`[GET Shipment] Container ${ship.containerNumber} - containerData:`, JSON.stringify(containerData, null, 2));
+          console.log(`[GET Shipment] Container ${ship.containerNumber} - containerRawData.emptyInEvent:`, containerRawData.emptyInEvent);
 
           // Calculate risk for THIS specific container/shipment
           const individualRiskAssessment = riskAssessmentService.assessShipmentRisk(ship);
@@ -466,73 +469,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const cargoesFlowShipment = await storage.getCargoesFlowShipmentById(shipmentId);
 
       if (cargoesFlowShipment) {
-        // Update Cargoes Flow shipment table
-        await storage.updateCargoesFlowShipment(shipmentId, {
+        // If this is an MBL-grouped shipment and we're updating a specific container,
+        // we need to find and update the specific shipment row for that container
+        let targetShipment = cargoesFlowShipment;
+        
+        if (containerNumber && cargoesFlowShipment.mblNumber) {
+          // Get all shipments for this MBL
+          const allShipmentsForMbl = await storage.getAllCargoesFlowShipmentsByMbl(cargoesFlowShipment.mblNumber);
+          // Find the specific shipment for this container
+          const containerShipment = allShipmentsForMbl.find(s => s.containerNumber === containerNumber);
+          if (containerShipment) {
+            targetShipment = containerShipment;
+            console.log(`[Container Update] Found specific shipment for container ${containerNumber}: ID ${containerShipment.id}`);
+          }
+        }
+        
+        // Update the target shipment (either the specific container's shipment or the main one)
+        await storage.updateCargoesFlowShipment(targetShipment.id, {
           containerNumber,
           containerType,
           voyageNumber,
           bookingNumber: bookingReference,
         });
 
-        // Update or create containers array in rawData
-        const existingContainers = cargoesFlowShipment.rawData?.containers || [];
-        let updatedContainers;
-
-        if (existingContainers.length > 0) {
-          // Find the container to update by matching containerNumber or use first container
-          const containerToUpdateIndex = containerNumber 
-            ? existingContainers.findIndex((c: any) => c.containerNumber === containerNumber)
-            : 0;
-          const targetIndex = containerToUpdateIndex >= 0 ? containerToUpdateIndex : 0;
-          
-          // Update the specific container
-          updatedContainers = [...existingContainers];
-          updatedContainers[targetIndex] = {
-            ...updatedContainers[targetIndex],
-            containerNumber: containerNumber !== undefined ? containerNumber : updatedContainers[targetIndex].containerNumber,
-            containerType: containerType !== undefined ? containerType : updatedContainers[targetIndex].containerType,
-            containerStatus: containerStatus !== undefined ? containerStatus : updatedContainers[targetIndex].containerStatus,
-            voyageNumber: voyageNumber !== undefined ? voyageNumber : updatedContainers[targetIndex].voyageNumber,
-            bookingReference: bookingReference !== undefined ? bookingReference : updatedContainers[targetIndex].bookingReference,
-            sealNumber: sealNumber !== undefined ? sealNumber : updatedContainers[targetIndex].sealNumber,
-            lastFreeDay: lastFreeDay !== undefined ? lastFreeDay : updatedContainers[targetIndex].lastFreeDay,
-            rawData: {
-              ...(updatedContainers[targetIndex].rawData || {}),
-              lastReturnDate: lastReturnDate !== undefined ? lastReturnDate : updatedContainers[targetIndex].rawData?.lastReturnDate,
-              demurrageCost: demurrageCost !== undefined ? demurrageCost : updatedContainers[targetIndex].rawData?.demurrageCost,
-              detentionCost: detentionCost !== undefined ? detentionCost : updatedContainers[targetIndex].rawData?.detentionCost,
-              pickupAppointment: pickupAppointment !== undefined ? pickupAppointment : updatedContainers[targetIndex].rawData?.pickupAppointment,
-              emptyInEvent: emptyInEvent !== undefined ? emptyInEvent : updatedContainers[targetIndex].rawData?.emptyInEvent || {},
-            },
-          };
-          
-          console.log(`[Container Update] Updated container at index ${targetIndex} (${containerNumber || 'first container'})`);
-          console.log(`[Container Update] Empty In Event:`, JSON.stringify(updatedContainers[targetIndex].rawData?.emptyInEvent, null, 2));
-        } else {
-          // Create new container from shipment data
-          updatedContainers = [{
-            containerNumber: containerNumber || cargoesFlowShipment.containerNumber || "",
-            containerType: containerType || cargoesFlowShipment.containerType || "",
-            containerStatus: containerStatus || "",
-            voyageNumber: voyageNumber || cargoesFlowShipment.voyageNumber || "",
-            bookingReference: bookingReference || cargoesFlowShipment.bookingNumber || "",
-            sealNumber: sealNumber || "",
-            lastFreeDay: lastFreeDay || "",
-            rawData: {
-              lastReturnDate: lastReturnDate || "",
-              demurrageCost: demurrageCost || "",
-              detentionCost: detentionCost || "",
-              pickupAppointment: pickupAppointment || "",
-              emptyInEvent: emptyInEvent || {},
-            },
-          }];
-        }
-
-        // Update terminal info in rawData
+        // For MBL-grouped shipments, store the container-specific data directly in the shipment's rawData
+        // rather than in a containers array
         const updatedRawData: any = {
-          ...cargoesFlowShipment.rawData,
-          containers: updatedContainers,
+          ...targetShipment.rawData,
+          lastReturnDate: lastReturnDate !== undefined ? lastReturnDate : targetShipment.rawData?.lastReturnDate,
+          demurrageCost: demurrageCost !== undefined ? demurrageCost : targetShipment.rawData?.demurrageCost,
+          detentionCost: detentionCost !== undefined ? detentionCost : targetShipment.rawData?.detentionCost,
+          pickupAppointment: pickupAppointment !== undefined ? pickupAppointment : targetShipment.rawData?.pickupAppointment,
+          emptyInEvent: emptyInEvent !== undefined ? emptyInEvent : targetShipment.rawData?.emptyInEvent || {},
         };
+        
+        console.log(`[Container Update] Updating shipment ${targetShipment.id} for container ${containerNumber}`);
+        console.log(`[Container Update] Empty In Event being saved:`, JSON.stringify(updatedRawData.emptyInEvent, null, 2));
 
         // Helper function to set value only if it's not an empty string
         const setValueIfProvided = (key: string, value: any) => {
@@ -575,10 +547,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
 
         try {
-          await storage.updateCargoesFlowShipment(shipmentId, {
+          await storage.updateCargoesFlowShipment(targetShipment.id, {
             rawData: updatedRawData,
           });
 
+          console.log(`[Container Update] Successfully updated shipment ${targetShipment.id}`);
+          
+          // Return the originally requested shipment (which might be different from targetShipment)
+          // This ensures the frontend gets the full MBL group data
           const updated = await storage.getCargoesFlowShipmentById(shipmentId);
           if (!updated) {
             return res.status(404).json({ error: "Shipment not found after update" });

@@ -275,6 +275,7 @@ export interface IStorage {
   getCargoesFlowPostById(id: string): Promise<CargoesFlowPost | undefined>;
   getCargoesFlowPostByReference(shipmentReference: string): Promise<CargoesFlowPost | undefined>;
   getCargoesFlowPostByMbl(mblNumber: string): Promise<CargoesFlowPost | undefined>;
+  getCargoesFlowPostByContainer(containerNumber: string): Promise<CargoesFlowPost | undefined>;
   updateCargoesFlowPostStatus(id: string, status: string, responseData?: any, errorMessage?: string): Promise<CargoesFlowPost | undefined>;
 
   // Missing MBL Shipments
@@ -1489,6 +1490,14 @@ export class DbStorage implements IStorage {
   async getCargoesFlowPostByMbl(mblNumber: string): Promise<CargoesFlowPost | undefined> {
     const result = await db.select().from(cargoesFlowPosts)
       .where(eq(cargoesFlowPosts.mblNumber, mblNumber))
+      .orderBy(desc(cargoesFlowPosts.postedAt))
+      .limit(1);
+    return result[0];
+  }
+
+  async getCargoesFlowPostByContainer(containerNumber: string): Promise<CargoesFlowPost | undefined> {
+    const result = await db.select().from(cargoesFlowPosts)
+      .where(eq(cargoesFlowPosts.containerNumber, containerNumber))
       .orderBy(desc(cargoesFlowPosts.postedAt))
       .limit(1);
     return result[0];

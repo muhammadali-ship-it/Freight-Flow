@@ -1836,8 +1836,8 @@ export default function CargoesFlowShipmentDetail() {
                                   {container.containerType && (
                                     <p className="text-xs text-muted-foreground">{container.containerType}</p>
                                   )}
-                                  {container.shipmentReference && (
-                                    <p className="text-xs text-muted-foreground">Ref: {container.shipmentReference}</p>
+                                  {container.tmsReference && (
+                                    <p className="text-xs text-muted-foreground">Ref: {container.tmsReference}</p>
                                   )}
                                 </div>
                               </div>

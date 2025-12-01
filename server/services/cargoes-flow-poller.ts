@@ -167,12 +167,25 @@ async function processAndStoreShipmentsWithStats(shipments: CargoesFlowShipmentD
       const eta = shipment.eta || shipment.promisedEta || extractEtaFromLegs(shipment.shipmentLegs);
       const currentLocation = shipment.currentLocationName || shipment.currentLocation || null;
 
-      // Look up TAI shipment ID, office, and salesRepNames by MBL number from cargoes_flow_posts
+      // Look up TAI shipment ID, office, and salesRepNames by container number first, then by MBL
       let taiShipmentId: string | null = null;
       let office: string | null = null;
       let salesRepNames: string[] | null = null;
+      let containerTmsReference: string | null = null;
 
-      if (mblNumber) {
+      // First try to find by container number (more specific)
+      if (shipment.containerNumber) {
+        const containerPost = await storage.getCargoesFlowPostByContainer(shipment.containerNumber);
+        if (containerPost) {
+          containerTmsReference = containerPost.taiShipmentId;
+          taiShipmentId = containerPost.taiShipmentId;
+          office = containerPost.office;
+          salesRepNames = containerPost.salesRepNames;
+        }
+      }
+
+      // If not found by container, fallback to MBL lookup
+      if (!taiShipmentId && mblNumber) {
         const cargoesFlowPost = await storage.getCargoesFlowPostByMbl(mblNumber);
         if (cargoesFlowPost) {
           taiShipmentId = cargoesFlowPost.taiShipmentId;
@@ -318,7 +331,10 @@ async function processAndStoreShipmentsWithStats(shipments: CargoesFlowShipmentD
           mergedRawData.containers = mergedContainers;
         } else if (shipment.containerNumber) {
           // No existing containers array, but we have a containerNumber from API
-          mergedRawData.containers = [{ containerNumber: shipment.containerNumber }];
+          mergedRawData.containers = [{ 
+            containerNumber: shipment.containerNumber,
+            tmsReference: containerTmsReference 
+          }];
         }
       } else if (existing && existing.rawData) {
         // No MBL grouping, just use the single existing shipment's data
@@ -340,11 +356,20 @@ async function processAndStoreShipmentsWithStats(shipments: CargoesFlowShipmentD
         if (existingRawData.terminalLastFreeDay) mergedRawData.terminalLastFreeDay = existingRawData.terminalLastFreeDay;
         if (existingRawData.terminalDemurrage) mergedRawData.terminalDemurrage = existingRawData.terminalDemurrage;
 
-        // Preserve manually added containers array with rail data
+        // Preserve manually added containers array with rail data, but update TMS reference
         if (existingRawData.containers && Array.isArray(existingRawData.containers)) {
-          mergedRawData.containers = existingRawData.containers;
+          mergedRawData.containers = existingRawData.containers.map((c: any) => {
+            // If this is the current container, update its TMS reference
+            if (c.containerNumber === shipment.containerNumber && containerTmsReference) {
+              return { ...c, tmsReference: containerTmsReference };
+            }
+            return c;
+          });
         } else if (shipment.containerNumber) {
-          mergedRawData.containers = [{ containerNumber: shipment.containerNumber }];
+          mergedRawData.containers = [{ 
+            containerNumber: shipment.containerNumber,
+            tmsReference: containerTmsReference 
+          }];
         }
       }
 

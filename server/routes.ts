@@ -410,6 +410,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           containerStatus: container.containerStatus || cargoesFlowShipment.status,
           rawData: container.rawData || {},
         }));
+        
+        // Debug: Log empty in event data for first container
+        if (allContainers.length > 0 && allContainers[0].rawData?.emptyInEvent) {
+          console.log(`[GET Shipment] Empty In Event for ${allContainers[0].containerNumber}:`, JSON.stringify(allContainers[0].rawData.emptyInEvent, null, 2));
+        }
       }
 
       res.json({
@@ -502,6 +507,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           };
           
           console.log(`[Container Update] Updated container at index ${targetIndex} (${containerNumber || 'first container'})`);
+          console.log(`[Container Update] Empty In Event:`, JSON.stringify(updatedContainers[targetIndex].rawData?.emptyInEvent, null, 2));
         } else {
           // Create new container from shipment data
           updatedContainers = [{

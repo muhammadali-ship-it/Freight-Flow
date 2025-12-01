@@ -696,9 +696,13 @@ export default function CargoesFlowShipmentDetail() {
 
   const updateContainerMutation = useMutation({
     mutationFn: async (data: any) => {
-      await apiRequest("PATCH", `/api/shipments/${shipmentId}`, data);
+      console.log('[Container Update] Sending PATCH request with data:', data);
+      const response = await apiRequest("PATCH", `/api/shipments/${shipmentId}`, data);
+      console.log('[Container Update] PATCH response:', response);
+      return response;
     },
     onSuccess: () => {
+      console.log('[Container Update] Success, invalidating queries...');
       queryClient.invalidateQueries({ queryKey: ["/api/shipments", shipmentId] });
       toast({
         title: "Container updated",
@@ -716,7 +720,8 @@ export default function CargoesFlowShipmentDetail() {
   });
 
   // Handler to open edit container dialog
-  const handleEditContainer = (container: any) => {
+  const handleEditContainer = (e: React.MouseEvent, container: any) => {
+    e.stopPropagation(); // Prevent collapsible from toggling
     setSelectedContainerId(container.id);
     setSelectedContainerNumber(container.containerNumber);
     setContainerForm({
@@ -749,7 +754,7 @@ export default function CargoesFlowShipmentDetail() {
 
   // Handler to submit container updates
   const handleSubmitContainerUpdate = () => {
-    updateContainerMutation.mutate({
+    const updateData = {
       containerNumber: containerForm.containerNumber,
       containerType: containerForm.containerType,
       containerStatus: containerForm.containerStatus,
@@ -766,7 +771,9 @@ export default function CargoesFlowShipmentDetail() {
         estimatedDate: customEventForm.estimatedDate,
         actualDate: customEventForm.actualDate,
       },
-    });
+    };
+    console.log('[Container Update] Sending update data:', updateData);
+    updateContainerMutation.mutate(updateData);
   };
 
   // Build containers list from containers array only (to avoid duplicates)
@@ -1544,10 +1551,7 @@ export default function CargoesFlowShipmentDetail() {
                                   variant="ghost"
                                   size="icon"
                                   className="h-8 w-8"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleEditContainer(container);
-                                  }}
+                                  onClick={(e) => handleEditContainer(e, container)}
                                 >
                                   <Edit className="h-4 w-4" />
                                 </Button>

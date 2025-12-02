@@ -372,6 +372,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 shipRawData.demurrageCost || containerRawData.demurrageCost,
                 shipRawData.terminalFullOut || containerRawData.terminalFullOut
               ),
+              // Calculate total detention cost based on LRD and Empty In event date
+              calculatedDetentionCost: storage.calculateDetentionCost(
+                shipRawData.lastReturnDate || containerRawData.lastReturnDate,
+                shipRawData.detentionCost || containerRawData.detentionCost,
+                shipRawData.emptyInEvent?.actualDate || containerRawData.emptyInEvent?.actualDate
+              ),
             },
           };
         });

@@ -1911,6 +1911,44 @@ export class DbStorage implements IStorage {
     return Math.round(daysDiff * costPerDay * 100) / 100; // Round to 2 decimal places
   }
 
+  // Helper method to calculate detention cost based on LRD and Empty In event date
+  public calculateDetentionCost(
+    lastReturnDate: string | null | undefined,
+    detentionCostPerDay: number | string | null | undefined,
+    emptyInEventDate: string | null | undefined
+  ): number {
+    if (!lastReturnDate || !detentionCostPerDay) {
+      return 0;
+    }
+
+    const costPerDay = typeof detentionCostPerDay === 'string' ? parseFloat(detentionCostPerDay) : detentionCostPerDay;
+
+    if (isNaN(costPerDay) || costPerDay <= 0) {
+      return 0;
+    }
+
+    const lrdDate = new Date(lastReturnDate);
+    lrdDate.setHours(0, 0, 0, 0);
+
+    // Start counting from day AFTER LRD
+    const startDate = new Date(lrdDate);
+    startDate.setDate(startDate.getDate() + 1);
+
+    // End date is either Empty In event date or today
+    const endDate = emptyInEventDate ? new Date(emptyInEventDate) : new Date();
+    endDate.setHours(0, 0, 0, 0);
+
+    // If Empty In happened before or on LRD, no detention
+    if (endDate <= lrdDate) {
+      return 0;
+    }
+
+    // Calculate days (inclusive)
+    const daysDiff = Math.max(0, Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+
+    return Math.round(daysDiff * costPerDay * 100) / 100; // Round to 2 decimal places
+  }
+
   // Helper method to calculate statistics from shipment data
   private calculateStats(shipments: any[]): {
     total: number;

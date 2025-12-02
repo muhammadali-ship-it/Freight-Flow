@@ -1068,6 +1068,8 @@ export default function CargoesFlowShipmentDetail() {
           const hasTerminalInfo = rawData.terminalName || rawData.terminalPort || rawData.lastFreeDay || rawData.demurrage ||
             rawData.detention || rawData.terminalYardLocation || rawData.terminalPickupChassis || rawData.terminalFullOut ||
             rawData.terminalPickupAppointment || rawData.terminalEmptyReturned || rawData.terminalAvailableForPickup !== undefined ||
+            rawData.demurrageCost || rawData.calculatedDemurrageCost || // Added demurrage cost fields
+            rawData.detentionCost || rawData.calculatedDetentionCost || // Added detention cost fields
             gateOutEvent;
 
           if (!hasTerminalInfo) return null;
@@ -1641,6 +1643,32 @@ export default function CargoesFlowShipmentDetail() {
                                     <div>
                                       <p className="text-xs text-muted-foreground">Last Free Day</p>
                                       <p className="text-xs">{formatDateOnly(container.lastFreeDay)}</p>
+                                    </div>
+                                  )}
+                                  {container.rawData?.calculatedDemurrageCost !== undefined && container.rawData.calculatedDemurrageCost > 0 && (
+                                    <div>
+                                      <p className="text-xs text-muted-foreground">Total Demurrage Cost</p>
+                                      <p className="text-xs font-semibold text-red-600 dark:text-red-400">
+                                        ${container.rawData.calculatedDemurrageCost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                      </p>
+                                      {container.rawData.demurrageCost && (
+                                        <p className="text-[10px] text-muted-foreground">
+                                          (${container.rawData.demurrageCost}/day)
+                                        </p>
+                                      )}
+                                    </div>
+                                  )}
+                                  {container.rawData?.calculatedDetentionCost !== undefined && container.rawData.calculatedDetentionCost > 0 && (
+                                    <div>
+                                      <p className="text-xs text-muted-foreground">Total Detention Cost</p>
+                                      <p className="text-xs font-semibold text-orange-600 dark:text-orange-400">
+                                        ${container.rawData.calculatedDetentionCost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                      </p>
+                                      {container.rawData.detentionCost && (
+                                        <p className="text-[10px] text-muted-foreground">
+                                          (${container.rawData.detentionCost}/day)
+                                        </p>
+                                      )}
                                     </div>
                                   )}
                                   {container.dailyFeeRate && (

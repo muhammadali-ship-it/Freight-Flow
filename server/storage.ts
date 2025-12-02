@@ -1223,55 +1223,65 @@ export class DbStorage implements IStorage {
       detention: number;
     }>;
   }> {
-    // Get all containers with cost data
-    const allContainers = await db.select().from(containers);
+    // Get all shipments with their rawData
+    const allShipments = await db.select().from(cargoesFlowShipments);
 
-    // Calculate totals
+    // Calculate costs for each container
     let totalDemurrage = 0;
     let totalDetention = 0;
-    let totalException = 0;
     let demurrageCount = 0;
+    let detentionCount = 0;
 
-    const containerCosts = allContainers.map(c => {
-      const demurrage = parseFloat(c.demurrageFee || "0");
-      const detention = parseFloat(c.detentionFee || "0");
-      const exception = parseFloat(c.exceptionCost || "0");
-      const total = demurrage + detention + exception;
+    const containerCosts = allShipments.map(ship => {
+      const rawData = (ship.rawData as any) || {};
+
+      // Calculate demurrage cost
+      const demurrage = this.calculateDemurrageCost(
+        rawData.lastFreeDay,
+        rawData.demurrageCost,
+        rawData.terminalFullOut
+      );
+
+      // Calculate detention cost
+      const detention = this.calculateDetentionCost(
+        rawData.lastReturnDate,
+        rawData.detentionCost,
+        rawData.emptyInEvent?.actualDate
+      );
+
+      const total = demurrage + detention;
 
       totalDemurrage += demurrage;
       totalDetention += detention;
-      totalException += exception;
       if (demurrage > 0) demurrageCount++;
+      if (detention > 0) detentionCount++;
 
       return {
-        shipmentId: c.shipmentId,
-        containerNumber: c.containerNumber,
+        shipmentId: ship.id,
+        containerNumber: ship.containerNumber || 'Unknown',
         totalCost: total,
         demurrage,
         detention,
-        createdAt: c.createdAt,
+        createdAt: ship.createdAt,
       };
     });
 
-    const totalCost = totalDemurrage + totalDetention + totalException;
+    const totalCost = totalDemurrage + totalDetention;
     const avgDemurrage = demurrageCount > 0 ? totalDemurrage / demurrageCount : 0;
 
     // Cost by type
     const costByType = [
       { type: "Demurrage", value: totalDemurrage },
       { type: "Detention", value: totalDetention },
-      { type: "Exception", value: totalException },
     ];
 
     // Monthly trend - last 6 months
     const monthlyTrendMap = new Map<string, number>();
-    allContainers.forEach(c => {
+    containerCosts.forEach(c => {
       if (c.createdAt) {
         const date = new Date(c.createdAt);
         const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-        const cost = parseFloat(c.demurrageFee || "0") +
-          parseFloat(c.detentionFee || "0") +
-          parseFloat(c.exceptionCost || "0");
+        const cost = c.demurrage + c.detention;
         monthlyTrendMap.set(monthKey, (monthlyTrendMap.get(monthKey) || 0) + cost);
       }
     });
@@ -1281,7 +1291,7 @@ export class DbStorage implements IStorage {
       .sort((a, b) => a.month.localeCompare(b.month))
       .slice(-6);
 
-    // Top 10 shipments by cost
+    // Top 10 containers by cost
     const topShipmentsByCost = containerCosts
       .filter(c => c.totalCost > 0)
       .sort((a, b) => b.totalCost - a.totalCost)

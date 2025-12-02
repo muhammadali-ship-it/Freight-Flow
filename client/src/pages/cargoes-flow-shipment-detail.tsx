@@ -1645,6 +1645,12 @@ export default function CargoesFlowShipmentDetail() {
                                       <p className="text-xs">{formatDateOnly(container.lastFreeDay)}</p>
                                     </div>
                                   )}
+                                  {container.lastReturnDate && (
+                                    <div>
+                                      <p className="text-xs text-muted-foreground">Last Return Date</p>
+                                      <p className="text-xs">{formatDateOnly(container.lastReturnDate)}</p>
+                                    </div>
+                                  )}
                                   {container.rawData?.calculatedDemurrageCost !== undefined && container.rawData.calculatedDemurrageCost > 0 && (
                                     <div>
                                       <p className="text-xs text-muted-foreground">Total Demurrage Cost</p>

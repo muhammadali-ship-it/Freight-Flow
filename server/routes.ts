@@ -354,6 +354,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             containerEta: ship.eta,
             containerAta: shipRawData.ata || containerData.containerAta,
             lastFreeDay: shipRawData.lastFreeDay || containerData.lastFreeDay,
+            lastReturnDate: shipRawData.lastReturnDate || containerRawData.lastReturnDate,
             dailyFeeRate: shipRawData.dailyFeeRate || containerData.dailyFeeRate,
             detentionFee: shipRawData.detentionFee || containerData.detentionFee,
             pickupChassis: shipRawData.pickupChassis || containerData.pickupChassis,

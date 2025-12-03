@@ -45,6 +45,7 @@ interface ContainerCardProps {
   demurrageFee?: number;
   detentionFee?: number;
   exceptionCost?: number;
+  kpiFilter?: string | null;
   onViewDetails?: () => void;
 }
 
@@ -67,8 +68,14 @@ export function ContainerCard({
   demurrageFee,
   detentionFee,
   exceptionCost,
+  kpiFilter,
   onViewDetails,
 }: ContainerCardProps) {
+  // Helper to check if current KPI is container-level
+  const isContainerLevelKpi = (kpi: string | null | undefined) => {
+    if (!kpi) return false;
+    return ['empty-returned', 'demurrage-alert', 'lfd-alert', 'detention-alert'].includes(kpi);
+  };
   const [isEditing, setIsEditing] = useState(false);
   const [editedStatus, setEditedStatus] = useState(status);
   const [editedEta, setEditedEta] = useState(eta);
@@ -152,14 +159,28 @@ export function ContainerCard({
       <CardHeader className="space-y-3 pb-4">
         <div className="flex items-start justify-between gap-2">
           <div className="space-y-1 flex-1">
-            <p className="font-mono text-base font-semibold" data-testid={`text-container-number-${containerNumber}`}>
-              {containerNumber}
-            </p>
-            {!isEditing ? (
-              reference && (
-                <p className="text-xs text-muted-foreground">Ref: {reference}</p>
-              )
+            {isContainerLevelKpi(kpiFilter) ? (
+              // For container-level KPIs, show container number prominently
+              <>
+                <p className="font-mono text-base font-semibold" data-testid={`text-container-number-${containerNumber}`}>
+                  {containerNumber}
+                </p>
+                {!isEditing && reference && (
+                  <p className="text-xs text-muted-foreground">MBL: {reference}</p>
+                )}
+              </>
             ) : (
+              // For shipment-level KPIs, show reference as main title
+              <>
+                <p className="font-mono text-base font-semibold" data-testid={`text-container-number-${containerNumber}`}>
+                  {containerNumber}
+                </p>
+                {!isEditing && reference && (
+                  <p className="text-xs text-muted-foreground">Ref: {reference}</p>
+                )}
+              </>
+            )}
+            {isEditing && (
               <Input
                 type="text"
                 value={editedReference}

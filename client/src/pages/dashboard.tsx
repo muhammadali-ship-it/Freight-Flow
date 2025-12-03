@@ -96,25 +96,25 @@ export default function Dashboard() {
     etaTo: undefined,
   });
   const [quickFilter, setQuickFilter] = useState<QuickFilter>(null);
-  
+
   // Initialize KPI filter from sessionStorage
   const [kpiFilter, setKpiFilter] = useState<KpiFilter>(() => {
     const saved = sessionStorage.getItem('dashboardKpiFilter');
     return saved ? (saved as KpiFilter) : null;
   });
-  
+
   const [sortField, setSortField] = useState<SortField>("eta");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
   const [showAnalytics, setShowAnalytics] = useState(false);
-  
+
   // Initialize page from sessionStorage
   const [page, setPage] = useState(() => {
     const saved = sessionStorage.getItem('dashboardPage');
     return saved ? parseInt(saved, 10) : 1;
   });
-  
+
   const [pageSize, setPageSize] = useState(20);
-  
+
   // Flag to track if scroll position has been restored
   const scrollRestoredRef = useRef(false);
 
@@ -757,6 +757,7 @@ export default function Dashboard() {
             demurrageFee={container.demurrageFee ? parseFloat(container.demurrageFee) : undefined}
             detentionFee={container.detentionFee ? parseFloat(container.detentionFee) : undefined}
             exceptionCost={container.exceptionCost ? parseFloat(container.exceptionCost) : undefined}
+            kpiFilter={kpiFilter}
             onViewDetails={() => handleViewDetails(container.id)}
           />
         ))}

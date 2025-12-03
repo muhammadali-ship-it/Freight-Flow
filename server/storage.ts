@@ -1839,10 +1839,10 @@ export class DbStorage implements IStorage {
     // Convert map to array for statistics calculation
     let groupedArray = Array.from(grouped.values());
 
-    // Calculate statistics from ALL grouped shipments (before KPI filtering)
-    // These stats should NEVER change regardless of KPI filter
-    const stats = this.calculateStats(groupedArray);
-    console.log(`[DEBUG] Calculated stats from ${groupedArray.length} shipment groups:`, stats);
+    // Calculate statistics from ALL raw shipments (before grouping)
+    // This ensures stats are consistent regardless of the current view/grouping
+    const stats = this.calculateStatsFromRaw(allShipments);
+    console.log(`[DEBUG] Calculated stats from ${allShipments.length} raw containers:`, stats);
 
     // CRITICAL DEBUG: Let's see if we have ANY data at all
     if (groupedArray.length === 0) {
@@ -2275,761 +2275,898 @@ export class DbStorage implements IStorage {
     console.log(`[DEBUG] Statistics summary: ${shipmentsWithTerminalData}/${shipments.length} shipments have terminal data`);
     console.log(`[DEBUG] POD stats: needsAttention=${podNeedsAttention}, awaitingFullOut=${podAwaitingFullOut}, fullOut=${podFullOut}`);
 
-    return {
-      total: totalContainers,
-      inTransit,
-      arrivingToday,
-      delayed,
-      urgent,
-      highRisk,
-      hasExceptions,
-      overdue,
-      podNeedsAttention,
-      podAwaitingFullOut,
-      podFullOut,
-      emptyReturned,
-      demurrageAlert,
-      lfdAlert,
+  };
+}
+
+  // New helper method to calculate stats from raw container list
+  // This ensures consistency regardless of how items are grouped in the UI
+  private calculateStatsFromRaw(allShipments: any[]): any {
+  const stats = {
+    total: 0,
+    inTransit: 0,
+    arrivingToday: 0,
+    delayed: 0,
+    urgent: 0,
+    highRisk: 0,
+    hasExceptions: 0,
+    overdue: 0,
+    podNeedsAttention: 0,
+    podAwaitingFullOut: 0,
+    podFullOut: 0,
+    emptyReturned: 0,
+    demurrageAlert: 0,
+    lfdAlert: 0,
+  };
+
+  const seenMbls = new Set<string>();
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  for (const shipment of allShipments) {
+    const rawData = shipment.rawData || {};
+    const mbl = shipment.mblNumber || 'NO_MBL';
+
+    // Container-level stats (count every container)
+    stats.total++;
+
+    // Risk Level
+    if (rawData.riskLevel === 'high' || rawData.riskLevel === 'critical') {
+      stats.highRisk++;
+    }
+
+    // Exceptions
+    if (rawData.hasExceptions) {
+      stats.hasExceptions++;
+    }
+
+    // Urgent / Overdue
+    if (rawData.lastFreeDay) {
+      const lfd = new Date(rawData.lastFreeDay);
+      lfd.setHours(0, 0, 0, 0);
+      const daysUntilLFD = Math.ceil((lfd.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+
+      if (lfd < today) {
+        stats.overdue++;
+      } else if (daysUntilLFD >= 0 && daysUntilLFD <= 3) {
+        stats.urgent++;
+      }
+    }
+
+    // Terminal Data & POD Stats
+    const terminalData = {
+      terminalName: rawData.terminalName,
+      terminalAvailableForPickup: rawData.terminalAvailableForPickup,
+      terminalFullOut: rawData.terminalFullOut,
+      terminalEmptyReturned: rawData.terminalEmptyReturned,
     };
+
+    const containersArray = rawData.containers || [];
+    const firstContainer = containersArray[0] || {};
+    const railData = firstContainer.rawData?.rail || {};
+
+    // POD Full Out
+    const isFullOut = !!(terminalData.terminalFullOut || railData.fullOut);
+    if (isFullOut) {
+      stats.podFullOut++;
+    }
+
+    // POD Awaiting Full Out (Available but not full out)
+    const isAvailable = terminalData.terminalAvailableForPickup === true;
+    if (isAvailable && !isFullOut) {
+      stats.podAwaitingFullOut++;
+    }
+
+    // POD Needs Attention (Not available, not full out, arrived at POD)
+    // Simplified check: if not available and not full out, but status implies at port
+    if (shipment.status === 'at-port' && !isAvailable && !isFullOut) {
+      stats.podNeedsAttention++;
+    }
+
+    // Empty Returned
+    const isEmptyReturned = !!(terminalData.terminalEmptyReturned || railData.emptyReturned);
+    if (isEmptyReturned) {
+      stats.emptyReturned++;
+    }
+
+    // Demurrage Alert
+    if (rawData.lastFreeDay && !isEmptyReturned) {
+      const lfd = new Date(rawData.lastFreeDay);
+      lfd.setHours(0, 0, 0, 0);
+      if (lfd < today && !isFullOut) {
+        stats.demurrageAlert++;
+      }
+    }
+
+    // LFD Alert
+    if (!isEmptyReturned && !rawData.lastFreeDay) {
+      const events = rawData.shipmentEvents || rawData.milestones || rawData.events || [];
+      const destinationPort = shipment.destinationPort || '';
+
+      const arrivalEvent = events.find((e: any) => {
+        if ((e.code === 'vesselArrival' || e.code === 'vesselArrivalWithContainer' || e.code === 'dischargeFromVessel') && e.actualTime) {
+          const arrivalDate = new Date(e.actualTime);
+          const isPast = arrivalDate <= today;
+          const isRealActual = !e.estimatedTime || e.actualTime !== e.estimatedTime;
+          const isAtDestination = e.locationRole === 'destinationPort' ||
+            (!destinationPort && e.location) ||
+            (destinationPort && e.location && (
+              e.location.toLowerCase().includes(destinationPort.toLowerCase()) ||
+              destinationPort.toLowerCase().includes(e.location.toLowerCase())
+            ));
+          return isPast && isRealActual && isAtDestination;
+        }
+        return false;
+      });
+
+      if (arrivalEvent) {
+        stats.lfdAlert++;
+      }
+    }
+
+    // Shipment-level stats (count unique MBLs)
+    // Only count the FIRST container of each MBL for these stats
+    if (!seenMbls.has(mbl)) {
+      seenMbls.add(mbl);
+
+      // In Transit
+      if (shipment.status === 'in-transit') {
+        stats.inTransit++;
+      }
+
+      // Arriving Today / Delayed
+      if (shipment.eta) {
+        const etaDate = new Date(shipment.eta);
+        etaDate.setHours(0, 0, 0, 0);
+
+        if (etaDate.getTime() === today.getTime()) {
+          stats.arrivingToday++;
+        } else if (etaDate < today && shipment.status !== 'delivered' && shipment.status !== 'at-port') {
+          stats.delayed++;
+        }
+      }
+    }
   }
+
+  return stats;
+}
 
   // Helper method to apply KPI filtering to shipments
   private applyKpiFilter(shipments: any[], kpiFilter: string): any[] {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
 
-    return shipments.filter(shipment => {
-      const rawData = shipment.rawData || {};
-      const events = rawData.shipmentEvents || [];
-      const gateOutEvent = events.find((e: any) => e.code === 'gateOutWithContainerFull');
+  return shipments.filter(shipment => {
+    const rawData = shipment.rawData || {};
+    const events = rawData.shipmentEvents || [];
+    const gateOutEvent = events.find((e: any) => e.code === 'gateOutWithContainerFull');
 
-      // Determine if empty returned based on events or legacy flags
-      let isEmptyReturned = false;
-      const milestones = rawData.milestones || rawData.events || [];
-      if (Array.isArray(milestones) && milestones.length > 0) {
-        const sortedMilestones = [...milestones].sort((a, b) => {
-          const timeA = new Date(a.actualTime || 0).getTime();
-          const timeB = new Date(b.actualTime || 0).getTime();
-          return timeB - timeA;
-        });
-        const lastEvent = sortedMilestones[0];
-        if (lastEvent && lastEvent.code === 'gateInWithContainerEmpty') {
-          isEmptyReturned = true;
-        }
-      }
-
-      const containersArray = rawData.containers || [];
-      const firstContainer = containersArray[0] || {};
-      const railData = firstContainer.rawData?.rail || {};
-      if (rawData.terminalEmptyReturned || railData.emptyReturned) {
+    // Determine if empty returned based on events or legacy flags
+    let isEmptyReturned = false;
+    const milestones = rawData.milestones || rawData.events || [];
+    if (Array.isArray(milestones) && milestones.length > 0) {
+      const sortedMilestones = [...milestones].sort((a, b) => {
+        const timeA = new Date(a.actualTime || 0).getTime();
+        const timeB = new Date(b.actualTime || 0).getTime();
+        return timeB - timeA;
+      });
+      const lastEvent = sortedMilestones[0];
+      if (lastEvent && lastEvent.code === 'gateInWithContainerEmpty') {
         isEmptyReturned = true;
       }
+    }
 
-      // Check for custom Empty In event with actual date
-      if (rawData.emptyInEvent?.actualDate) {
-        isEmptyReturned = true;
+    const containersArray = rawData.containers || [];
+    const firstContainer = containersArray[0] || {};
+    const railData = firstContainer.rawData?.rail || {};
+    if (rawData.terminalEmptyReturned || railData.emptyReturned) {
+      isEmptyReturned = true;
+    }
+
+    // Check for custom Empty In event with actual date
+    if (rawData.emptyInEvent?.actualDate) {
+      isEmptyReturned = true;
+    }
+
+    // Debug: Log when checking empty returned status
+    if (kpiFilter === 'empty-returned' && shipment.containerNumber) {
+      console.log(`[Empty Returned Filter] Checking ${shipment.containerNumber}:`, {
+        hasEmptyInEvent: !!rawData.emptyInEvent,
+        emptyInActualDate: rawData.emptyInEvent?.actualDate,
+        isEmptyReturned,
+        terminalEmptyReturned: rawData.terminalEmptyReturned,
+        railEmptyReturned: railData.emptyReturned
+      });
+    }
+
+    switch (kpiFilter) {
+      case 'in-transit': {
+        if (isEmptyReturned) return false; // Exclude empty returned
+        if (!shipment.eta) return true; // No ETA = in transit
+        const etaDate = new Date(shipment.eta);
+        etaDate.setHours(0, 0, 0, 0);
+        return etaDate > today;
       }
 
-      // Debug: Log when checking empty returned status
-      if (kpiFilter === 'empty-returned' && shipment.containerNumber) {
-        console.log(`[Empty Returned Filter] Checking ${shipment.containerNumber}:`, {
-          hasEmptyInEvent: !!rawData.emptyInEvent,
-          emptyInActualDate: rawData.emptyInEvent?.actualDate,
-          isEmptyReturned,
-          terminalEmptyReturned: rawData.terminalEmptyReturned,
-          railEmptyReturned: railData.emptyReturned
-        });
+      case 'arriving-today': {
+        if (isEmptyReturned) return false;
+        if (!shipment.eta) return false;
+        const etaDate = new Date(shipment.eta);
+        etaDate.setHours(0, 0, 0, 0);
+        return etaDate.getTime() === today.getTime();
       }
 
-      switch (kpiFilter) {
-        case 'in-transit': {
-          if (isEmptyReturned) return false; // Exclude empty returned
-          if (!shipment.eta) return true; // No ETA = in transit
-          const etaDate = new Date(shipment.eta);
-          etaDate.setHours(0, 0, 0, 0);
-          return etaDate > today;
-        }
+      case 'delayed': {
+        if (isEmptyReturned) return false;
+        if (!shipment.eta) return false;
+        const etaDate = new Date(shipment.eta);
+        etaDate.setHours(0, 0, 0, 0);
 
-        case 'arriving-today': {
-          if (isEmptyReturned) return false;
-          if (!shipment.eta) return false;
-          const etaDate = new Date(shipment.eta);
-          etaDate.setHours(0, 0, 0, 0);
-          return etaDate.getTime() === today.getTime();
-        }
+        // Check if ETA has passed
+        if (etaDate >= today) return false;
 
-        case 'delayed': {
-          if (isEmptyReturned) return false;
-          if (!shipment.eta) return false;
-          const etaDate = new Date(shipment.eta);
-          etaDate.setHours(0, 0, 0, 0);
-
-          // Check if ETA has passed
-          if (etaDate >= today) return false;
-
-          // Check if vessel has arrived at destination
-          const destinationPort = shipment.destinationPort || '';
-          const allEvents = rawData.shipmentEvents || rawData.milestones || rawData.events || [];
-          const hasArrivedAtDestination = allEvents.some((e: any) => {
-            if ((e.code === 'vesselArrival' || e.code === 'vesselArrivalWithContainer' || e.code === 'dischargeFromVessel') && e.actualTime) {
-              // Check if event explicitly marks this as destination port arrival
-              if (e.locationRole === 'destinationPort') {
-                return true;
-              }
-              // Fallback: check if arrival is at the final destination port by location matching
-              if (destinationPort && e.location) {
-                const isAtDestination =
-                  e.location.toLowerCase().includes(destinationPort.toLowerCase()) ||
-                  destinationPort.toLowerCase().includes(e.location.toLowerCase());
-                return isAtDestination;
-              }
+        // Check if vessel has arrived at destination
+        const destinationPort = shipment.destinationPort || '';
+        const allEvents = rawData.shipmentEvents || rawData.milestones || rawData.events || [];
+        const hasArrivedAtDestination = allEvents.some((e: any) => {
+          if ((e.code === 'vesselArrival' || e.code === 'vesselArrivalWithContainer' || e.code === 'dischargeFromVessel') && e.actualTime) {
+            // Check if event explicitly marks this as destination port arrival
+            if (e.locationRole === 'destinationPort') {
+              return true;
             }
-            return false;
-          });
-
-          // Only show as delayed if ETA passed AND vessel hasn't arrived at destination
-          return !hasArrivedAtDestination;
-        }
-
-        case 'pod-needs-attention': {
-          if (isEmptyReturned) return false;
-          const isAvailable = rawData.terminalAvailableForPickup === true ||
-            rawData.terminalAvailableForPickup === 'true';
-
-          // Check for active holds (excluding Customs Hold if customsRelease event exists)
-          const events = rawData.shipmentEvents || [];
-          const customsReleaseEvent = events.find((e: any) => e.code === 'customsRelease' || e.code === 'customsHoldReleased');
-          let activeHolds = rawData.terminalHolds || [];
-          if (customsReleaseEvent) {
-            activeHolds = activeHolds.filter((h: string) => h !== 'Customs Hold');
+            // Fallback: check if arrival is at the final destination port by location matching
+            if (destinationPort && e.location) {
+              const isAtDestination =
+                e.location.toLowerCase().includes(destinationPort.toLowerCase()) ||
+                destinationPort.toLowerCase().includes(e.location.toLowerCase());
+              return isAtDestination;
+            }
           }
-          const hasActiveHolds = activeHolds.length > 0;
+          return false;
+        });
 
-          // Only show containers with active holds
-          return hasActiveHolds;
-        }
-
-        case 'pod-awaiting-full-out': {
-          if (isEmptyReturned) return false;
-          const events = rawData.shipmentEvents || [];
-          const arrivalEvent = events.find((e: any) =>
-            (e.code === 'vesselArrival' || e.code === 'vesselArrivalWithContainer' || e.code === 'dischargeFromVessel') &&
-            e.actualTime &&
-            (
-              e.locationRole === 'destinationPort' || // Check locationRole first
-              !rawData.terminalPort ||
-              (e.location && rawData.terminalPort && e.location.toLowerCase().includes(rawData.terminalPort.toLowerCase())) ||
-              (e.location && rawData.terminalName && rawData.terminalName.toLowerCase().includes(e.location.toLowerCase()))
-            )
-          );
-          return rawData.terminalName &&
-            !rawData.terminalFullOut &&
-            !(gateOutEvent && gateOutEvent.actualTime) &&
-            !!arrivalEvent;
-        }
-
-        case 'pod-full-out': {
-          if (isEmptyReturned) return false;
-          const containersArray = rawData.containers || [];
-          const firstContainer = containersArray[0] || {};
-          const railData = firstContainer.rawData?.rail || {};
-          return !!(rawData.terminalFullOut || railData.fullOut || (gateOutEvent && gateOutEvent.actualTime));
-        }
-
-        case 'empty-returned': {
-          return isEmptyReturned;
-        }
-
-        case 'demurrage-alert': {
-          if (isEmptyReturned) return false;
-          if (!rawData.lastFreeDay) return false;
-
-          const lfd = new Date(rawData.lastFreeDay);
-          lfd.setHours(0, 0, 0, 0);
-
-          // Check if LFD is in the past
-          if (lfd >= today) return false;
-
-          // Check if NOT full out
-          const containersArray = rawData.containers || [];
-          const firstContainer = containersArray[0] || {};
-          const railData = firstContainer.rawData?.rail || {};
-          const isFullOut = !!(rawData.terminalFullOut || railData.fullOut || (gateOutEvent && gateOutEvent.actualTime));
-
-          return !isFullOut;
-        }
-
-        case 'lfd-alert': {
-          if (isEmptyReturned) return false;
-
-          const events = rawData.shipmentEvents || rawData.milestones || rawData.events || [];
-          const destinationPort = shipment.destinationPort || '';
-
-          const arrivalEvent = events.find((e: any) => {
-            if ((e.code === 'vesselArrival' || e.code === 'vesselArrivalWithContainer' || e.code === 'dischargeFromVessel') && e.actualTime) {
-              // Check if the actual arrival time is in the past (vessel has actually arrived)
-              const arrivalDate = new Date(e.actualTime);
-              const isPast = arrivalDate <= today;
-
-              // Also verify this is a true actual time, not an estimated one
-              // If estimatedTime exists and equals actualTime, it's likely just an estimate
-              const isRealActual = !e.estimatedTime || e.actualTime !== e.estimatedTime;
-
-              // Check if arrival is at the final destination port
-              // First check locationRole, then fallback to location matching
-              const isAtDestination = e.locationRole === 'destinationPort' ||
-                (!destinationPort && e.location) || // If no destinationPort specified but we have location, assume it's destination
-                (destinationPort && e.location && (
-                  e.location.toLowerCase().includes(destinationPort.toLowerCase()) ||
-                  destinationPort.toLowerCase().includes(e.location.toLowerCase())
-                ));
-
-              return isPast && isRealActual && isAtDestination;
-            }
-            return false;
-          });
-
-          // Show only containers with actual vessel arrival at destination but no LFD entered
-          return !!(arrivalEvent && !rawData.lastFreeDay);
-        }
-
-        default:
-          return true;
+        // Only show as delayed if ETA passed AND vessel hasn't arrived at destination
+        return !hasArrivedAtDestination;
       }
-    });
-  }
+
+      case 'pod-needs-attention': {
+        if (isEmptyReturned) return false;
+        const isAvailable = rawData.terminalAvailableForPickup === true ||
+          rawData.terminalAvailableForPickup === 'true';
+
+        // Check for active holds (excluding Customs Hold if customsRelease event exists)
+        const events = rawData.shipmentEvents || [];
+        const customsReleaseEvent = events.find((e: any) => e.code === 'customsRelease' || e.code === 'customsHoldReleased');
+        let activeHolds = rawData.terminalHolds || [];
+        if (customsReleaseEvent) {
+          activeHolds = activeHolds.filter((h: string) => h !== 'Customs Hold');
+        }
+        const hasActiveHolds = activeHolds.length > 0;
+
+        // Only show containers with active holds
+        return hasActiveHolds;
+      }
+
+      case 'pod-awaiting-full-out': {
+        if (isEmptyReturned) return false;
+        const events = rawData.shipmentEvents || [];
+        const arrivalEvent = events.find((e: any) =>
+          (e.code === 'vesselArrival' || e.code === 'vesselArrivalWithContainer' || e.code === 'dischargeFromVessel') &&
+          e.actualTime &&
+          (
+            e.locationRole === 'destinationPort' || // Check locationRole first
+            !rawData.terminalPort ||
+            (e.location && rawData.terminalPort && e.location.toLowerCase().includes(rawData.terminalPort.toLowerCase())) ||
+            (e.location && rawData.terminalName && rawData.terminalName.toLowerCase().includes(e.location.toLowerCase()))
+          )
+        );
+        return rawData.terminalName &&
+          !rawData.terminalFullOut &&
+          !(gateOutEvent && gateOutEvent.actualTime) &&
+          !!arrivalEvent;
+      }
+
+      case 'pod-full-out': {
+        if (isEmptyReturned) return false;
+        const containersArray = rawData.containers || [];
+        const firstContainer = containersArray[0] || {};
+        const railData = firstContainer.rawData?.rail || {};
+        return !!(rawData.terminalFullOut || railData.fullOut || (gateOutEvent && gateOutEvent.actualTime));
+      }
+
+      case 'empty-returned': {
+        return isEmptyReturned;
+      }
+
+      case 'demurrage-alert': {
+        if (isEmptyReturned) return false;
+        if (!rawData.lastFreeDay) return false;
+
+        const lfd = new Date(rawData.lastFreeDay);
+        lfd.setHours(0, 0, 0, 0);
+
+        // Check if LFD is in the past
+        if (lfd >= today) return false;
+
+        // Check if NOT full out
+        const containersArray = rawData.containers || [];
+        const firstContainer = containersArray[0] || {};
+        const railData = firstContainer.rawData?.rail || {};
+        const isFullOut = !!(rawData.terminalFullOut || railData.fullOut || (gateOutEvent && gateOutEvent.actualTime));
+
+        return !isFullOut;
+      }
+
+      case 'lfd-alert': {
+        if (isEmptyReturned) return false;
+
+        const events = rawData.shipmentEvents || rawData.milestones || rawData.events || [];
+        const destinationPort = shipment.destinationPort || '';
+
+        const arrivalEvent = events.find((e: any) => {
+          if ((e.code === 'vesselArrival' || e.code === 'vesselArrivalWithContainer' || e.code === 'dischargeFromVessel') && e.actualTime) {
+            // Check if the actual arrival time is in the past (vessel has actually arrived)
+            const arrivalDate = new Date(e.actualTime);
+            const isPast = arrivalDate <= today;
+
+            // Also verify this is a true actual time, not an estimated one
+            // If estimatedTime exists and equals actualTime, it's likely just an estimate
+            const isRealActual = !e.estimatedTime || e.actualTime !== e.estimatedTime;
+
+            // Check if arrival is at the final destination port
+            // First check locationRole, then fallback to location matching
+            const isAtDestination = e.locationRole === 'destinationPort' ||
+              (!destinationPort && e.location) || // If no destinationPort specified but we have location, assume it's destination
+              (destinationPort && e.location && (
+                e.location.toLowerCase().includes(destinationPort.toLowerCase()) ||
+                destinationPort.toLowerCase().includes(e.location.toLowerCase())
+              ));
+
+            return isPast && isRealActual && isAtDestination;
+          }
+          return false;
+        });
+
+        // Show only containers with actual vessel arrival at destination but no LFD entered
+        return !!(arrivalEvent && !rawData.lastFreeDay);
+      }
+
+      default:
+        return true;
+    }
+  });
+}
 
   // Helper method to determine if a KPI filter operates at container level (not shipment/MBL level)
   private isContainerLevelKpi(kpiFilter: string): boolean {
-    const containerLevelKpis = [
-      'empty-returned',
-      'demurrage-alert',
-      'lfd-alert',
-      'detention-alert'
-    ];
-    return containerLevelKpis.includes(kpiFilter);
-  }
+  const containerLevelKpis = [
+    'empty-returned',
+    'demurrage-alert',
+    'lfd-alert',
+    'detention-alert'
+  ];
+  return containerLevelKpis.includes(kpiFilter);
+}
 
-  async getCargoesFlowShipmentById(id: string): Promise<CargoesFlowShipment | undefined> {
-    const result = await db.select().from(cargoesFlowShipments).where(eq(cargoesFlowShipments.id, id));
-    return result[0];
-  }
+  async getCargoesFlowShipmentById(id: string): Promise < CargoesFlowShipment | undefined > {
+  const result = await db.select().from(cargoesFlowShipments).where(eq(cargoesFlowShipments.id, id));
+  return result[0];
+}
 
-  async getCargoesFlowShipmentByReference(shipmentReference: string): Promise<CargoesFlowShipment | undefined> {
-    const result = await db.select().from(cargoesFlowShipments).where(eq(cargoesFlowShipments.shipmentReference, shipmentReference));
-    return result[0];
-  }
+  async getCargoesFlowShipmentByReference(shipmentReference: string): Promise < CargoesFlowShipment | undefined > {
+  const result = await db.select().from(cargoesFlowShipments).where(eq(cargoesFlowShipments.shipmentReference, shipmentReference));
+  return result[0];
+}
 
-  async getCargoesFlowShipmentByContainer(containerNumber: string): Promise<CargoesFlowShipment | undefined> {
-    const result = await db.select().from(cargoesFlowShipments).where(eq(cargoesFlowShipments.containerNumber, containerNumber));
-    return result[0];
-  }
+  async getCargoesFlowShipmentByContainer(containerNumber: string): Promise < CargoesFlowShipment | undefined > {
+  const result = await db.select().from(cargoesFlowShipments).where(eq(cargoesFlowShipments.containerNumber, containerNumber));
+  return result[0];
+}
 
-  async getCargoesFlowShipmentByContainerInRawData(containerNumber: string): Promise<CargoesFlowShipment | undefined> {
-    // Search for shipments where the container number exists in rawData.containers array
-    const result = await db.select()
-      .from(cargoesFlowShipments)
-      .where(
-        sql`${cargoesFlowShipments.rawData} IS NOT NULL 
+  async getCargoesFlowShipmentByContainerInRawData(containerNumber: string): Promise < CargoesFlowShipment | undefined > {
+  // Search for shipments where the container number exists in rawData.containers array
+  const result = await db.select()
+    .from(cargoesFlowShipments)
+    .where(
+      sql`${cargoesFlowShipments.rawData} IS NOT NULL 
           AND ${cargoesFlowShipments.rawData}->'containers' IS NOT NULL
           AND EXISTS (
             SELECT 1 
             FROM jsonb_array_elements(${cargoesFlowShipments.rawData}->'containers') AS container
             WHERE container->>'containerNumber' = ${containerNumber}
           )`
-      )
-      .limit(1);
-    return result[0];
+    )
+    .limit(1);
+  return result[0];
+}
+
+  async getCargoesFlowShipmentByMbl(mblNumber: string): Promise < CargoesFlowShipment | undefined > {
+  const result = await db.select().from(cargoesFlowShipments).where(eq(cargoesFlowShipments.mblNumber, mblNumber));
+  return result[0];
+}
+
+  async getAllCargoesFlowShipmentsByMbl(mblNumber: string): Promise < CargoesFlowShipment[] > {
+  const result = await db.select().from(cargoesFlowShipments).where(eq(cargoesFlowShipments.mblNumber, mblNumber));
+  return result;
+}
+
+  async getTaiShipmentIdByMbl(mblNumber: string): Promise < string | null > {
+  const result = await db.select({ taiShipmentId: cargoesFlowPosts.taiShipmentId })
+    .from(cargoesFlowPosts)
+    .where(eq(cargoesFlowPosts.mblNumber, mblNumber))
+    .orderBy(desc(cargoesFlowPosts.postedAt))
+    .limit(1);
+  return result[0]?.taiShipmentId || null;
+}
+
+  async updateCargoesFlowShipment(id: string, shipmentUpdate: Partial<InsertCargoesFlowShipment>): Promise < CargoesFlowShipment | undefined > {
+  const result = await db.update(cargoesFlowShipments)
+    .set({ ...shipmentUpdate, updatedAt: new Date() })
+    .where(eq(cargoesFlowShipments.id, id))
+    .returning();
+  return result[0];
+}
+
+  async deleteCargoesFlowShipment(id: string): Promise < boolean > {
+  const result = await db.delete(cargoesFlowShipments)
+    .where(eq(cargoesFlowShipments.id, id))
+    .returning();
+  return result.length > 0;
+}
+
+  async getCargoesFlowShipmentUsers(shipmentId: string): Promise < CargoesFlowShipmentUser[] > {
+  return await db.select().from(cargoesFlowShipmentUsers)
+    .where(eq(cargoesFlowShipmentUsers.shipmentId, shipmentId))
+    .orderBy(asc(cargoesFlowShipmentUsers.createdAt));
+}
+
+  async setCargoesFlowShipmentUsers(shipmentId: string, userIds: string[]): Promise < void> {
+  await db.delete(cargoesFlowShipmentUsers).where(eq(cargoesFlowShipmentUsers.shipmentId, shipmentId));
+
+  if(userIds.length > 0) {
+  const values = userIds.map(userId => ({ shipmentId, userId }));
+  await db.insert(cargoesFlowShipmentUsers).values(values);
+}
   }
 
-  async getCargoesFlowShipmentByMbl(mblNumber: string): Promise<CargoesFlowShipment | undefined> {
-    const result = await db.select().from(cargoesFlowShipments).where(eq(cargoesFlowShipments.mblNumber, mblNumber));
-    return result[0];
-  }
-
-  async getAllCargoesFlowShipmentsByMbl(mblNumber: string): Promise<CargoesFlowShipment[]> {
-    const result = await db.select().from(cargoesFlowShipments).where(eq(cargoesFlowShipments.mblNumber, mblNumber));
-    return result;
-  }
-
-  async getTaiShipmentIdByMbl(mblNumber: string): Promise<string | null> {
-    const result = await db.select({ taiShipmentId: cargoesFlowPosts.taiShipmentId })
-      .from(cargoesFlowPosts)
-      .where(eq(cargoesFlowPosts.mblNumber, mblNumber))
-      .orderBy(desc(cargoesFlowPosts.postedAt))
-      .limit(1);
-    return result[0]?.taiShipmentId || null;
-  }
-
-  async updateCargoesFlowShipment(id: string, shipmentUpdate: Partial<InsertCargoesFlowShipment>): Promise<CargoesFlowShipment | undefined> {
-    const result = await db.update(cargoesFlowShipments)
-      .set({ ...shipmentUpdate, updatedAt: new Date() })
-      .where(eq(cargoesFlowShipments.id, id))
-      .returning();
-    return result[0];
-  }
-
-  async deleteCargoesFlowShipment(id: string): Promise<boolean> {
-    const result = await db.delete(cargoesFlowShipments)
-      .where(eq(cargoesFlowShipments.id, id))
-      .returning();
-    return result.length > 0;
-  }
-
-  async getCargoesFlowShipmentUsers(shipmentId: string): Promise<CargoesFlowShipmentUser[]> {
-    return await db.select().from(cargoesFlowShipmentUsers)
-      .where(eq(cargoesFlowShipmentUsers.shipmentId, shipmentId))
-      .orderBy(asc(cargoesFlowShipmentUsers.createdAt));
-  }
-
-  async setCargoesFlowShipmentUsers(shipmentId: string, userIds: string[]): Promise<void> {
-    await db.delete(cargoesFlowShipmentUsers).where(eq(cargoesFlowShipmentUsers.shipmentId, shipmentId));
-
-    if (userIds.length > 0) {
-      const values = userIds.map(userId => ({ shipmentId, userId }));
-      await db.insert(cargoesFlowShipmentUsers).values(values);
-    }
-  }
-
-  async getContainers(shipmentId: string): Promise<Container[]> {
-    return await db.select().from(containers)
-      .where(eq(containers.shipmentId, shipmentId))
-      .orderBy(asc(containers.createdAt));
-  }
+  async getContainers(shipmentId: string): Promise < Container[] > {
+  return await db.select().from(containers)
+    .where(eq(containers.shipmentId, shipmentId))
+    .orderBy(asc(containers.createdAt));
+}
 
   // Cargoes Flow Sync Logs Methods
-  async createCargoesFlowSyncLog(log: InsertCargoesFlowSyncLog): Promise<CargoesFlowSyncLog> {
-    const result = await db.insert(cargoesFlowSyncLogs)
-      .values(log)
-      .returning();
-    return result[0];
-  }
+  async createCargoesFlowSyncLog(log: InsertCargoesFlowSyncLog): Promise < CargoesFlowSyncLog > {
+  const result = await db.insert(cargoesFlowSyncLogs)
+    .values(log)
+    .returning();
+  return result[0];
+}
 
-  async getCargoesFlowSyncLogs(params?: PaginationParams): Promise<PaginatedResult<CargoesFlowSyncLog>> {
-    const page = params?.page || 1;
-    const pageSize = params?.pageSize || 25;
-    const offset = (page - 1) * pageSize;
+  async getCargoesFlowSyncLogs(params ?: PaginationParams): Promise < PaginatedResult < CargoesFlowSyncLog >> {
+  const page = params?.page || 1;
+  const pageSize = params?.pageSize || 25;
+  const offset = (page - 1) * pageSize;
 
-    const [totalResult, data] = await Promise.all([
-      db.select({ count: sql<number>`count(*)` })
-        .from(cargoesFlowSyncLogs),
-      db.select()
-        .from(cargoesFlowSyncLogs)
-        .orderBy(desc(cargoesFlowSyncLogs.createdAt))
-        .limit(pageSize)
-        .offset(offset)
-    ]);
-
-    const total = Number(totalResult[0]?.count || 0);
-
-    return {
-      data,
-      pagination: {
-        page,
-        pageSize,
-        total,
-        totalPages: Math.ceil(total / pageSize),
-      },
-    };
-  }
-
-  async getLatestCargoesFlowSyncLog(): Promise<CargoesFlowSyncLog | undefined> {
-    const result = await db.select()
+  const [totalResult, data] = await Promise.all([
+    db.select({ count: sql<number>`count(*)` })
+      .from(cargoesFlowSyncLogs),
+    db.select()
       .from(cargoesFlowSyncLogs)
       .orderBy(desc(cargoesFlowSyncLogs.createdAt))
-      .limit(1);
-    return result[0];
-  }
+      .limit(pageSize)
+      .offset(offset)
+  ]);
+
+  const total = Number(totalResult[0]?.count || 0);
+
+  return {
+    data,
+    pagination: {
+      page,
+      pageSize,
+      total,
+      totalPages: Math.ceil(total / pageSize),
+    },
+  };
+}
+
+  async getLatestCargoesFlowSyncLog(): Promise < CargoesFlowSyncLog | undefined > {
+  const result = await db.select()
+    .from(cargoesFlowSyncLogs)
+    .orderBy(desc(cargoesFlowSyncLogs.createdAt))
+    .limit(1);
+  return result[0];
+}
 
   // Cargoes Flow Update Logs Methods
-  async createCargoesFlowUpdateLog(log: InsertCargoesFlowUpdateLog): Promise<CargoesFlowUpdateLog> {
-    const result = await db.insert(cargoesFlowUpdateLogs)
-      .values(log)
-      .returning();
-    return result[0];
-  }
+  async createCargoesFlowUpdateLog(log: InsertCargoesFlowUpdateLog): Promise < CargoesFlowUpdateLog > {
+  const result = await db.insert(cargoesFlowUpdateLogs)
+    .values(log)
+    .returning();
+  return result[0];
+}
 
   async getCargoesFlowUpdateLogs(
-    params?: PaginationParams,
-    filters?: { search?: string }
-  ): Promise<PaginatedResult<CargoesFlowUpdateLog>> {
-    const page = params?.page || 1;
-    const pageSize = params?.pageSize || 25;
-    const offset = (page - 1) * pageSize;
+  params ?: PaginationParams,
+  filters ?: { search?: string }
+): Promise < PaginatedResult < CargoesFlowUpdateLog >> {
+  const page = params?.page || 1;
+  const pageSize = params?.pageSize || 25;
+  const offset = (page - 1) * pageSize;
 
-    const conditions: SQL[] = [];
+  const conditions: SQL[] = [];
 
-    if (filters?.search) {
-      conditions.push(
-        or(
-          like(cargoesFlowUpdateLogs.shipmentNumber, `%${filters.search}%`),
-          like(cargoesFlowUpdateLogs.shipmentReference, `%${filters.search}%`),
-          like(cargoesFlowUpdateLogs.taiShipmentId, `%${filters.search}%`)
-        )!
-      );
-    }
+  if(filters?.search) {
+    conditions.push(
+      or(
+        like(cargoesFlowUpdateLogs.shipmentNumber, `%${filters.search}%`),
+        like(cargoesFlowUpdateLogs.shipmentReference, `%${filters.search}%`),
+        like(cargoesFlowUpdateLogs.taiShipmentId, `%${filters.search}%`)
+      )!
+    );
+  }
 
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
-    const data = await db
-      .select()
-      .from(cargoesFlowUpdateLogs)
-      .where(whereClause)
-      .orderBy(desc(cargoesFlowUpdateLogs.createdAt))
-      .limit(pageSize)
-      .offset(offset);
+  const data = await db
+    .select()
+    .from(cargoesFlowUpdateLogs)
+    .where(whereClause)
+    .orderBy(desc(cargoesFlowUpdateLogs.createdAt))
+    .limit(pageSize)
+    .offset(offset);
 
-    const countResult = await db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(cargoesFlowUpdateLogs)
-      .where(whereClause);
+  const countResult = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(cargoesFlowUpdateLogs)
+    .where(whereClause);
 
-    const total = countResult[0]?.count || 0;
+  const total = countResult[0]?.count || 0;
 
-    return {
-      data,
-      pagination: {
-        page,
-        pageSize,
-        total,
-        totalPages: Math.ceil(total / pageSize),
-      },
-    };
+  return {
+    data,
+    pagination: {
+      page,
+      pageSize,
+      total,
+      totalPages: Math.ceil(total / pageSize),
+    },
+  };
+}
+
+  async getCargoesFlowUpdateLogById(id: string): Promise < CargoesFlowUpdateLog | undefined > {
+  const result = await db.select()
+    .from(cargoesFlowUpdateLogs)
+    .where(eq(cargoesFlowUpdateLogs.id, id));
+  return result[0];
+}
+
+  async createCargoesFlowMapLog(insertLog: InsertCargoesFlowMapLog): Promise < CargoesFlowMapLog > {
+  const result = await db.insert(cargoesFlowMapLogs).values(insertLog).returning();
+  return result[0];
+}
+
+  async getCargoesFlowMapLogsByShipmentNumber(shipmentNumber: string, limit: number = 50): Promise < CargoesFlowMapLog[] > {
+  return await db.select()
+    .from(cargoesFlowMapLogs)
+    .where(eq(cargoesFlowMapLogs.shipmentNumber, shipmentNumber))
+    .orderBy(desc(cargoesFlowMapLogs.createdAt))
+    .limit(limit);
+}
+
+  async createShipmentDocument(insertDocument: InsertShipmentDocument): Promise < ShipmentDocument > {
+  const result = await db.insert(shipmentDocuments).values(insertDocument).returning();
+  return result[0];
+}
+
+  async getShipmentDocuments(shipmentId: string): Promise < ShipmentDocument[] > {
+  return await db.select()
+    .from(shipmentDocuments)
+    .where(eq(shipmentDocuments.shipmentId, shipmentId))
+    .orderBy(desc(shipmentDocuments.uploadedAt));
+}
+
+  async getShipmentDocumentById(id: string): Promise < ShipmentDocument | undefined > {
+  const result = await db.select()
+    .from(shipmentDocuments)
+    .where(eq(shipmentDocuments.id, id));
+  return result[0];
+}
+
+  async deleteShipmentDocument(id: string): Promise < boolean > {
+  const result = await db.delete(shipmentDocuments)
+    .where(eq(shipmentDocuments.id, id))
+    .returning();
+  return result.length > 0;
+}
+
+  async createCargoesFlowDocumentUpload(insertUpload: InsertCargoesFlowDocumentUpload): Promise < CargoesFlowDocumentUpload > {
+  const result = await db.insert(cargoesFlowDocumentUploads).values(insertUpload).returning();
+  return result[0];
+}
+
+  async getCargoesFlowDocumentUploads(params ?: PaginationParams, filters ?: { shipmentNumber?: string; uploadStatus?: string }): Promise < PaginatedResult < CargoesFlowDocumentUpload >> {
+  const { page = 1, pageSize = 50 } = params || {};
+  const offset = (page - 1) * pageSize;
+
+  const conditions: SQL[] = [];
+
+  if(filters?.shipmentNumber) {
+    conditions.push(like(cargoesFlowDocumentUploads.shipmentNumber, `%${filters.shipmentNumber}%`));
   }
 
-  async getCargoesFlowUpdateLogById(id: string): Promise<CargoesFlowUpdateLog | undefined> {
-    const result = await db.select()
-      .from(cargoesFlowUpdateLogs)
-      .where(eq(cargoesFlowUpdateLogs.id, id));
-    return result[0];
+    if(filters?.uploadStatus) {
+    conditions.push(eq(cargoesFlowDocumentUploads.uploadStatus, filters.uploadStatus));
   }
-
-  async createCargoesFlowMapLog(insertLog: InsertCargoesFlowMapLog): Promise<CargoesFlowMapLog> {
-    const result = await db.insert(cargoesFlowMapLogs).values(insertLog).returning();
-    return result[0];
-  }
-
-  async getCargoesFlowMapLogsByShipmentNumber(shipmentNumber: string, limit: number = 50): Promise<CargoesFlowMapLog[]> {
-    return await db.select()
-      .from(cargoesFlowMapLogs)
-      .where(eq(cargoesFlowMapLogs.shipmentNumber, shipmentNumber))
-      .orderBy(desc(cargoesFlowMapLogs.createdAt))
-      .limit(limit);
-  }
-
-  async createShipmentDocument(insertDocument: InsertShipmentDocument): Promise<ShipmentDocument> {
-    const result = await db.insert(shipmentDocuments).values(insertDocument).returning();
-    return result[0];
-  }
-
-  async getShipmentDocuments(shipmentId: string): Promise<ShipmentDocument[]> {
-    return await db.select()
-      .from(shipmentDocuments)
-      .where(eq(shipmentDocuments.shipmentId, shipmentId))
-      .orderBy(desc(shipmentDocuments.uploadedAt));
-  }
-
-  async getShipmentDocumentById(id: string): Promise<ShipmentDocument | undefined> {
-    const result = await db.select()
-      .from(shipmentDocuments)
-      .where(eq(shipmentDocuments.id, id));
-    return result[0];
-  }
-
-  async deleteShipmentDocument(id: string): Promise<boolean> {
-    const result = await db.delete(shipmentDocuments)
-      .where(eq(shipmentDocuments.id, id))
-      .returning();
-    return result.length > 0;
-  }
-
-  async createCargoesFlowDocumentUpload(insertUpload: InsertCargoesFlowDocumentUpload): Promise<CargoesFlowDocumentUpload> {
-    const result = await db.insert(cargoesFlowDocumentUploads).values(insertUpload).returning();
-    return result[0];
-  }
-
-  async getCargoesFlowDocumentUploads(params?: PaginationParams, filters?: { shipmentNumber?: string; uploadStatus?: string }): Promise<PaginatedResult<CargoesFlowDocumentUpload>> {
-    const { page = 1, pageSize = 50 } = params || {};
-    const offset = (page - 1) * pageSize;
-
-    const conditions: SQL[] = [];
-
-    if (filters?.shipmentNumber) {
-      conditions.push(like(cargoesFlowDocumentUploads.shipmentNumber, `%${filters.shipmentNumber}%`));
-    }
-
-    if (filters?.uploadStatus) {
-      conditions.push(eq(cargoesFlowDocumentUploads.uploadStatus, filters.uploadStatus));
-    }
 
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
-    const data = await db
-      .select()
-      .from(cargoesFlowDocumentUploads)
-      .where(whereClause)
-      .orderBy(desc(cargoesFlowDocumentUploads.uploadedAt))
-      .limit(pageSize)
-      .offset(offset);
+  const data = await db
+    .select()
+    .from(cargoesFlowDocumentUploads)
+    .where(whereClause)
+    .orderBy(desc(cargoesFlowDocumentUploads.uploadedAt))
+    .limit(pageSize)
+    .offset(offset);
 
-    const countResult = await db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(cargoesFlowDocumentUploads)
-      .where(whereClause);
+  const countResult = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(cargoesFlowDocumentUploads)
+    .where(whereClause);
 
-    const total = countResult[0]?.count || 0;
+  const total = countResult[0]?.count || 0;
 
-    return {
-      data,
-      pagination: {
-        page,
-        pageSize,
-        total,
-        totalPages: Math.ceil(total / pageSize),
-      },
-    };
-  }
+  return {
+    data,
+    pagination: {
+      page,
+      pageSize,
+      total,
+      totalPages: Math.ceil(total / pageSize),
+    },
+  };
+}
 
-  async getCargoesFlowDocumentUploadById(id: string): Promise<CargoesFlowDocumentUpload | undefined> {
-    const result = await db.select()
-      .from(cargoesFlowDocumentUploads)
-      .where(eq(cargoesFlowDocumentUploads.id, id));
-    return result[0];
-  }
+  async getCargoesFlowDocumentUploadById(id: string): Promise < CargoesFlowDocumentUpload | undefined > {
+  const result = await db.select()
+    .from(cargoesFlowDocumentUploads)
+    .where(eq(cargoesFlowDocumentUploads.id, id));
+  return result[0];
+}
 
   async updateCargoesFlowDocumentUploadStatus(
-    id: string,
-    status: string,
-    errorMessage?: string,
-    cargoesFlowCreatedAt?: Date
-  ): Promise<CargoesFlowDocumentUpload | undefined> {
-    const updateData: any = { uploadStatus: status };
-    if (errorMessage) updateData.errorMessage = errorMessage;
-    if (cargoesFlowCreatedAt) updateData.cargoesFlowCreatedAt = cargoesFlowCreatedAt;
+  id: string,
+  status: string,
+  errorMessage ?: string,
+  cargoesFlowCreatedAt ?: Date
+): Promise < CargoesFlowDocumentUpload | undefined > {
+  const updateData: any = { uploadStatus: status };
+  if(errorMessage) updateData.errorMessage = errorMessage;
+  if(cargoesFlowCreatedAt) updateData.cargoesFlowCreatedAt = cargoesFlowCreatedAt;
 
-    const result = await db
-      .update(cargoesFlowDocumentUploads)
-      .set(updateData)
-      .where(eq(cargoesFlowDocumentUploads.id, id))
-      .returning();
-    return result[0];
-  }
+  const result = await db
+    .update(cargoesFlowDocumentUploads)
+    .set(updateData)
+    .where(eq(cargoesFlowDocumentUploads.id, id))
+    .returning();
+  return result[0];
+}
 
-  async createCargoesFlowDocumentUploadLog(insertLog: InsertCargoesFlowDocumentUploadLog): Promise<CargoesFlowDocumentUploadLog> {
-    const result = await db.insert(cargoesFlowDocumentUploadLogs).values(insertLog).returning();
-    return result[0];
-  }
+  async createCargoesFlowDocumentUploadLog(insertLog: InsertCargoesFlowDocumentUploadLog): Promise < CargoesFlowDocumentUploadLog > {
+  const result = await db.insert(cargoesFlowDocumentUploadLogs).values(insertLog).returning();
+  return result[0];
+}
 
-  async getCargoesFlowDocumentUploadLogs(params?: PaginationParams): Promise<PaginatedResult<CargoesFlowDocumentUploadLog>> {
-    const { page = 1, pageSize = 50 } = params || {};
-    const offset = (page - 1) * pageSize;
+  async getCargoesFlowDocumentUploadLogs(params ?: PaginationParams): Promise < PaginatedResult < CargoesFlowDocumentUploadLog >> {
+  const { page = 1, pageSize = 50 } = params || {};
+  const offset = (page - 1) * pageSize;
 
-    const data = await db
-      .select()
-      .from(cargoesFlowDocumentUploadLogs)
-      .orderBy(desc(cargoesFlowDocumentUploadLogs.uploadStartedAt))
-      .limit(pageSize)
-      .offset(offset);
+  const data = await db
+    .select()
+    .from(cargoesFlowDocumentUploadLogs)
+    .orderBy(desc(cargoesFlowDocumentUploadLogs.uploadStartedAt))
+    .limit(pageSize)
+    .offset(offset);
 
-    const countResult = await db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(cargoesFlowDocumentUploadLogs);
+  const countResult = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(cargoesFlowDocumentUploadLogs);
 
-    const total = countResult[0]?.count || 0;
+  const total = countResult[0]?.count || 0;
 
-    return {
-      data,
-      pagination: {
-        page,
-        pageSize,
-        total,
-        totalPages: Math.ceil(total / pageSize),
-      },
-    };
-  }
+  return {
+    data,
+    pagination: {
+      page,
+      pageSize,
+      total,
+      totalPages: Math.ceil(total / pageSize),
+    },
+  };
+}
 
-  async getCargoesFlowDocumentUploadLogById(id: string): Promise<CargoesFlowDocumentUploadLog | undefined> {
-    const result = await db.select()
-      .from(cargoesFlowDocumentUploadLogs)
-      .where(eq(cargoesFlowDocumentUploadLogs.id, id));
-    return result[0];
-  }
+  async getCargoesFlowDocumentUploadLogById(id: string): Promise < CargoesFlowDocumentUploadLog | undefined > {
+  const result = await db.select()
+    .from(cargoesFlowDocumentUploadLogs)
+    .where(eq(cargoesFlowDocumentUploadLogs.id, id));
+  return result[0];
+}
 
   async updateCargoesFlowDocumentUploadLogStatus(
-    id: string,
-    successCount: number,
-    failCount: number,
-    completedAt: Date,
-    apiResponse?: string,
-    errorDetails?: string
-  ): Promise<CargoesFlowDocumentUploadLog | undefined> {
-    const updateData: any = {
-      successfulUploads: successCount,
-      failedUploads: failCount,
-      uploadCompletedAt: completedAt,
-    };
-    if (apiResponse) updateData.apiResponse = apiResponse;
-    if (errorDetails) updateData.errorDetails = errorDetails;
+  id: string,
+  successCount: number,
+  failCount: number,
+  completedAt: Date,
+  apiResponse ?: string,
+  errorDetails ?: string
+): Promise < CargoesFlowDocumentUploadLog | undefined > {
+  const updateData: any = {
+    successfulUploads: successCount,
+    failedUploads: failCount,
+    uploadCompletedAt: completedAt,
+  };
+  if(apiResponse) updateData.apiResponse = apiResponse;
+  if(errorDetails) updateData.errorDetails = errorDetails;
 
-    const result = await db
-      .update(cargoesFlowDocumentUploadLogs)
-      .set(updateData)
-      .where(eq(cargoesFlowDocumentUploadLogs.id, id))
-      .returning();
-    return result[0];
-  }
+  const result = await db
+    .update(cargoesFlowDocumentUploadLogs)
+    .set(updateData)
+    .where(eq(cargoesFlowDocumentUploadLogs.id, id))
+    .returning();
+  return result[0];
+}
 
 
-  async getDistinctPorts(): Promise<string[]> {
-    const origins = await db
-      .selectDistinct({ port: cargoesFlowShipments.originPort })
-      .from(cargoesFlowShipments)
-      .where(sql`${cargoesFlowShipments.originPort} IS NOT NULL AND ${cargoesFlowShipments.originPort} != ''`);
+  async getDistinctPorts(): Promise < string[] > {
+  const origins = await db
+    .selectDistinct({ port: cargoesFlowShipments.originPort })
+    .from(cargoesFlowShipments)
+    .where(sql`${cargoesFlowShipments.originPort} IS NOT NULL AND ${cargoesFlowShipments.originPort} != ''`);
 
-    const destinations = await db
-      .selectDistinct({ port: cargoesFlowShipments.destinationPort })
-      .from(cargoesFlowShipments)
-      .where(sql`${cargoesFlowShipments.destinationPort} IS NOT NULL AND ${cargoesFlowShipments.destinationPort} != ''`);
+  const destinations = await db
+    .selectDistinct({ port: cargoesFlowShipments.destinationPort })
+    .from(cargoesFlowShipments)
+    .where(sql`${cargoesFlowShipments.destinationPort} IS NOT NULL AND ${cargoesFlowShipments.destinationPort} != ''`);
 
-    const allPorts = [
-      ...origins.map(row => row.port),
-      ...destinations.map(row => row.port)
-    ]
-      .filter((port): port is string => port !== null && port !== undefined);
+  const allPorts = [
+    ...origins.map(row => row.port),
+    ...destinations.map(row => row.port)
+  ]
+    .filter((port): port is string => port !== null && port !== undefined);
 
-    // Normalize and deduplicate port names
-    const normalizedPorts = this.normalizePortNames(allPorts);
-    const uniquePorts = Array.from(new Set(normalizedPorts));
-    return uniquePorts.sort();
-  }
+  // Normalize and deduplicate port names
+  const normalizedPorts = this.normalizePortNames(allPorts);
+  const uniquePorts = Array.from(new Set(normalizedPorts));
+  return uniquePorts.sort();
+}
 
   // Helper function to normalize port names and remove duplicates
   private normalizePortNames(ports: string[]): string[] {
-    const portMapping: { [key: string]: string } = {
-      // New York variations
-      'new york city': 'New York',
-      'new york': 'New York',
-      'nyc': 'New York',
-      'new york, ny': 'New York',
+  const portMapping: { [key: string]: string } = {
+    // New York variations
+    'new york city': 'New York',
+    'new york': 'New York',
+    'nyc': 'New York',
+    'new york, ny': 'New York',
 
-      // Karachi/Pakistan port variations
-      'karachi': 'Karachi',
-      'kemari': 'Karachi',
-      'muhammad bin qasim': 'Karachi',
-      'bin qasim': 'Karachi',
-      'bin qasim port': 'Karachi',
-      'port qasim': 'Karachi',
-      'port muhammad bin qasim': 'Karachi',
+    // Karachi/Pakistan port variations
+    'karachi': 'Karachi',
+    'kemari': 'Karachi',
+    'muhammad bin qasim': 'Karachi',
+    'bin qasim': 'Karachi',
+    'bin qasim port': 'Karachi',
+    'port qasim': 'Karachi',
+    'port muhammad bin qasim': 'Karachi',
 
-      // Los Angeles variations
-      'los angeles': 'Los Angeles',
-      'la': 'Los Angeles',
-      'los angeles, ca': 'Los Angeles',
+    // Los Angeles variations
+    'los angeles': 'Los Angeles',
+    'la': 'Los Angeles',
+    'los angeles, ca': 'Los Angeles',
 
-      // Long Beach variations
-      'long beach': 'Long Beach',
-      'long beach, ca': 'Long Beach',
+    // Long Beach variations
+    'long beach': 'Long Beach',
+    'long beach, ca': 'Long Beach',
 
-      // Shanghai variations
-      'shanghai': 'Shanghai',
-      'shanghai, china': 'Shanghai',
+    // Shanghai variations
+    'shanghai': 'Shanghai',
+    'shanghai, china': 'Shanghai',
 
-      // Houston variations
-      'houston': 'Houston',
-      'houston, tx': 'Houston',
+    // Houston variations
+    'houston': 'Houston',
+    'houston, tx': 'Houston',
 
-      // Oakland variations
-      'oakland': 'Oakland',
-      'oakland, ca': 'Oakland',
+    // Oakland variations
+    'oakland': 'Oakland',
+    'oakland, ca': 'Oakland',
 
-      // Seattle variations
-      'seattle': 'Seattle',
-      'seattle, wa': 'Seattle',
+    // Seattle variations
+    'seattle': 'Seattle',
+    'seattle, wa': 'Seattle',
 
-      // Savannah variations
-      'savannah': 'Savannah',
-      'savannah, ga': 'Savannah',
+    // Savannah variations
+    'savannah': 'Savannah',
+    'savannah, ga': 'Savannah',
 
-      // Norfolk variations
-      'norfolk': 'Norfolk',
-      'norfolk, va': 'Norfolk',
+    // Norfolk variations
+    'norfolk': 'Norfolk',
+    'norfolk, va': 'Norfolk',
 
-      // Charleston variations
-      'charleston': 'Charleston',
-      'charleston, sc': 'Charleston',
-    };
+    // Charleston variations
+    'charleston': 'Charleston',
+    'charleston, sc': 'Charleston',
+  };
 
-    return ports.map(port => {
-      const normalized = port.toLowerCase().trim();
-      return portMapping[normalized] || port;
-    });
+  return ports.map(port => {
+    const normalized = port.toLowerCase().trim();
+    return portMapping[normalized] || port;
+  });
+}
+
+  async upsertVessel(vessel: InsertVessel): Promise < Vessel > {
+  const result = await db.insert(vessels)
+    .values(vessel)
+    .onConflictDoUpdate({
+      target: vessels.name,
+      set: {
+        tripNumber: vessel.tripNumber,
+        destination: vessel.destination,
+        eta: vessel.eta,
+        atd: vessel.atd,
+        lastUpdated: new Date(),
+      }
+    })
+    .returning();
+  return result[0];
+}
+
+  async getVessels(params ?: PaginationParams, filters ?: { search?: string }): Promise < PaginatedResult < Vessel >> {
+  const page = params?.page || 1;
+  const pageSize = params?.pageSize || 50;
+  const offset = (page - 1) * pageSize;
+
+  const whereClauses: SQL[] = [];
+
+  if(filters?.search) {
+    whereClauses.push(like(vessels.name, `%${filters.search}%`));
   }
-
-  async upsertVessel(vessel: InsertVessel): Promise<Vessel> {
-    const result = await db.insert(vessels)
-      .values(vessel)
-      .onConflictDoUpdate({
-        target: vessels.name,
-        set: {
-          tripNumber: vessel.tripNumber,
-          destination: vessel.destination,
-          eta: vessel.eta,
-          atd: vessel.atd,
-          lastUpdated: new Date(),
-        }
-      })
-      .returning();
-    return result[0];
-  }
-
-  async getVessels(params?: PaginationParams, filters?: { search?: string }): Promise<PaginatedResult<Vessel>> {
-    const page = params?.page || 1;
-    const pageSize = params?.pageSize || 50;
-    const offset = (page - 1) * pageSize;
-
-    const whereClauses: SQL[] = [];
-
-    if (filters?.search) {
-      whereClauses.push(like(vessels.name, `%${filters.search}%`));
-    }
 
     const whereClause = whereClauses.length > 0
-      ? sql`${whereClauses.reduce((acc, clause, idx) => {
-        return idx === 0 ? clause : sql`${acc} AND ${clause}`;
-      })}`
-      : undefined;
+    ? sql`${whereClauses.reduce((acc, clause, idx) => {
+      return idx === 0 ? clause : sql`${acc} AND ${clause}`;
+    })}`
+    : undefined;
 
-    let query = db.select().from(vessels);
-    if (whereClause) {
-      query = query.where(whereClause) as typeof query;
-    }
+  let query = db.select().from(vessels);
+  if(whereClause) {
+    query = query.where(whereClause) as typeof query;
+  }
 
     const data = await query
-      .orderBy(desc(vessels.lastUpdated))
-      .limit(pageSize)
-      .offset(offset);
+    .orderBy(desc(vessels.lastUpdated))
+    .limit(pageSize)
+    .offset(offset);
 
-    const baseCondition = whereClause || sql`TRUE`;
-    const totalResult = await db.select({ count: sql<number>`count(*)` })
-      .from(vessels)
-      .where(baseCondition);
-    const total = Number(totalResult[0]?.count || 0);
+  const baseCondition = whereClause || sql`TRUE`;
+  const totalResult = await db.select({ count: sql<number>`count(*)` })
+    .from(vessels)
+    .where(baseCondition);
+  const total = Number(totalResult[0]?.count || 0);
 
-    return {
-      data,
-      pagination: {
-        page,
-        pageSize,
-        total,
-        totalPages: Math.ceil(total / pageSize),
-      },
-    };
-  }
+  return {
+    data,
+    pagination: {
+      page,
+      pageSize,
+      total,
+      totalPages: Math.ceil(total / pageSize),
+    },
+  };
+}
 
-  async getVesselById(id: string): Promise<Vessel | undefined> {
-    const result = await db.select().from(vessels).where(eq(vessels.id, id));
-    return result[0];
-  }
+  async getVesselById(id: string): Promise < Vessel | undefined > {
+  const result = await db.select().from(vessels).where(eq(vessels.id, id));
+  return result[0];
+}
 }
 
 export const storage = new DbStorage();

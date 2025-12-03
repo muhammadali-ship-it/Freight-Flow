@@ -219,23 +219,12 @@ async function processAndStoreShipmentsWithStats(shipments: CargoesFlowShipmentD
         console.log(`[Cargoes Flow Poller] Shipment ${shipmentRef}: existing=${!!existing ? 'YES' : 'NO'}, container=${shipment.containerNumber}`);
       }
 
-      // Check if existing shipment is "Completed" (Empty In > 10 days ago)
+      // Check if existing shipment is "Completed" (status is 'COMPLETED')
       // If so, SKIP update to freeze tracking history
-      if (existing && existing.rawData) {
-        const rawData = existing.rawData as any;
-        const events = rawData.shipmentEvents || [];
-        const emptyInEvent = events.find((e: any) => e.code === 'gateInWithContainerEmpty');
-
-        if (emptyInEvent && emptyInEvent.actualTime) {
-          const emptyInDate = new Date(emptyInEvent.actualTime);
-          const tenDaysAgo = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000);
-
-          if (emptyInDate < tenDaysAgo) {
-            console.log(`[Cargoes Flow Poller] 🛑 Skipping update for COMPLETED shipment ${shipmentRef} (Empty In: ${emptyInEvent.actualTime})`);
-            skippedCount++;
-            continue;
-          }
-        }
+      if (existing && existing.status === 'COMPLETED') {
+        console.log(`[Cargoes Flow Poller] 🛑 Skipping update for COMPLETED shipment ${shipmentRef}`);
+        skippedCount++;
+        continue;
       }
 
       // For MBL-grouped shipments, collect ALL shipments with same MBL to merge their data

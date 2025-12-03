@@ -1223,16 +1223,12 @@ export class DbStorage implements IStorage {
     }>;
   }> {
     // Get all shipments with their rawData, excluding completed containers
-    const completedCondition = sql`EXISTS (
-      SELECT 1 FROM jsonb_array_elements(${cargoesFlowShipments.rawData}->'shipmentEvents') as event
-      WHERE event->>'code' = 'gateInWithContainerEmpty'
-      AND (event->>'actualTime') IS NOT NULL
-      AND (event->>'actualTime')::timestamp < NOW() - INTERVAL '10 days'
-    )`;
+    // A container is considered completed if its status is 'COMPLETED'
+    const completedCondition = eq(cargoesFlowShipments.status, 'COMPLETED');
 
     const allShipments = await db.select()
       .from(cargoesFlowShipments)
-      .where(sql`NOT ${completedCondition}`);
+      .where(not(completedCondition));
 
     // Calculate costs for each container
     let totalDemurrage = 0;
@@ -1678,19 +1674,16 @@ export class DbStorage implements IStorage {
     // Completed container filtering
     // A container is considered completed if it has an "Empty In" event (gateInWithContainerEmpty)
     // with an actualTime that is more than 10 days ago.
-    const completedCondition = sql`EXISTS (
-      SELECT 1 FROM jsonb_array_elements(${cargoesFlowShipments.rawData}->'shipmentEvents') as event
-      WHERE event->>'code' = 'gateInWithContainerEmpty'
-      AND (event->>'actualTime') IS NOT NULL
-      AND (event->>'actualTime')::timestamp < NOW() - INTERVAL '10 days'
-    )`;
+    // Completed container filtering
+    // A container is considered completed if its status is 'COMPLETED'
+    const completedCondition = eq(cargoesFlowShipments.status, 'COMPLETED');
 
     if (filters?.completed === true) {
       // Show ONLY completed containers
       conditions.push(completedCondition);
     } else {
       // Show ONLY active (non-completed) containers (default behavior)
-      conditions.push(sql`NOT ${completedCondition}`);
+      conditions.push(not(completedCondition));
     }
 
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
@@ -1764,19 +1757,16 @@ export class DbStorage implements IStorage {
     // Completed container filtering
     // A container is considered completed if it has an "Empty In" event (gateInWithContainerEmpty)
     // with an actualTime that is more than 10 days ago.
-    const completedCondition = sql`EXISTS (
-      SELECT 1 FROM jsonb_array_elements(${cargoesFlowShipments.rawData}->'shipmentEvents') as event
-      WHERE event->>'code' = 'gateInWithContainerEmpty'
-      AND (event->>'actualTime') IS NOT NULL
-      AND (event->>'actualTime')::timestamp < NOW() - INTERVAL '10 days'
-    )`;
+    // Completed container filtering
+    // A container is considered completed if its status is 'COMPLETED'
+    const completedCondition = eq(cargoesFlowShipments.status, 'COMPLETED');
 
     if (filters?.completed === true) {
       // Show ONLY completed containers
       conditions.push(completedCondition);
     } else {
       // Show ONLY active (non-completed) containers (default behavior)
-      conditions.push(sql`NOT ${completedCondition}`);
+      conditions.push(not(completedCondition));
     }
 
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;

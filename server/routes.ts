@@ -190,6 +190,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           ? { start: req.query.dateFrom as string, end: req.query.dateTo as string }
           : undefined,
         kpiFilter: req.query.kpiFilter as string,
+        completed: req.query.completed === 'true' ? true : undefined,
       };
 
       // Get current user and apply filters based on role

@@ -181,7 +181,7 @@ async function processAndStoreShipmentsWithStats(shipments: CargoesFlowShipmentD
           taiShipmentId = containerPost.taiShipmentId;
           office = containerPost.office;
           salesRepNames = containerPost.salesRepNames;
-          
+
           // Debug log for first few containers
           if (i < 3) {
             console.log(`[Cargoes Flow Poller] Found TMS reference for container ${shipment.containerNumber}: ${containerTmsReference}`);
@@ -198,7 +198,7 @@ async function processAndStoreShipmentsWithStats(shipments: CargoesFlowShipmentD
           taiShipmentId = cargoesFlowPost.taiShipmentId;
           office = cargoesFlowPost.office;
           salesRepNames = cargoesFlowPost.salesRepNames;
-          
+
           if (i < 3) {
             console.log(`[Cargoes Flow Poller] Using MBL lookup for ${mblNumber}, found TAI ID: ${taiShipmentId}`);
           }
@@ -217,6 +217,25 @@ async function processAndStoreShipmentsWithStats(shipments: CargoesFlowShipmentD
       // Debug: Log first few shipments to see what's happening
       if (i < 3) {
         console.log(`[Cargoes Flow Poller] Shipment ${shipmentRef}: existing=${!!existing ? 'YES' : 'NO'}, container=${shipment.containerNumber}`);
+      }
+
+      // Check if existing shipment is "Completed" (Empty In > 10 days ago)
+      // If so, SKIP update to freeze tracking history
+      if (existing && existing.rawData) {
+        const rawData = existing.rawData as any;
+        const events = rawData.shipmentEvents || [];
+        const emptyInEvent = events.find((e: any) => e.code === 'gateInWithContainerEmpty');
+
+        if (emptyInEvent && emptyInEvent.actualTime) {
+          const emptyInDate = new Date(emptyInEvent.actualTime);
+          const tenDaysAgo = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000);
+
+          if (emptyInDate < tenDaysAgo) {
+            console.log(`[Cargoes Flow Poller] 🛑 Skipping update for COMPLETED shipment ${shipmentRef} (Empty In: ${emptyInEvent.actualTime})`);
+            skippedCount++;
+            continue;
+          }
+        }
       }
 
       // For MBL-grouped shipments, collect ALL shipments with same MBL to merge their data
@@ -352,9 +371,9 @@ async function processAndStoreShipmentsWithStats(shipments: CargoesFlowShipmentD
           mergedRawData.containers = mergedContainers;
         } else if (shipment.containerNumber) {
           // No existing containers array, but we have a containerNumber from API
-          mergedRawData.containers = [{ 
+          mergedRawData.containers = [{
             containerNumber: shipment.containerNumber,
-            tmsReference: containerTmsReference 
+            tmsReference: containerTmsReference
           }];
         }
       } else if (existing && existing.rawData) {
@@ -387,9 +406,9 @@ async function processAndStoreShipmentsWithStats(shipments: CargoesFlowShipmentD
             return c;
           });
         } else if (shipment.containerNumber) {
-          mergedRawData.containers = [{ 
+          mergedRawData.containers = [{
             containerNumber: shipment.containerNumber,
-            tmsReference: containerTmsReference 
+            tmsReference: containerTmsReference
           }];
         }
       }

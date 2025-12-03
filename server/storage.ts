@@ -1222,8 +1222,17 @@ export class DbStorage implements IStorage {
       detention: number;
     }>;
   }> {
-    // Get all shipments with their rawData
-    const allShipments = await db.select().from(cargoesFlowShipments);
+    // Get all shipments with their rawData, excluding completed containers
+    const completedCondition = sql`EXISTS (
+      SELECT 1 FROM jsonb_array_elements(${cargoesFlowShipments.rawData}->'shipmentEvents') as event
+      WHERE event->>'code' = 'gateInWithContainerEmpty'
+      AND (event->>'actualTime') IS NOT NULL
+      AND (event->>'actualTime')::timestamp < NOW() - INTERVAL '10 days'
+    )`;
+
+    const allShipments = await db.select()
+      .from(cargoesFlowShipments)
+      .where(sql`NOT ${completedCondition}`);
 
     // Calculate costs for each container
     let totalDemurrage = 0;
@@ -1620,7 +1629,7 @@ export class DbStorage implements IStorage {
 
   async getCargoesFlowShipments(
     params?: PaginationParams,
-    filters?: ShipmentFilters & { search?: string; userName?: string; userOffice?: string; userRole?: string }
+    filters?: ShipmentFilters & { search?: string; userName?: string; userOffice?: string; userRole?: string; completed?: boolean }
   ): Promise<PaginatedResult<CargoesFlowShipment>> {
     const page = params?.page || 1;
     const pageSize = params?.pageSize || 25;
@@ -1666,6 +1675,24 @@ export class DbStorage implements IStorage {
     }
     // Admin role: no filtering (no conditions added)
 
+    // Completed container filtering
+    // A container is considered completed if it has an "Empty In" event (gateInWithContainerEmpty)
+    // with an actualTime that is more than 10 days ago.
+    const completedCondition = sql`EXISTS (
+      SELECT 1 FROM jsonb_array_elements(${cargoesFlowShipments.rawData}->'shipmentEvents') as event
+      WHERE event->>'code' = 'gateInWithContainerEmpty'
+      AND (event->>'actualTime') IS NOT NULL
+      AND (event->>'actualTime')::timestamp < NOW() - INTERVAL '10 days'
+    )`;
+
+    if (filters?.completed === true) {
+      // Show ONLY completed containers
+      conditions.push(completedCondition);
+    } else {
+      // Show ONLY active (non-completed) containers (default behavior)
+      conditions.push(sql`NOT ${completedCondition}`);
+    }
+
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
     const [totalResult, data] = await Promise.all([
@@ -1695,7 +1722,7 @@ export class DbStorage implements IStorage {
 
   async getGroupedCargoesFlowShipments(
     params?: PaginationParams,
-    filters?: ShipmentFilters & { search?: string; userName?: string; userOffice?: string; userRole?: string; kpiFilter?: string }
+    filters?: ShipmentFilters & { search?: string; userName?: string; userOffice?: string; userRole?: string; kpiFilter?: string; completed?: boolean }
   ): Promise<PaginatedResult<any>> {
     const conditions: SQL[] = [];
 
@@ -1732,6 +1759,24 @@ export class DbStorage implements IStorage {
       conditions.push(sql`${filters.userName} = ANY(${cargoesFlowShipments.salesRepNames})`);
     } else if (filters?.userRole === 'Manager' && filters?.userOffice) {
       conditions.push(eq(cargoesFlowShipments.office, filters.userOffice));
+    }
+
+    // Completed container filtering
+    // A container is considered completed if it has an "Empty In" event (gateInWithContainerEmpty)
+    // with an actualTime that is more than 10 days ago.
+    const completedCondition = sql`EXISTS (
+      SELECT 1 FROM jsonb_array_elements(${cargoesFlowShipments.rawData}->'shipmentEvents') as event
+      WHERE event->>'code' = 'gateInWithContainerEmpty'
+      AND (event->>'actualTime') IS NOT NULL
+      AND (event->>'actualTime')::timestamp < NOW() - INTERVAL '10 days'
+    )`;
+
+    if (filters?.completed === true) {
+      // Show ONLY completed containers
+      conditions.push(completedCondition);
+    } else {
+      // Show ONLY active (non-completed) containers (default behavior)
+      conditions.push(sql`NOT ${completedCondition}`);
     }
 
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;

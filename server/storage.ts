@@ -1742,14 +1742,21 @@ export class DbStorage implements IStorage {
       .where(whereClause)
       .orderBy(desc(cargoesFlowShipments.lastFetchedAt));
 
-    // Group by MBL number
+    // Determine if this is a container-level KPI (no MBL grouping needed)
+    const isContainerLevel = filters?.kpiFilter && this.isContainerLevelKpi(filters.kpiFilter);
+
+    // Group by MBL number (or by container ID for container-level KPIs)
     const grouped = new Map<string, any>();
 
     for (const shipment of allShipments) {
-      const mbl = shipment.mblNumber || 'NO_MBL';
+      // For container-level KPIs, use unique container ID as key
+      // For shipment-level KPIs, use MBL number as key
+      const groupKey = isContainerLevel
+        ? shipment.id // Unique container ID
+        : (shipment.mblNumber || 'NO_MBL'); // MBL number
 
-      if (!grouped.has(mbl)) {
-        // First shipment for this MBL - create the group
+      if (!grouped.has(groupKey)) {
+        // First shipment for this group - create the group
         const rawData = shipment.rawData as any || {};
         const riskLevel = rawData.riskLevel || 'low';
         const riskReasons = rawData.riskReasons || [];
@@ -1759,7 +1766,7 @@ export class DbStorage implements IStorage {
         const containerInfo = containersArray.find((c: any) => c.containerNumber === shipment.containerNumber);
         const tmsReference = containerInfo?.tmsReference || null;
 
-        grouped.set(mbl, {
+        grouped.set(groupKey, {
           ...shipment,
           containers: [{
             containerNumber: shipment.containerNumber,
@@ -1772,9 +1779,10 @@ export class DbStorage implements IStorage {
           highestRiskLevel: riskLevel,
           aggregatedRiskReasons: riskReasons,
         });
-      } else {
-        // Add container to existing group
-        const group = grouped.get(mbl)!;
+      } else if (!isContainerLevel) {
+        // Only merge/group for shipment-level KPIs
+        // For container-level KPIs, each container is already its own group
+        const group = grouped.get(groupKey)!;
         const rawData = shipment.rawData as any || {};
 
         // Extract TMS reference from rawData.containers if available
@@ -2489,6 +2497,17 @@ export class DbStorage implements IStorage {
           return true;
       }
     });
+  }
+
+  // Helper method to determine if a KPI filter operates at container level (not shipment/MBL level)
+  private isContainerLevelKpi(kpiFilter: string): boolean {
+    const containerLevelKpis = [
+      'empty-returned',
+      'demurrage-alert',
+      'lfd-alert',
+      'detention-alert'
+    ];
+    return containerLevelKpis.includes(kpiFilter);
   }
 
   async getCargoesFlowShipmentById(id: string): Promise<CargoesFlowShipment | undefined> {

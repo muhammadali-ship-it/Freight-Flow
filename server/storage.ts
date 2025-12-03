@@ -88,7 +88,7 @@ import {
   type Vessel,
 } from "./shared/schema.js";
 import { db, pool } from "./db.js";
-import { eq, or, like, desc, asc, sql, SQL, and, inArray } from "drizzle-orm";
+import { eq, or, like, desc, asc, sql, SQL, and, inArray, isNull, ne, not } from "drizzle-orm";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
 
@@ -1224,11 +1224,13 @@ export class DbStorage implements IStorage {
   }> {
     // Get all shipments with their rawData, excluding completed containers
     // A container is considered completed if its status is 'COMPLETED'
-    const completedCondition = eq(cargoesFlowShipments.status, 'COMPLETED');
-
+    // NULL status is treated as active (not completed)
     const allShipments = await db.select()
       .from(cargoesFlowShipments)
-      .where(not(completedCondition));
+      .where(or(
+        isNull(cargoesFlowShipments.status),
+        ne(cargoesFlowShipments.status, 'COMPLETED')
+      ));
 
     // Calculate costs for each container
     let totalDemurrage = 0;
@@ -1672,18 +1674,18 @@ export class DbStorage implements IStorage {
     // Admin role: no filtering (no conditions added)
 
     // Completed container filtering
-    // A container is considered completed if it has an "Empty In" event (gateInWithContainerEmpty)
-    // with an actualTime that is more than 10 days ago.
-    // Completed container filtering
     // A container is considered completed if its status is 'COMPLETED'
-    const completedCondition = eq(cargoesFlowShipments.status, 'COMPLETED');
-
+    // NULL status is treated as active (not completed)
     if (filters?.completed === true) {
-      // Show ONLY completed containers
-      conditions.push(completedCondition);
+      // Show ONLY completed containers (status = 'COMPLETED')
+      conditions.push(eq(cargoesFlowShipments.status, 'COMPLETED'));
     } else {
       // Show ONLY active (non-completed) containers (default behavior)
-      conditions.push(not(completedCondition));
+      // This includes NULL status and any status that is not 'COMPLETED'
+      conditions.push(or(
+        isNull(cargoesFlowShipments.status),
+        ne(cargoesFlowShipments.status, 'COMPLETED')
+      ));
     }
 
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
@@ -1755,18 +1757,18 @@ export class DbStorage implements IStorage {
     }
 
     // Completed container filtering
-    // A container is considered completed if it has an "Empty In" event (gateInWithContainerEmpty)
-    // with an actualTime that is more than 10 days ago.
-    // Completed container filtering
     // A container is considered completed if its status is 'COMPLETED'
-    const completedCondition = eq(cargoesFlowShipments.status, 'COMPLETED');
-
+    // NULL status is treated as active (not completed)
     if (filters?.completed === true) {
-      // Show ONLY completed containers
-      conditions.push(completedCondition);
+      // Show ONLY completed containers (status = 'COMPLETED')
+      conditions.push(eq(cargoesFlowShipments.status, 'COMPLETED'));
     } else {
       // Show ONLY active (non-completed) containers (default behavior)
-      conditions.push(not(completedCondition));
+      // This includes NULL status and any status that is not 'COMPLETED'
+      conditions.push(or(
+        isNull(cargoesFlowShipments.status),
+        ne(cargoesFlowShipments.status, 'COMPLETED')
+      ));
     }
 
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;

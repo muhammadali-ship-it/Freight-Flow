@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage, db } from "./storage.js";
 import { sql } from "drizzle-orm";
-import { insertContainerSchema, insertExceptionSchema, insertVesselPositionSchema, insertRailSegmentSchema, insertTimelineEventSchema, insertSavedViewSchema, insertIntegrationConfigSchema, insertUserSchema, insertShipmentSchema, insertMilestoneSchema, insertCustomEntrySchema, cargoesFlowCarriers, cargoesFlowCarrierSyncLogs, type Milestone, type User, type Shipment } from "./shared/schema.js";
+import { insertContainerSchema, insertExceptionSchema, insertVesselPositionSchema, insertRailSegmentSchema, insertTimelineEventSchema, insertSavedViewSchema, insertIntegrationConfigSchema, insertUserSchema, insertShipmentSchema, insertMilestoneSchema, insertCustomEntrySchema, type Milestone, type User, type Shipment } from "./shared/schema.js";
 import { integrationOrchestrator } from "./integrations/integration-orchestrator.js";
 import { riskScheduler } from "./services/risk-scheduler.js";
 import { startPolling as startCargoesFlowPolling, triggerManualPoll, resetPollingState } from "./services/cargoes-flow-poller.js";
@@ -3010,59 +3010,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Cargoes Flow Carriers - Get all carriers
-  app.get("/api/cargoes-flow/carriers", async (req, res) => {
-    try {
-      const carriers = await db.select().from(cargoesFlowCarriers).orderBy(cargoesFlowCarriers.carrierName);
-      res.json(carriers);
-    } catch (error: any) {
-      console.error("Error syncing carriers:", error);
-      res.status(500).json({ error: error.message || "Failed to sync carriers" });
-    }
-  });
-
-  // Get carrier sync logs
-  app.get("/api/cargoes-flow/carriers/sync-logs", async (req, res) => {
-    try {
-      const page = parseInt(req.query.page as string) || 1;
-      const pageSize = parseInt(req.query.pageSize as string) || 50;
-      const offset = (page - 1) * pageSize;
-
-      const logs = await db.select()
-        .from(cargoesFlowCarrierSyncLogs)
-        .orderBy(sql`${cargoesFlowCarrierSyncLogs.createdAt} DESC`)
-        .limit(pageSize)
-        .offset(offset);
-
-      const countResult = await db.select({ count: sql<number>`count(*)` })
-        .from(cargoesFlowCarrierSyncLogs);
-      const total = Number(countResult[0]?.count || 0);
-
-      res.json({
-        logs,
-        pagination: {
-          page,
-          pageSize,
-          total,
-          totalPages: Math.ceil(total / pageSize),
-        },
-      });
-    } catch (error: any) {
-      console.error("Error fetching carrier sync logs:", error);
-      res.status(500).json({ error: error.message || "Failed to fetch carrier sync logs" });
-    }
-  });
-
-  // Get distinct carriers from Cargoes Flow shipments (for filter dropdowns)
-  app.get("/api/carriers", async (req, res) => {
-    try {
-      const carriers = await storage.getDistinctCarriers();
-      res.json(carriers);
-    } catch (error: any) {
-      console.error("Error fetching distinct carriers:", error);
-      res.status(500).json({ error: error.message || "Failed to fetch carriers" });
-    }
-  });
 
   // Get distinct ports from Cargoes Flow shipments (for filter dropdowns)
   app.get("/api/ports", async (req, res) => {

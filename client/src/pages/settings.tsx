@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Users as UsersIcon, Plug, Upload, Building2, Ship, Activity, Package2 } from "lucide-react";
+import { Users as UsersIcon, Plug, Upload, Building2, Ship, Activity } from "lucide-react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -15,7 +15,6 @@ import IntegrationsPage from "./integrations";
 import CargoesFlowTracking from "./cargoes-flow-tracking";
 import WebhookMonitor from "./webhook-monitor";
 import { BulkDocumentUpload } from "@/components/bulk-document-upload";
-import { CarriersWidget } from "@/components/carriers-widget";
 
 type Organization = {
   id: string;
@@ -46,7 +45,7 @@ export default function Settings() {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-7 gap-1">
+          <TabsList className="grid w-full grid-cols-6 gap-1">
             <TabsTrigger value="cargoes-tracking" className="flex items-center gap-2" data-testid="tab-cargoes-tracking">
               <Ship className="h-4 w-4" />
               Cargoes Tracking
@@ -54,10 +53,6 @@ export default function Settings() {
             <TabsTrigger value="webhook-monitor" className="flex items-center gap-2" data-testid="tab-webhook-monitor">
               <Activity className="h-4 w-4" />
               Webhook Monitor
-            </TabsTrigger>
-            <TabsTrigger value="carriers" className="flex items-center gap-2" data-testid="tab-carriers">
-              <Package2 className="h-4 w-4" />
-              Carriers
             </TabsTrigger>
             <TabsTrigger value="organizations" className="flex items-center gap-2" data-testid="tab-organizations">
               <Building2 className="h-4 w-4" />
@@ -85,11 +80,6 @@ export default function Settings() {
           {/* Webhook Monitor */}
           <TabsContent value="webhook-monitor">
             <WebhookMonitor />
-          </TabsContent>
-
-          {/* Carriers */}
-          <TabsContent value="carriers">
-            <CarriersWidget />
           </TabsContent>
 
           {/* Organizations Database */}
@@ -125,7 +115,7 @@ export default function Settings() {
                               {org.name}
                             </TableCell>
                             <TableCell>
-                              <Badge 
+                              <Badge
                                 variant={org.type === "shipper" ? "default" : org.type === "consignee" ? "secondary" : "outline"}
                                 data-testid={`badge-org-type-${org.id}`}
                               >

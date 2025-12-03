@@ -336,7 +336,6 @@ export interface IStorage {
   updateCargoesFlowDocumentUploadLogStatus(id: string, successCount: number, failCount: number, completedAt: Date, apiResponse?: string, errorDetails?: string): Promise<CargoesFlowDocumentUploadLog | undefined>;
 
   // Cargoes Flow Filters - Distinct values for dropdowns
-  getDistinctCarriers(): Promise<string[]>;
   getDistinctPorts(): Promise<string[]>;
 
   // Vessels
@@ -2861,17 +2860,6 @@ export class DbStorage implements IStorage {
     return result[0];
   }
 
-  async getDistinctCarriers(): Promise<string[]> {
-    const result = await db
-      .selectDistinct({ carrier: cargoesFlowShipments.carrier })
-      .from(cargoesFlowShipments)
-      .where(sql`${cargoesFlowShipments.carrier} IS NOT NULL AND ${cargoesFlowShipments.carrier} != ''`);
-
-    return result
-      .map(row => row.carrier)
-      .filter((carrier): carrier is string => carrier !== null && carrier !== undefined)
-      .sort();
-  }
 
   async getDistinctPorts(): Promise<string[]> {
     const origins = await db

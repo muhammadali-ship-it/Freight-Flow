@@ -503,6 +503,7 @@ export default function CargoesFlowShipmentDetail() {
     location: "",
     estimatedDate: "",
     actualDate: "",
+    fromAPI: false, // Track if data came from API
   });
   const [railForm, setRailForm] = useState({
     railNumber: "",
@@ -549,6 +550,53 @@ export default function CargoesFlowShipmentDetail() {
   });
 
   const isUserCreatedShipment = !!trackingPost;
+
+  // Populate Empty In event form from API data when shipment loads
+  useEffect(() => {
+    if (shipment && shipment.containers && shipment.containers.length > 0) {
+      // Find the currently selected container or use the first one
+      const container = shipment.containers.find(c => c.id === selectedContainerId) || shipment.containers[0];
+
+      if (container && container.rawData) {
+        const events = (container.rawData as any).shipmentEvents || [];
+        const emptyInEvent = events.find((e: any) => e.code === 'gateInWithContainerEmpty');
+
+        if (emptyInEvent) {
+          // Format location from API data
+          const location = emptyInEvent.locationTerminalName
+            ? `${emptyInEvent.location} - ${emptyInEvent.locationTerminalName}`
+            : emptyInEvent.location;
+
+          // Format dates to datetime-local format (YYYY-MM-DDTHH:mm)
+          const formatDateTime = (dateStr: string | null) => {
+            if (!dateStr) return "";
+            try {
+              const date = new Date(dateStr);
+              if (isNaN(date.getTime())) return "";
+              return date.toISOString().slice(0, 16);
+            } catch {
+              return "";
+            }
+          };
+
+          setCustomEventForm({
+            location: location || "",
+            estimatedDate: formatDateTime(emptyInEvent.estimateTime),
+            actualDate: formatDateTime(emptyInEvent.actualTime),
+            fromAPI: true,
+          });
+        } else {
+          // Reset form if no API event
+          setCustomEventForm({
+            location: "",
+            estimatedDate: "",
+            actualDate: "",
+            fromAPI: false,
+          });
+        }
+      }
+    }
+  }, [shipment, selectedContainerId]);
 
   const assignUsersMutation = useMutation({
     mutationFn: async (userIds: string[]) => {
@@ -2902,38 +2950,52 @@ export default function CargoesFlowShipmentDetail() {
             <div className="space-y-3 p-4 border rounded-lg bg-muted/20">
               <div>
                 <Label htmlFor="empty-in-location">Location</Label>
-                <Select
-                  value={customEventForm.location}
-                  onValueChange={(value) => setCustomEventForm({ ...customEventForm, location: value })}
-                >
-                  <SelectTrigger id="empty-in-location">
-                    <SelectValue placeholder="Select empty return location" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Los Angeles, CA - APM Terminal">Los Angeles, CA - APM Terminal</SelectItem>
-                    <SelectItem value="Los Angeles, CA - Everport Terminal">Los Angeles, CA - Everport Terminal</SelectItem>
-                    <SelectItem value="Los Angeles, CA - TraPac Terminal">Los Angeles, CA - TraPac Terminal</SelectItem>
-                    <SelectItem value="Long Beach, CA - LBCT">Long Beach, CA - LBCT</SelectItem>
-                    <SelectItem value="Long Beach, CA - TTI Terminal">Long Beach, CA - TTI Terminal</SelectItem>
-                    <SelectItem value="Long Beach, CA - PCT">Long Beach, CA - PCT</SelectItem>
-                    <SelectItem value="Oakland, CA - SSA Terminal">Oakland, CA - SSA Terminal</SelectItem>
-                    <SelectItem value="Oakland, CA - TraPac Terminal">Oakland, CA - TraPac Terminal</SelectItem>
-                    <SelectItem value="Seattle, WA - SSA Terminal">Seattle, WA - SSA Terminal</SelectItem>
-                    <SelectItem value="Seattle, WA - TOTE Terminal">Seattle, WA - TOTE Terminal</SelectItem>
-                    <SelectItem value="Tacoma, WA - Husky Terminal">Tacoma, WA - Husky Terminal</SelectItem>
-                    <SelectItem value="Tacoma, WA - Washington United Terminal">Tacoma, WA - Washington United Terminal</SelectItem>
-                    <SelectItem value="New York, NY - APM Terminal">New York, NY - APM Terminal</SelectItem>
-                    <SelectItem value="New York, NY - Maher Terminal">New York, NY - Maher Terminal</SelectItem>
-                    <SelectItem value="Newark, NJ - APM Terminal">Newark, NJ - APM Terminal</SelectItem>
-                    <SelectItem value="Newark, NJ - PNCT">Newark, NJ - PNCT</SelectItem>
-                    <SelectItem value="Savannah, GA - GPA Garden City Terminal">Savannah, GA - GPA Garden City Terminal</SelectItem>
-                    <SelectItem value="Charleston, SC - Wando Welch Terminal">Charleston, SC - Wando Welch Terminal</SelectItem>
-                    <SelectItem value="Houston, TX - Barbours Cut Terminal">Houston, TX - Barbours Cut Terminal</SelectItem>
-                    <SelectItem value="Houston, TX - Bayport Terminal">Houston, TX - Bayport Terminal</SelectItem>
-                    <SelectItem value="Miami, FL - PortMiami">Miami, FL - PortMiami</SelectItem>
-                    <SelectItem value="Other">Other</SelectItem>
-                  </SelectContent>
-                </Select>
+                {customEventForm.fromAPI ? (
+                  <Input
+                    id="empty-in-location"
+                    value={customEventForm.location}
+                    disabled
+                    className="bg-muted"
+                  />
+                ) : (
+                  <Select
+                    value={customEventForm.location}
+                    onValueChange={(value) => setCustomEventForm({ ...customEventForm, location: value })}
+                  >
+                    <SelectTrigger id="empty-in-location">
+                      <SelectValue placeholder="Select empty return location" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Los Angeles, CA - APM Terminal">Los Angeles, CA - APM Terminal</SelectItem>
+                      <SelectItem value="Los Angeles, CA - Everport Terminal">Los Angeles, CA - Everport Terminal</SelectItem>
+                      <SelectItem value="Los Angeles, CA - TraPac Terminal">Los Angeles, CA - TraPac Terminal</SelectItem>
+                      <SelectItem value="Long Beach, CA - LBCT">Long Beach, CA - LBCT</SelectItem>
+                      <SelectItem value="Long Beach, CA - TTI Terminal">Long Beach, CA - TTI Terminal</SelectItem>
+                      <SelectItem value="Long Beach, CA - PCT">Long Beach, CA - PCT</SelectItem>
+                      <SelectItem value="Oakland, CA - SSA Terminal">Oakland, CA - SSA Terminal</SelectItem>
+                      <SelectItem value="Oakland, CA - TraPac Terminal">Oakland, CA - TraPac Terminal</SelectItem>
+                      <SelectItem value="Seattle, WA - SSA Terminal">Seattle, WA - SSA Terminal</SelectItem>
+                      <SelectItem value="Seattle, WA - TOTE Terminal">Seattle, WA - TOTE Terminal</SelectItem>
+                      <SelectItem value="Tacoma, WA - Husky Terminal">Tacoma, WA - Husky Terminal</SelectItem>
+                      <SelectItem value="Tacoma, WA - Washington United Terminal">Tacoma, WA - Washington United Terminal</SelectItem>
+                      <SelectItem value="New York, NY - APM Terminal">New York, NY - APM Terminal</SelectItem>
+                      <SelectItem value="New York, NY - Maher Terminal">New York, NY - Maher Terminal</SelectItem>
+                      <SelectItem value="Newark, NJ - APM Terminal">Newark, NJ - APM Terminal</SelectItem>
+                      <SelectItem value="Newark, NJ - PNCT">Newark, NJ - PNCT</SelectItem>
+                      <SelectItem value="Savannah, GA - GPA Garden City Terminal">Savannah, GA - GPA Garden City Terminal</SelectItem>
+                      <SelectItem value="Charleston, SC - Wando Welch Terminal">Charleston, SC - Wando Welch Terminal</SelectItem>
+                      <SelectItem value="Houston, TX - Barbours Cut Terminal">Houston, TX - Barbours Cut Terminal</SelectItem>
+                      <SelectItem value="Houston, TX - Bayport Terminal">Houston, TX - Bayport Terminal</SelectItem>
+                      <SelectItem value="Miami, FL - PortMiami">Miami, FL - PortMiami</SelectItem>
+                      <SelectItem value="Other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
+                {customEventForm.fromAPI && (
+                  <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                    From CargoesFlow API
+                  </p>
+                )}
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -2943,10 +3005,18 @@ export default function CargoesFlowShipmentDetail() {
                     type="datetime-local"
                     value={customEventForm.estimatedDate}
                     onChange={(e) => setCustomEventForm({ ...customEventForm, estimatedDate: e.target.value })}
+                    disabled={customEventForm.fromAPI}
+                    className={customEventForm.fromAPI ? "bg-muted" : ""}
                   />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Event has not occurred yet
-                  </p>
+                  {customEventForm.fromAPI ? (
+                    <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                      From CargoesFlow API
+                    </p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Event has not occurred yet
+                    </p>
+                  )}
                 </div>
                 <div>
                   <Label htmlFor="empty-in-actual">Actual Date</Label>

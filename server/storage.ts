@@ -1223,13 +1223,13 @@ export class DbStorage implements IStorage {
     }>;
   }> {
     // Get all shipments with their rawData, excluding completed containers
-    // A container is considered completed if its status is 'COMPLETED'
+    // A container is considered completed if its status is 'complete' or 'COMPLETED' (case-insensitive)
     // NULL status is treated as active (not completed)
     const allShipments = await db.select()
       .from(cargoesFlowShipments)
       .where(or(
         isNull(cargoesFlowShipments.status),
-        ne(cargoesFlowShipments.status, 'COMPLETED')
+        sql`LOWER(${cargoesFlowShipments.status}) != 'completed'`
       ));
 
     // Calculate costs for each container
@@ -1674,17 +1674,17 @@ export class DbStorage implements IStorage {
     // Admin role: no filtering (no conditions added)
 
     // Completed container filtering
-    // A container is considered completed if its status is 'COMPLETED'
+    // A container is considered completed if its status is 'complete' or 'COMPLETED' (case-insensitive)
     // NULL status is treated as active (not completed)
     if (filters?.completed === true) {
-      // Show ONLY completed containers (status = 'COMPLETED')
-      conditions.push(eq(cargoesFlowShipments.status, 'COMPLETED'));
+      // Show ONLY completed containers (status = 'complete' or 'COMPLETED', case-insensitive)
+      conditions.push(sql`LOWER(${cargoesFlowShipments.status}) = 'completed'`);
     } else {
       // Show ONLY active (non-completed) containers (default behavior)
-      // This includes NULL status and any status that is not 'COMPLETED'
+      // This includes NULL status and any status that is not 'completed' (case-insensitive)
       conditions.push(or(
         isNull(cargoesFlowShipments.status),
-        ne(cargoesFlowShipments.status, 'COMPLETED')
+        sql`LOWER(${cargoesFlowShipments.status}) != 'completed'`
       ));
     }
 
@@ -1757,17 +1757,17 @@ export class DbStorage implements IStorage {
     }
 
     // Completed container filtering
-    // A container is considered completed if its status is 'COMPLETED'
+    // A container is considered completed if its status is 'complete' or 'COMPLETED' (case-insensitive)
     // NULL status is treated as active (not completed)
     if (filters?.completed === true) {
-      // Show ONLY completed containers (status = 'COMPLETED')
-      conditions.push(eq(cargoesFlowShipments.status, 'COMPLETED'));
+      // Show ONLY completed containers (status = 'complete' or 'COMPLETED', case-insensitive)
+      conditions.push(sql`LOWER(${cargoesFlowShipments.status}) = 'completed'`);
     } else {
       // Show ONLY active (non-completed) containers (default behavior)
-      // This includes NULL status and any status that is not 'COMPLETED'
+      // This includes NULL status and any status that is not 'completed' (case-insensitive)
       conditions.push(or(
         isNull(cargoesFlowShipments.status),
-        ne(cargoesFlowShipments.status, 'COMPLETED')
+        sql`LOWER(${cargoesFlowShipments.status}) != 'completed'`
       ));
     }
 

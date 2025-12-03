@@ -219,13 +219,9 @@ async function processAndStoreShipmentsWithStats(shipments: CargoesFlowShipmentD
         console.log(`[Cargoes Flow Poller] Shipment ${shipmentRef}: existing=${!!existing ? 'YES' : 'NO'}, container=${shipment.containerNumber}`);
       }
 
-      // Check if existing shipment is "Completed" (status is 'COMPLETED')
-      // If so, SKIP update to freeze tracking history
-      if (existing && existing.status === 'COMPLETED') {
-        console.log(`[Cargoes Flow Poller] 🛑 Skipping update for COMPLETED shipment ${shipmentRef}`);
-        skippedCount++;
-        continue;
-      }
+      // Note: We no longer skip completed shipments here.
+      // Completed shipments will still be updated with latest data from API,
+      // but they will be filtered out from active views by storage.ts filters.
 
       // For MBL-grouped shipments, collect ALL shipments with same MBL to merge their data
       let allMblShipments: any[] = [];

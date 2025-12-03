@@ -3847,6 +3847,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // DEBUG: Temporary endpoint to check MBL status
+  app.get("/api/debug/mbl/:mbl", async (req, res) => {
+    try {
+      const mbl = req.params.mbl;
+      const result = await db.select()
+        .from(cargoesFlowShipments)
+        .where(eq(cargoesFlowShipments.mblNumber, mbl));
+
+      res.json({
+        found: result.length,
+        shipments: result.map(s => ({
+          id: s.id,
+          mblNumber: s.mblNumber,
+          containerNumber: s.containerNumber,
+          status: s.status,
+          statusType: typeof s.status,
+          statusLower: s.status?.toLowerCase(),
+          lastFetchedAt: s.lastFetchedAt,
+        }))
+      });
+    } catch (error) {
+      console.error("Error in debug endpoint:", error);
+      res.status(500).json({ error: "Failed to fetch debug info" });
+    }
+  });
+
   integrationOrchestrator.startAllActiveIntegrations();
   riskScheduler.start();
   startCargoesFlowPolling();

@@ -165,6 +165,8 @@ async function processAndStoreShipmentsWithStats(shipments: CargoesFlowShipmentD
       const destinationPort = shipment.destinationOceanPort || shipment.destinationPort || extractDestinationFromLegs(shipment.shipmentLegs);
       const etd = shipment.etd || shipment.promisedEtd || extractEtdFromLegs(shipment.shipmentLegs);
       const eta = shipment.eta || shipment.promisedEta || extractEtaFromLegs(shipment.shipmentLegs);
+      const atd = extractAtdFromEvents(shipment.shipmentEvents, originPort);
+      const ata = extractAtaFromEvents(shipment.shipmentEvents, destinationPort);
       const currentLocation = shipment.currentLocationName || shipment.currentLocation || null;
 
       // Look up TAI shipment ID, office, and salesRepNames by container number first, then by MBL
@@ -414,6 +416,8 @@ async function processAndStoreShipmentsWithStats(shipments: CargoesFlowShipmentD
           destinationPort,
           etd,
           eta,
+          atd,
+          ata,
           status: shipment.status || null,
           carrier: carrierName,
           vesselName: shipment.vesselName || null,
@@ -478,6 +482,8 @@ async function processAndStoreShipmentsWithStats(shipments: CargoesFlowShipmentD
           destinationPort,
           etd,
           eta,
+          atd,
+          ata,
           status: shipment.status || null,
           carrier: carrierName,
           vesselName: shipment.vesselName || null,
@@ -649,6 +655,56 @@ function extractLastVesselForDestination(shipment: any, destination: string | nu
           eta: segment.eta || null,
           atd: segment.atd || null,
         };
+      }
+    }
+  }
+
+  return null;
+}
+
+// Helper functions to extract actual times from shipment events
+function extractAtdFromEvents(shipmentEvents: any[], originPort: string | null): string | null {
+  if (!shipmentEvents || !Array.isArray(shipmentEvents)) return null;
+
+  // Look for vessel departure events with actual time at origin port
+  for (const event of shipmentEvents) {
+    if ((event.code === 'vesselDeparture' || event.code === 'vesselDepartureWithContainer') && event.actualTime) {
+      // Check if this is at the origin port
+      if (originPort && event.location) {
+        const isAtOrigin = 
+          event.location.toLowerCase().includes(originPort.toLowerCase()) ||
+          originPort.toLowerCase().includes(event.location.toLowerCase()) ||
+          event.locationRole === 'originPort';
+        
+        if (isAtOrigin) {
+          return event.actualTime;
+        }
+      } else {
+        // If no origin port specified, return first vessel departure actual time
+        return event.actualTime;
+      }
+    }
+  }
+
+  return null;
+}
+
+function extractAtaFromEvents(shipmentEvents: any[], destinationPort: string | null): string | null {
+  if (!shipmentEvents || !Array.isArray(shipmentEvents)) return null;
+
+  // Look for vessel arrival events with actual time at destination port
+  for (const event of shipmentEvents) {
+    if ((event.code === 'vesselArrival' || event.code === 'vesselArrivalWithContainer' || event.code === 'dischargeFromVessel') && event.actualTime) {
+      // Check if this is at the destination port
+      if (destinationPort && event.location) {
+        const isAtDestination = 
+          event.location.toLowerCase().includes(destinationPort.toLowerCase()) ||
+          destinationPort.toLowerCase().includes(event.location.toLowerCase()) ||
+          event.locationRole === 'destinationPort';
+        
+        if (isAtDestination) {
+          return event.actualTime;
+        }
       }
     }
   }

@@ -576,6 +576,8 @@ export const cargoesFlowShipments = pgTable("cargoes_flow_shipments", {
   destinationPort: text("destination_port"),
   etd: text("etd"),
   eta: text("eta"),
+  atd: text("atd"), // Actual Time of Departure
+  ata: text("ata"), // Actual Time of Arrival
   status: text("status"),
   carrier: text("carrier"),
   vesselName: text("vessel_name"),

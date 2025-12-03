@@ -116,6 +116,8 @@ interface CargoesFlowShipment {
   destinationPort?: string;
   etd?: string;
   eta?: string;
+  atd?: string;
+  ata?: string;
   status?: string;
   carrier?: string;
   vesselName?: string;
@@ -1009,16 +1011,20 @@ export default function CargoesFlowShipmentDetail() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
-            {(shipment.etd || rawData.promisedEtd) && (
+            {(shipment.atd || shipment.etd || rawData.promisedEtd) && (
               <div>
-                <p className="text-xs text-muted-foreground">ETD</p>
-                <p className="text-sm">{formatDateOnly(shipment.etd || rawData.promisedEtd)}</p>
+                <p className="text-xs text-muted-foreground">{shipment.atd ? 'ATD' : 'ETD'}</p>
+                <p className={`text-sm ${shipment.atd ? 'font-semibold text-green-700' : ''}`}>
+                  {formatDateOnly(shipment.atd || shipment.etd || rawData.promisedEtd)}
+                </p>
               </div>
             )}
-            {(shipment.eta || rawData.promisedEta) && (
+            {(shipment.ata || shipment.eta || rawData.promisedEta) && (
               <div>
-                <p className="text-xs text-muted-foreground">ETA</p>
-                <p className="text-sm">{formatDateOnly(shipment.eta || rawData.promisedEta)}</p>
+                <p className="text-xs text-muted-foreground">{shipment.ata ? 'ATA' : 'ETA'}</p>
+                <p className={`text-sm ${shipment.ata ? 'font-semibold text-green-700' : ''}`}>
+                  {formatDateOnly(shipment.ata || shipment.eta || rawData.promisedEta)}
+                </p>
               </div>
             )}
           </CardContent>

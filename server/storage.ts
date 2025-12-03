@@ -1742,21 +1742,14 @@ export class DbStorage implements IStorage {
       .where(whereClause)
       .orderBy(desc(cargoesFlowShipments.lastFetchedAt));
 
-    // Determine if this is a container-level KPI (no MBL grouping needed)
-    const isContainerLevel = filters?.kpiFilter && this.isContainerLevelKpi(filters.kpiFilter);
-
-    // Group by MBL number (or by container ID for container-level KPIs)
+    // Group by MBL number
     const grouped = new Map<string, any>();
 
     for (const shipment of allShipments) {
-      // For container-level KPIs, use unique container ID as key
-      // For shipment-level KPIs, use MBL number as key
-      const groupKey = isContainerLevel
-        ? shipment.id // Unique container ID
-        : (shipment.mblNumber || 'NO_MBL'); // MBL number
+      const mbl = shipment.mblNumber || 'NO_MBL';
 
-      if (!grouped.has(groupKey)) {
-        // First shipment for this group - create the group
+      if (!grouped.has(mbl)) {
+        // First shipment for this MBL - create the group
         const rawData = shipment.rawData as any || {};
         const riskLevel = rawData.riskLevel || 'low';
         const riskReasons = rawData.riskReasons || [];
@@ -1766,7 +1759,7 @@ export class DbStorage implements IStorage {
         const containerInfo = containersArray.find((c: any) => c.containerNumber === shipment.containerNumber);
         const tmsReference = containerInfo?.tmsReference || null;
 
-        grouped.set(groupKey, {
+        grouped.set(mbl, {
           ...shipment,
           containers: [{
             containerNumber: shipment.containerNumber,
@@ -1779,10 +1772,9 @@ export class DbStorage implements IStorage {
           highestRiskLevel: riskLevel,
           aggregatedRiskReasons: riskReasons,
         });
-      } else if (!isContainerLevel) {
-        // Only merge/group for shipment-level KPIs
-        // For container-level KPIs, each container is already its own group
-        const group = grouped.get(groupKey)!;
+      } else {
+        // Add container to existing group
+        const group = grouped.get(mbl)!;
         const rawData = shipment.rawData as any || {};
 
         // Extract TMS reference from rawData.containers if available
@@ -1839,10 +1831,10 @@ export class DbStorage implements IStorage {
     // Convert map to array for statistics calculation
     let groupedArray = Array.from(grouped.values());
 
-    // Calculate statistics from ALL raw shipments (before grouping)
-    // This ensures stats are consistent regardless of the current view/grouping
-    const stats = this.calculateStatsFromRaw(allShipments);
-    console.log(`[DEBUG] Calculated stats from ${allShipments.length} raw containers:`, stats);
+    // Calculate statistics from ALL grouped shipments (before KPI filtering)
+    // These stats should NEVER change regardless of KPI filter
+    const stats = this.calculateStats(groupedArray);
+    console.log(`[DEBUG] Calculated stats from ${groupedArray.length} shipment groups:`, stats);
 
     // CRITICAL DEBUG: Let's see if we have ANY data at all
     if (groupedArray.length === 0) {
@@ -2293,158 +2285,6 @@ export class DbStorage implements IStorage {
     };
   }
 
-  // New helper method to calculate stats from raw container list
-  // This ensures consistency regardless of how items are grouped in the UI
-  private calculateStatsFromRaw(allShipments: any[]): any {
-    const stats = {
-      total: 0,
-      inTransit: 0,
-      arrivingToday: 0,
-      delayed: 0,
-      urgent: 0,
-      highRisk: 0,
-      hasExceptions: 0,
-      overdue: 0,
-      podNeedsAttention: 0,
-      podAwaitingFullOut: 0,
-      podFullOut: 0,
-      emptyReturned: 0,
-      demurrageAlert: 0,
-      lfdAlert: 0,
-    };
-
-    const seenMbls = new Set<string>();
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    for (const shipment of allShipments) {
-      const rawData = shipment.rawData || {};
-      const mbl = shipment.mblNumber || 'NO_MBL';
-
-      // Container-level stats (count every container)
-      stats.total++;
-
-      // Risk Level
-      if (rawData.riskLevel === 'high' || rawData.riskLevel === 'critical') {
-        stats.highRisk++;
-      }
-
-      // Exceptions
-      if (rawData.hasExceptions) {
-        stats.hasExceptions++;
-      }
-
-      // Urgent / Overdue
-      if (rawData.lastFreeDay) {
-        const lfd = new Date(rawData.lastFreeDay);
-        lfd.setHours(0, 0, 0, 0);
-        const daysUntilLFD = Math.ceil((lfd.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-
-        if (lfd < today) {
-          stats.overdue++;
-        } else if (daysUntilLFD >= 0 && daysUntilLFD <= 3) {
-          stats.urgent++;
-        }
-      }
-
-      // Terminal Data & POD Stats
-      const terminalData = {
-        terminalName: rawData.terminalName,
-        terminalAvailableForPickup: rawData.terminalAvailableForPickup,
-        terminalFullOut: rawData.terminalFullOut,
-        terminalEmptyReturned: rawData.terminalEmptyReturned,
-      };
-
-      const containersArray = rawData.containers || [];
-      const firstContainer = containersArray[0] || {};
-      const railData = firstContainer.rawData?.rail || {};
-
-      // POD Full Out
-      const isFullOut = !!(terminalData.terminalFullOut || railData.fullOut);
-      if (isFullOut) {
-        stats.podFullOut++;
-      }
-
-      // POD Awaiting Full Out (Available but not full out)
-      const isAvailable = terminalData.terminalAvailableForPickup === true;
-      if (isAvailable && !isFullOut) {
-        stats.podAwaitingFullOut++;
-      }
-
-      // POD Needs Attention (Not available, not full out, arrived at POD)
-      // Simplified check: if not available and not full out, but status implies at port
-      if (shipment.status === 'at-port' && !isAvailable && !isFullOut) {
-        stats.podNeedsAttention++;
-      }
-
-      // Empty Returned
-      const isEmptyReturned = !!(terminalData.terminalEmptyReturned || railData.emptyReturned);
-      if (isEmptyReturned) {
-        stats.emptyReturned++;
-      }
-
-      // Demurrage Alert
-      if (rawData.lastFreeDay && !isEmptyReturned) {
-        const lfd = new Date(rawData.lastFreeDay);
-        lfd.setHours(0, 0, 0, 0);
-        if (lfd < today && !isFullOut) {
-          stats.demurrageAlert++;
-        }
-      }
-
-      // LFD Alert
-      if (!isEmptyReturned && !rawData.lastFreeDay) {
-        const events = rawData.shipmentEvents || rawData.milestones || rawData.events || [];
-        const destinationPort = shipment.destinationPort || '';
-
-        const arrivalEvent = events.find((e: any) => {
-          if ((e.code === 'vesselArrival' || e.code === 'vesselArrivalWithContainer' || e.code === 'dischargeFromVessel') && e.actualTime) {
-            const arrivalDate = new Date(e.actualTime);
-            const isPast = arrivalDate <= today;
-            const isRealActual = !e.estimatedTime || e.actualTime !== e.estimatedTime;
-            const isAtDestination = e.locationRole === 'destinationPort' ||
-              (!destinationPort && e.location) ||
-              (destinationPort && e.location && (
-                e.location.toLowerCase().includes(destinationPort.toLowerCase()) ||
-                destinationPort.toLowerCase().includes(e.location.toLowerCase())
-              ));
-            return isPast && isRealActual && isAtDestination;
-          }
-          return false;
-        });
-
-        if (arrivalEvent) {
-          stats.lfdAlert++;
-        }
-      }
-
-      // Shipment-level stats (count unique MBLs)
-      // Only count the FIRST container of each MBL for these stats
-      if (!seenMbls.has(mbl)) {
-        seenMbls.add(mbl);
-
-        // In Transit
-        if (shipment.status === 'in-transit') {
-          stats.inTransit++;
-        }
-
-        // Arriving Today / Delayed
-        if (shipment.eta) {
-          const etaDate = new Date(shipment.eta);
-          etaDate.setHours(0, 0, 0, 0);
-
-          if (etaDate.getTime() === today.getTime()) {
-            stats.arrivingToday++;
-          } else if (etaDate < today && shipment.status !== 'delivered' && shipment.status !== 'at-port') {
-            stats.delayed++;
-          }
-        }
-      }
-    }
-
-    return stats;
-  }
-
   // Helper method to apply KPI filtering to shipments
   private applyKpiFilter(shipments: any[], kpiFilter: string): any[] {
     const today = new Date();
@@ -2649,17 +2489,6 @@ export class DbStorage implements IStorage {
           return true;
       }
     });
-  }
-
-  // Helper method to determine if a KPI filter operates at container level (not shipment/MBL level)
-  private isContainerLevelKpi(kpiFilter: string): boolean {
-    const containerLevelKpis = [
-      'empty-returned',
-      'demurrage-alert',
-      'lfd-alert',
-      'detention-alert'
-    ];
-    return containerLevelKpis.includes(kpiFilter);
   }
 
   async getCargoesFlowShipmentById(id: string): Promise<CargoesFlowShipment | undefined> {

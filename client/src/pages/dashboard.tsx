@@ -757,7 +757,6 @@ export default function Dashboard() {
             demurrageFee={container.demurrageFee ? parseFloat(container.demurrageFee) : undefined}
             detentionFee={container.detentionFee ? parseFloat(container.detentionFee) : undefined}
             exceptionCost={container.exceptionCost ? parseFloat(container.exceptionCost) : undefined}
-            kpiFilter={kpiFilter}
             onViewDetails={() => handleViewDetails(container.id)}
           />
         ))}

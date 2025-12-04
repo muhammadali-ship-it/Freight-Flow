@@ -156,6 +156,16 @@ async function processAndStoreShipmentsWithStats(shipments: CargoesFlowShipmentD
         continue;
       }
 
+      // Skip COMPLETED shipments to avoid storing them
+      // The API returns COMPLETED shipments even though we request status=ACTIVE
+      if (shipment.status === 'COMPLETED') {
+        if (i < 3) {
+          console.log(`[Cargoes Flow Poller] Skipping COMPLETED shipment ${shipmentRef}`);
+        }
+        skippedCount++;
+        continue;
+      }
+
       // Extract carrier name from carrierScac if carrier is null
       const carrierName = shipment.carrier || shipment.carrierScac || null;
 
@@ -671,11 +681,11 @@ function extractAtdFromEvents(shipmentEvents: any[], originPort: string | null):
     if ((event.code === 'vesselDeparture' || event.code === 'vesselDepartureWithContainer') && event.actualTime) {
       // Check if this is at the origin port
       if (originPort && event.location) {
-        const isAtOrigin = 
+        const isAtOrigin =
           event.location.toLowerCase().includes(originPort.toLowerCase()) ||
           originPort.toLowerCase().includes(event.location.toLowerCase()) ||
           event.locationRole === 'originPort';
-        
+
         if (isAtOrigin) {
           return event.actualTime;
         }
@@ -697,11 +707,11 @@ function extractAtaFromEvents(shipmentEvents: any[], destinationPort: string | n
     if ((event.code === 'vesselArrival' || event.code === 'vesselArrivalWithContainer' || event.code === 'dischargeFromVessel') && event.actualTime) {
       // Check if this is at the destination port
       if (destinationPort && event.location) {
-        const isAtDestination = 
+        const isAtDestination =
           event.location.toLowerCase().includes(destinationPort.toLowerCase()) ||
           destinationPort.toLowerCase().includes(event.location.toLowerCase()) ||
           event.locationRole === 'destinationPort';
-        
+
         if (isAtDestination) {
           return event.actualTime;
         }

@@ -3787,16 +3787,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         { search }
       );
 
-      // For each vessel, get container count from shipments
+      // For each vessel, get container count from ACTIVE shipments only
       const vesselsWithStats = await Promise.all(
         result.data.map(async (vessel) => {
           // Count containers from cargoes_flow_shipments where vessel appears in raw_data
-          // Simple search for vessel name in the JSON text
+          // AND status is NOT 'COMPLETED' (only count active containers)
           const searchPattern = `%${vessel.name}%`;
           const containerCountQuery = sql`
             SELECT COUNT(*) as count
             FROM cargoes_flow_shipments
             WHERE raw_data::text LIKE ${searchPattern}
+            AND (status IS NULL OR LOWER(status) != 'completed')
           `;
           const countResult = await db.execute(containerCountQuery);
           const containerCount = Number(countResult.rows[0]?.count || 0);
@@ -3808,9 +3809,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         })
       );
 
+      // Filter out vessels with 0 containers (no active shipments)
+      const vesselsWithActiveContainers = vesselsWithStats.filter(v => v.containerCount > 0);
+
       res.json({
-        data: vesselsWithStats,
-        pagination: result.pagination,
+        data: vesselsWithActiveContainers,
+        pagination: {
+          ...result.pagination,
+          total: vesselsWithActiveContainers.length,
+          totalPages: Math.ceil(vesselsWithActiveContainers.length / result.pagination.pageSize),
+        },
       });
     } catch (error) {
       console.error("Error fetching vessels:", error);

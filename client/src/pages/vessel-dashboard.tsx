@@ -26,7 +26,16 @@ export default function VesselDashboard() {
         data: Vessel[];
         pagination: { page: number; pageSize: number; total: number; totalPages: number };
     }>({
-        queryKey: ["/api/vessels", { pageSize: 500, search: searchQuery }],
+        queryKey: ["/api/vessels", searchQuery],
+        queryFn: async () => {
+            const params = new URLSearchParams({
+                pageSize: "500",
+                ...(searchQuery && { search: searchQuery }),
+            });
+            const response = await fetch(`/api/vessels?${params}`);
+            if (!response.ok) throw new Error("Failed to fetch vessels");
+            return response.json();
+        },
     });
 
     const vessels = vesselsData?.data || [];

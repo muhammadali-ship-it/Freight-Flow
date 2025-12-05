@@ -73,7 +73,7 @@ const formatDateOnly = (dateString: string | undefined | null): string => {
     return match ? match[1] : dateString;
 };
 
-export default function CompletedShipments() {
+export default function NoTrackingUpdate() {
     const { toast } = useToast();
     const [searchQuery, setSearchQuery] = useState("");
     const [statusFilter, setStatusFilter] = useState("all");
@@ -112,14 +112,14 @@ export default function CompletedShipments() {
                 dateTo: dateTo ? format(dateTo, "yyyy-MM-dd") : undefined,
                 userId: user?.id,
                 userRole: user?.role,
-                completed: true, // Fetch ONLY completed shipments
+                noTrackingUpdate: true, // Fetch ONLY shipments with no updates > 7 days
             },
         ],
         queryFn: async () => {
             const params = new URLSearchParams({
                 page: page.toString(),
                 pageSize: pageSize.toString(),
-                completed: "true", // Fetch ONLY completed shipments
+                noTrackingUpdate: "true", // Fetch ONLY shipments with no updates > 7 days
             });
 
             if (searchQuery) params.append("search", searchQuery);
@@ -196,11 +196,11 @@ export default function CompletedShipments() {
         <div className="space-y-4 sm:space-y-6">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
                 <div>
-                    <h1 className="text-xl sm:text-2xl font-bold" data-testid="heading-completed-shipments">
-                        Completed Shipments
+                    <h1 className="text-xl sm:text-2xl font-bold" data-testid="heading-no-tracking-update">
+                        No Tracking Update
                     </h1>
                     <p className="text-sm sm:text-base text-muted-foreground">
-                        View history of completed shipments (Empty In &gt; 10 days ago)
+                        Shipments with no updates for more than 7 days
                     </p>
                 </div>
             </div>

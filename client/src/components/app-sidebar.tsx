@@ -29,8 +29,8 @@ const menuItems = [
     roles: ["User", "Manager", "Admin"],
   },
   {
-    title: "Completed",
-    url: "/completed",
+    title: "No Tracking Update",
+    url: "/no-tracking-update",
     icon: CheckSquare,
     roles: ["User", "Manager", "Admin"],
   },

@@ -1627,7 +1627,7 @@ export class DbStorage implements IStorage {
 
   async getCargoesFlowShipments(
     params?: PaginationParams,
-    filters?: ShipmentFilters & { search?: string; userName?: string; userOffice?: string; userRole?: string; completed?: boolean }
+    filters?: ShipmentFilters & { search?: string; userName?: string; userOffice?: string; userRole?: string; completed?: boolean; noTrackingUpdate?: boolean }
   ): Promise<PaginatedResult<CargoesFlowShipment>> {
     const page = params?.page || 1;
     const pageSize = params?.pageSize || 25;
@@ -1673,19 +1673,25 @@ export class DbStorage implements IStorage {
     }
     // Admin role: no filtering (no conditions added)
 
-    // Completed container filtering
-    // A container is considered completed if its status is 'complete' or 'COMPLETED' (case-insensitive)
-    // NULL status is treated as active (not completed)
-    if (filters?.completed === true) {
-      // Show ONLY completed containers (status = 'complete' or 'COMPLETED', case-insensitive)
-      conditions.push(sql`LOWER(${cargoesFlowShipments.status}) = 'completed'`);
+    // No Tracking Update filtering
+    // If noTrackingUpdate is true, show shipments with no updates for > 7 days
+    // If noTrackingUpdate is false/undefined, show shipments with updates within last 7 days (default)
+    // This effectively splits shipments into "Recent" (Dashboard) and "Stale" (NoTrackingUpdate)
+    if (filters?.noTrackingUpdate === true) {
+      conditions.push(sql`${cargoesFlowShipments.updatedAt} <= NOW() - INTERVAL '7 days'`);
     } else {
-      // Show ONLY active (non-completed) containers (default behavior)
-      // This includes NULL status and any status that is not 'completed' (case-insensitive)
-      conditions.push(or(
-        isNull(cargoesFlowShipments.status),
-        sql`LOWER(${cargoesFlowShipments.status}) != 'completed'`
-      ));
+      // Default: Exclude stale shipments (show only recent)
+      conditions.push(sql`${cargoesFlowShipments.updatedAt} > NOW() - INTERVAL '7 days'`);
+
+      // Keep existing completed status filtering for the "Recent" view
+      if (filters?.completed === true) {
+        conditions.push(sql`LOWER(${cargoesFlowShipments.status}) = 'completed'`);
+      } else {
+        conditions.push(or(
+          isNull(cargoesFlowShipments.status),
+          sql`LOWER(${cargoesFlowShipments.status}) != 'completed'`
+        ));
+      }
     }
 
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
@@ -1717,7 +1723,7 @@ export class DbStorage implements IStorage {
 
   async getGroupedCargoesFlowShipments(
     params?: PaginationParams,
-    filters?: ShipmentFilters & { search?: string; userName?: string; userOffice?: string; userRole?: string; kpiFilter?: string; completed?: boolean }
+    filters?: ShipmentFilters & { search?: string; userName?: string; userOffice?: string; userRole?: string; kpiFilter?: string; completed?: boolean; noTrackingUpdate?: boolean }
   ): Promise<PaginatedResult<any>> {
     const conditions: SQL[] = [];
 
@@ -1756,19 +1762,24 @@ export class DbStorage implements IStorage {
       conditions.push(eq(cargoesFlowShipments.office, filters.userOffice));
     }
 
-    // Completed container filtering
-    // A container is considered completed if its status is 'complete' or 'COMPLETED' (case-insensitive)
-    // NULL status is treated as active (not completed)
-    if (filters?.completed === true) {
-      // Show ONLY completed containers (status = 'complete' or 'COMPLETED', case-insensitive)
-      conditions.push(sql`LOWER(${cargoesFlowShipments.status}) = 'completed'`);
+    // No Tracking Update filtering
+    // If noTrackingUpdate is true, show shipments with no updates for > 7 days
+    // If noTrackingUpdate is false/undefined, show shipments with updates within last 7 days (default)
+    if (filters?.noTrackingUpdate === true) {
+      conditions.push(sql`${cargoesFlowShipments.updatedAt} <= NOW() - INTERVAL '7 days'`);
     } else {
-      // Show ONLY active (non-completed) containers (default behavior)
-      // This includes NULL status and any status that is not 'completed' (case-insensitive)
-      conditions.push(or(
-        isNull(cargoesFlowShipments.status),
-        sql`LOWER(${cargoesFlowShipments.status}) != 'completed'`
-      ));
+      // Default: Exclude stale shipments (show only recent)
+      conditions.push(sql`${cargoesFlowShipments.updatedAt} > NOW() - INTERVAL '7 days'`);
+
+      // Keep existing completed status filtering for the "Recent" view
+      if (filters?.completed === true) {
+        conditions.push(sql`LOWER(${cargoesFlowShipments.status}) = 'completed'`);
+      } else {
+        conditions.push(or(
+          isNull(cargoesFlowShipments.status),
+          sql`LOWER(${cargoesFlowShipments.status}) != 'completed'`
+        ));
+      }
     }
 
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;

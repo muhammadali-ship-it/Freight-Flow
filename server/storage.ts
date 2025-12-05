@@ -1677,10 +1677,13 @@ export class DbStorage implements IStorage {
     // If noTrackingUpdate is true, show shipments with no updates for > 7 days
     // If noTrackingUpdate is false/undefined, show shipments with updates within last 7 days (default)
     // This effectively splits shipments into "Recent" (Dashboard) and "Stale" (NoTrackingUpdate)
+    console.log('[DEBUG Storage] noTrackingUpdate filter value:', filters?.noTrackingUpdate);
     if (filters?.noTrackingUpdate === true) {
+      console.log('[DEBUG Storage] Applying STALE filter: updatedAt <= NOW() - 7 days');
       conditions.push(sql`${cargoesFlowShipments.updatedAt} <= NOW() - INTERVAL '7 days'`);
     } else {
       // Default: Exclude stale shipments (show only recent)
+      console.log('[DEBUG Storage] Applying RECENT filter: updatedAt > NOW() - 7 days');
       conditions.push(sql`${cargoesFlowShipments.updatedAt} > NOW() - INTERVAL '7 days'`);
 
       // Keep existing completed status filtering for the "Recent" view

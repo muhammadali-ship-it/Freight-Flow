@@ -1688,6 +1688,9 @@ export class DbStorage implements IStorage {
       console.log('[DEBUG Storage] Applying RECENT filter: lastFetchedAt > NOW() - 7 days');
       conditions.push(sql`${cargoesFlowShipments.lastFetchedAt} > NOW() - INTERVAL '7 days'`);
 
+      // Also exclude shipments where origin = destination (these are likely completed/delivered)
+      conditions.push(sql`${cargoesFlowShipments.originPort} IS DISTINCT FROM ${cargoesFlowShipments.destinationPort}`);
+
       // Keep existing completed status filtering for the "Recent" view
       if (filters?.completed === true) {
         conditions.push(sql`LOWER(${cargoesFlowShipments.status}) = 'completed'`);
@@ -1809,6 +1812,9 @@ export class DbStorage implements IStorage {
     } else {
       // Default: Exclude stale shipments (show only recent)
       conditions.push(sql`${cargoesFlowShipments.lastFetchedAt} > NOW() - INTERVAL '7 days'`);
+
+      // Also exclude shipments where origin = destination (these are likely completed/delivered)
+      conditions.push(sql`${cargoesFlowShipments.originPort} IS DISTINCT FROM ${cargoesFlowShipments.destinationPort}`);
 
       // Keep existing completed status filtering for the "Recent" view
       if (filters?.completed === true) {

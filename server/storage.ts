@@ -2108,6 +2108,42 @@ export class DbStorage implements IStorage {
     return Math.round(daysDiff * costPerDay * 100) / 100; // Round to 2 decimal places
   }
 
+  // Helper method to prorate costs across months based on actual days
+  private prorateCostAcrossMonths(
+    startDate: Date,
+    endDate: Date,
+    dailyRate: number,
+    monthlyTrendMap: Map<string, number>,
+    last6Months: string[]
+  ): void {
+    // Start from the day AFTER the start date (LFD or LRD)
+    const currentDate = new Date(startDate);
+    currentDate.setDate(currentDate.getDate() + 1);
+    currentDate.setHours(0, 0, 0, 0);
+
+    const finalDate = new Date(endDate);
+    finalDate.setHours(0, 0, 0, 0);
+
+    // If end date is before or on start date, no costs
+    if (finalDate <= startDate) {
+      return;
+    }
+
+    // Iterate through each day and add cost to the appropriate month
+    while (currentDate <= finalDate) {
+      const monthKey = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
+
+      // Only add cost if this month is in our 6-month window
+      if (last6Months.includes(monthKey)) {
+        const currentCost = monthlyTrendMap.get(monthKey) || 0;
+        monthlyTrendMap.set(monthKey, currentCost + dailyRate);
+      }
+
+      // Move to next day
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+  }
+
   // Helper method to calculate statistics from shipment data
   private calculateStats(shipments: any[]): {
     total: number;

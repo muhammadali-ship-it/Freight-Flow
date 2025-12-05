@@ -1269,6 +1269,7 @@ export class DbStorage implements IStorage {
         demurrage,
         detention,
         createdAt: ship.createdAt,
+        updatedAt: ship.updatedAt,
       };
     });
 
@@ -1283,19 +1284,32 @@ export class DbStorage implements IStorage {
 
     // Monthly trend - last 6 months
     const monthlyTrendMap = new Map<string, number>();
+    const now = new Date();
+
+    // Generate last 6 months keys to ensure we show all months even if no costs
+    const last6Months: string[] = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const monthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      last6Months.push(monthKey);
+      monthlyTrendMap.set(monthKey, 0); // Initialize with 0
+    }
+
     containerCosts.forEach(c => {
-      if (c.createdAt) {
-        const date = new Date(c.createdAt);
-        const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-        const cost = c.demurrage + c.detention;
+      // Use updatedAt (when cost was last calculated) or createdAt as fallback
+      const date = c.updatedAt ? new Date(c.updatedAt) : (c.createdAt ? new Date(c.createdAt) : now);
+      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      const cost = c.demurrage + c.detention;
+
+      // Only add to the map if it's within our 6-month window
+      if (last6Months.includes(monthKey)) {
         monthlyTrendMap.set(monthKey, (monthlyTrendMap.get(monthKey) || 0) + cost);
       }
     });
 
     const monthlyTrend = Array.from(monthlyTrendMap.entries())
       .map(([month, cost]) => ({ month, cost }))
-      .sort((a, b) => a.month.localeCompare(b.month))
-      .slice(-6);
+      .sort((a, b) => a.month.localeCompare(b.month));
 
     // Top 10 containers by cost
     const topShipmentsByCost = containerCosts

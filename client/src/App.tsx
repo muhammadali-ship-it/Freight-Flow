@@ -26,7 +26,6 @@ import CostAnalytics from "@/pages/cost-analytics";
 import ShipNexusWebhooks from "@/pages/shipnexus-webhooks";
 import CargoesFlowTracking from "@/pages/cargoes-flow-tracking";
 import CargoesFlowSyncLogs from "@/pages/cargoes-flow-sync-logs";
-import CargoesFlowUpdateLogs from "@/pages/cargoes-flow-update-logs";
 import DocumentUploadLogs from "@/pages/document-upload-logs";
 import WebhookMonitor from "@/pages/webhook-monitor";
 import CarrierLogs from "@/pages/carrier-logs";
@@ -51,7 +50,6 @@ function Router() {
       <ProtectedRoute path="/webhooks" component={ShipNexusWebhooks} />
       <ProtectedRoute path="/cargoes-flow" component={CargoesFlowTracking} />
       <ProtectedRoute path="/cargoes-flow/sync-logs" component={CargoesFlowSyncLogs} />
-      <ProtectedRoute path="/cargoes-flow/update-logs" component={CargoesFlowUpdateLogs} />
       <ProtectedRoute path="/cargoes-flow/document-upload-logs" component={DocumentUploadLogs} />
       <ProtectedRoute path="/cargoes-flow/carrier-logs" component={CarrierLogs} />
       <ProtectedRoute path="/webhook-monitor" component={WebhookMonitor} />

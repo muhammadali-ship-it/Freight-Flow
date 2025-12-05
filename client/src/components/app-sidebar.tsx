@@ -61,12 +61,6 @@ const integrationItems = [
     icon: Webhook,
     roles: ["Manager", "Admin"],
   },
-  {
-    title: "CF Update Tracking",
-    url: "/cargoes-flow/update-logs",
-    icon: RefreshCw,
-    roles: ["Manager", "Admin"],
-  },
 ];
 
 export function AppSidebar() {

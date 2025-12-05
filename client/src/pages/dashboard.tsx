@@ -105,6 +105,11 @@ export default function Dashboard() {
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
   const [showAnalytics, setShowAnalytics] = useState(false);
 
+  // Debug logging for sort changes
+  useEffect(() => {
+    console.log('[DEBUG] Sort changed:', { sortField, sortDirection });
+  }, [sortField, sortDirection]);
+
   // Initialize page from sessionStorage
   const [page, setPage] = useState(() => {
     const saved = sessionStorage.getItem('dashboardPage');
@@ -165,7 +170,7 @@ export default function Dashboard() {
       lfdAlert: number;
     };
   }>({
-    queryKey: ["/api/shipments", { page, pageSize, search: searchQuery, filters, userId: user?.id, userRole: user?.role, kpiFilter }],
+    queryKey: ["/api/shipments", { page, pageSize, search: searchQuery, filters, userId: user?.id, userRole: user?.role, kpiFilter, sortField, sortDirection }],
     queryFn: async ({ queryKey }) => {
       const params = new URLSearchParams({
         page: page.toString(),
@@ -180,6 +185,10 @@ export default function Dashboard() {
         filters.users.forEach(userId => params.append("userIds", userId));
       }
       if (kpiFilter) params.append("kpiFilter", kpiFilter);
+
+      // Add sort parameters
+      if (sortField) params.append("sortField", sortField);
+      if (sortDirection) params.append("sortDirection", sortDirection);
 
       console.log('[DEBUG] API Query Params:', params.toString());
       console.log('[DEBUG] Filters:', filters);
@@ -497,34 +506,87 @@ export default function Dashboard() {
 
     return true;
   }).sort((a, b) => {
-    // Client-side sorting
+    // Client-side sorting with ETA as secondary sort
     let aValue: any;
     let bValue: any;
+    let useSecondarySort = false;
 
     switch (sortField) {
       case "eta":
-        aValue = a.eta ? new Date(a.eta).getTime() : 0;
-        bValue = b.eta ? new Date(b.eta).getTime() : 0;
+        // Parse dates - handle format like "2025-12-04 12:00:00 AM" or "2025-12-04"
+        if (a.eta && b.eta) {
+          aValue = new Date(a.eta).getTime();
+          bValue = new Date(b.eta).getTime();
+          // If parsing failed, use string comparison as fallback
+          if (isNaN(aValue)) aValue = a.eta;
+          if (isNaN(bValue)) bValue = b.eta;
+        } else {
+          aValue = a.eta ? new Date(a.eta).getTime() : Number.MAX_SAFE_INTEGER;
+          bValue = b.eta ? new Date(b.eta).getTime() : Number.MAX_SAFE_INTEGER;
+        }
         break;
       case "lastFreeDay":
-        aValue = a.lastFreeDay ? new Date(a.lastFreeDay).getTime() : 0;
-        bValue = b.lastFreeDay ? new Date(b.lastFreeDay).getTime() : 0;
+        // Parse dates - handle format like "2025-12-04 12:00:00 AM" or "2025-12-04"
+        if (a.lastFreeDay && b.lastFreeDay) {
+          aValue = new Date(a.lastFreeDay).getTime();
+          bValue = new Date(b.lastFreeDay).getTime();
+          // If parsing failed, use string comparison as fallback
+          if (isNaN(aValue)) aValue = a.lastFreeDay;
+          if (isNaN(bValue)) bValue = b.lastFreeDay;
+        } else if (!a.lastFreeDay && !b.lastFreeDay) {
+          // Both are null/undefined, use ETA as secondary sort
+          useSecondarySort = true;
+          aValue = a.eta ? new Date(a.eta).getTime() : Number.MAX_SAFE_INTEGER;
+          bValue = b.eta ? new Date(b.eta).getTime() : Number.MAX_SAFE_INTEGER;
+        } else {
+          aValue = a.lastFreeDay ? new Date(a.lastFreeDay).getTime() : Number.MAX_SAFE_INTEGER;
+          bValue = b.lastFreeDay ? new Date(b.lastFreeDay).getTime() : Number.MAX_SAFE_INTEGER;
+        }
         break;
       case "riskLevel":
         const riskOrder = { critical: 4, high: 3, medium: 2, low: 1 };
-        aValue = riskOrder[a.riskLevel as keyof typeof riskOrder] || 0;
-        bValue = riskOrder[b.riskLevel as keyof typeof riskOrder] || 0;
+        aValue = riskOrder[a.riskLevel as keyof typeof riskOrder] ?? 0;
+        bValue = riskOrder[b.riskLevel as keyof typeof riskOrder] ?? 0;
+        // If risk levels are equal, use ETA as secondary sort
+        if (aValue === bValue) {
+          useSecondarySort = true;
+          aValue = a.eta ? new Date(a.eta).getTime() : Number.MAX_SAFE_INTEGER;
+          bValue = b.eta ? new Date(b.eta).getTime() : Number.MAX_SAFE_INTEGER;
+        }
         break;
       default:
         return 0;
     }
 
-    if (sortDirection === "asc") {
-      return aValue > bValue ? 1 : aValue < bValue ? -1 : 0;
-    } else {
-      return aValue < bValue ? 1 : aValue > bValue ? -1 : 0;
-    }
+    const result = sortDirection === "asc"
+      ? (aValue > bValue ? 1 : aValue < bValue ? -1 : 0)
+      : (aValue < bValue ? 1 : aValue > bValue ? -1 : 0);
+
+    return result;
   });
+
+  // Debug: Log first 5 containers after sorting
+  useEffect(() => {
+    if (filteredContainers.length > 0) {
+      console.log('[DEBUG] First 5 containers after sort by', sortField, sortDirection, ':',
+        filteredContainers.slice(0, 5).map(c => {
+          const etaDate = c.eta ? new Date(c.eta).getTime() : null;
+          const lfdDate = c.lastFreeDay ? new Date(c.lastFreeDay).getTime() : null;
+          return {
+            id: c.id.substring(0, 8),
+            eta: c.eta,
+            etaTimestamp: etaDate,
+            lastFreeDay: c.lastFreeDay,
+            lfdTimestamp: lfdDate,
+            riskLevel: c.riskLevel
+          };
+        })
+      );
+      // Log ALL fields of first container to identify LFD field
+      console.log('[DEBUG] ALL fields of first container:', Object.keys(filteredContainers[0]));
+      console.log('[DEBUG] First container full data:', filteredContainers[0]);
+    }
+  }, [filteredContainers, sortField, sortDirection]);
 
   // Use backend-provided stats (accurate for full filtered dataset, not just current page)
   const urgentCount = containers.filter(c => isUrgent(c)).length;

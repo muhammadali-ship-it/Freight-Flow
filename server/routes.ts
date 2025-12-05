@@ -193,6 +193,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         completed: req.query.completed === 'true' ? true : undefined,
         noTrackingUpdate: req.query.noTrackingUpdate === 'true' ? true : undefined,
         userIds: req.query.userIds ? (Array.isArray(req.query.userIds) ? req.query.userIds as string[] : [req.query.userIds as string]) : undefined,
+        sortField: req.query.sortField as string,
+        sortDirection: (req.query.sortDirection as 'asc' | 'desc') || 'asc',
       };
 
       // Get current user and apply filters based on role

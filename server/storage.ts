@@ -1728,7 +1728,7 @@ export class DbStorage implements IStorage {
 
   async getGroupedCargoesFlowShipments(
     params?: PaginationParams,
-    filters?: ShipmentFilters & { search?: string; userName?: string; userOffice?: string; userRole?: string; kpiFilter?: string; completed?: boolean; noTrackingUpdate?: boolean; userIds?: string[] }
+    filters?: ShipmentFilters & { search?: string; userName?: string; userOffice?: string; userRole?: string; kpiFilter?: string; completed?: boolean; noTrackingUpdate?: boolean; userIds?: string[]; sortField?: string; sortDirection?: 'asc' | 'desc' }
   ): Promise<PaginatedResult<any>> {
     const conditions: SQL[] = [];
 
@@ -1823,11 +1823,35 @@ export class DbStorage implements IStorage {
 
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
-    // Fetch all matching shipments
+    // Dynamic sorting based on sortField and sortDirection
+    let orderByClause;
+    const sortDir = filters?.sortDirection === 'desc' ? desc : asc;
+
+    switch (filters?.sortField) {
+      case 'eta':
+        orderByClause = sortDir(cargoesFlowShipments.eta);
+        break;
+      case 'lastFreeDay':
+        // Sort by lastFreeDay, with nulls last
+        orderByClause = filters?.sortDirection === 'desc'
+          ? desc(cargoesFlowShipments.lastFreeDay)
+          : asc(cargoesFlowShipments.lastFreeDay);
+        break;
+      case 'riskLevel':
+        // For risk level, we need to sort by the riskLevel field in rawData
+        // This is more complex as it's in JSONB, so we'll fall back to default sort
+        orderByClause = desc(cargoesFlowShipments.lastFetchedAt);
+        break;
+      default:
+        // Default sort by lastFetchedAt descending
+        orderByClause = desc(cargoesFlowShipments.lastFetchedAt);
+    }
+
+    // Fetch all matching shipments with dynamic sorting
     const allShipments = await db.select()
       .from(cargoesFlowShipments)
       .where(whereClause)
-      .orderBy(desc(cargoesFlowShipments.lastFetchedAt));
+      .orderBy(orderByClause);
 
     // Group by MBL number
     const grouped = new Map<string, any>();

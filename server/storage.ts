@@ -1677,14 +1677,16 @@ export class DbStorage implements IStorage {
     // If noTrackingUpdate is true, show shipments with no updates for > 7 days
     // If noTrackingUpdate is false/undefined, show shipments with updates within last 7 days (default)
     // This effectively splits shipments into "Recent" (Dashboard) and "Stale" (NoTrackingUpdate)
+    // NOTE: We use lastFetchedAt instead of updatedAt because updatedAt is updated on every upsert,
+    // while lastFetchedAt represents when we last got tracking data from the API
     console.log('[DEBUG Storage] noTrackingUpdate filter value:', filters?.noTrackingUpdate);
     if (filters?.noTrackingUpdate === true) {
-      console.log('[DEBUG Storage] Applying STALE filter: updatedAt <= NOW() - 7 days');
-      conditions.push(sql`${cargoesFlowShipments.updatedAt} <= NOW() - INTERVAL '7 days'`);
+      console.log('[DEBUG Storage] Applying STALE filter: lastFetchedAt <= NOW() - 7 days');
+      conditions.push(sql`${cargoesFlowShipments.lastFetchedAt} <= NOW() - INTERVAL '7 days'`);
     } else {
       // Default: Exclude stale shipments (show only recent)
-      console.log('[DEBUG Storage] Applying RECENT filter: updatedAt > NOW() - 7 days');
-      conditions.push(sql`${cargoesFlowShipments.updatedAt} > NOW() - INTERVAL '7 days'`);
+      console.log('[DEBUG Storage] Applying RECENT filter: lastFetchedAt > NOW() - 7 days');
+      conditions.push(sql`${cargoesFlowShipments.lastFetchedAt} > NOW() - INTERVAL '7 days'`);
 
       // Keep existing completed status filtering for the "Recent" view
       if (filters?.completed === true) {
@@ -1768,11 +1770,13 @@ export class DbStorage implements IStorage {
     // No Tracking Update filtering
     // If noTrackingUpdate is true, show shipments with no updates for > 7 days
     // If noTrackingUpdate is false/undefined, show shipments with updates within last 7 days (default)
+    // NOTE: We use lastFetchedAt instead of updatedAt because updatedAt is updated on every upsert,
+    // while lastFetchedAt represents when we last got tracking data from the API
     if (filters?.noTrackingUpdate === true) {
-      conditions.push(sql`${cargoesFlowShipments.updatedAt} <= NOW() - INTERVAL '7 days'`);
+      conditions.push(sql`${cargoesFlowShipments.lastFetchedAt} <= NOW() - INTERVAL '7 days'`);
     } else {
       // Default: Exclude stale shipments (show only recent)
-      conditions.push(sql`${cargoesFlowShipments.updatedAt} > NOW() - INTERVAL '7 days'`);
+      conditions.push(sql`${cargoesFlowShipments.lastFetchedAt} > NOW() - INTERVAL '7 days'`);
 
       // Keep existing completed status filtering for the "Recent" view
       if (filters?.completed === true) {

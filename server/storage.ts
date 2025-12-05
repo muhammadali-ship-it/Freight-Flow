@@ -1295,15 +1295,34 @@ export class DbStorage implements IStorage {
       monthlyTrendMap.set(monthKey, 0); // Initialize with 0
     }
 
-    containerCosts.forEach(c => {
-      // Use updatedAt (when cost was last calculated) or createdAt as fallback
-      const date = c.updatedAt ? new Date(c.updatedAt) : (c.createdAt ? new Date(c.createdAt) : now);
-      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-      const cost = c.demurrage + c.detention;
+    // Prorate costs across months based on actual days
+    allShipments.forEach(ship => {
+      const rawData = (ship.rawData as any) || {};
 
-      // Only add to the map if it's within our 6-month window
-      if (last6Months.includes(monthKey)) {
-        monthlyTrendMap.set(monthKey, (monthlyTrendMap.get(monthKey) || 0) + cost);
+      // Process demurrage
+      const lfd = rawData.lastFreeDay;
+      const fullOut = rawData.terminalFullOut;
+      const demurrageDailyRate = rawData.demurrageCost ? parseFloat(rawData.demurrageCost) : 0;
+
+      if (lfd && demurrageDailyRate > 0) {
+        const lfdDate = new Date(lfd);
+        const endDate = fullOut ? new Date(fullOut) : now;
+
+        // Prorate demurrage across months
+        this.prorateCostAcrossMonths(lfdDate, endDate, demurrageDailyRate, monthlyTrendMap, last6Months);
+      }
+
+      // Process detention
+      const lastReturnDate = rawData.lastReturnDate;
+      const emptyIn = rawData.emptyInEvent?.actualDate;
+      const detentionDailyRate = rawData.detentionCost ? parseFloat(rawData.detentionCost) : 0;
+
+      if (lastReturnDate && detentionDailyRate > 0) {
+        const lrdDate = new Date(lastReturnDate);
+        const endDate = emptyIn ? new Date(emptyIn) : now;
+
+        // Prorate detention across months
+        this.prorateCostAcrossMonths(lrdDate, endDate, detentionDailyRate, monthlyTrendMap, last6Months);
       }
     });
 

@@ -1760,6 +1760,19 @@ export class DbStorage implements IStorage {
       conditions.push(like(sql`LOWER(${cargoesFlowShipments.destinationPort})`, `%${filters.destinationPort.toLowerCase()}%`));
     }
 
+    // ETA Date Range filtering
+    if (filters?.dateRange) {
+      if (filters.dateRange.start && filters.dateRange.end) {
+        console.log('[DEBUG Storage] Filtering by ETA date range:', filters.dateRange);
+        conditions.push(
+          and(
+            sql`${cargoesFlowShipments.eta} >= ${filters.dateRange.start}`,
+            sql`${cargoesFlowShipments.eta} <= ${filters.dateRange.end}`
+          )!
+        );
+      }
+    }
+
     // Role-based filtering
     if (filters?.userRole === 'User' && filters?.userName) {
       conditions.push(sql`${filters.userName} = ANY(${cargoesFlowShipments.salesRepNames})`);

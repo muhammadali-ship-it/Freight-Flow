@@ -1769,14 +1769,15 @@ export class DbStorage implements IStorage {
 
     // User IDs filtering (for Admin selecting specific users)
     if (filters?.userIds && filters.userIds.length > 0) {
-      // Filter shipments where any of the selected user IDs appear in salesRepNames array
-      // We need to get user names from user IDs first
-      const selectedUsers = await db.select({ name: users.name })
+      console.log('[DEBUG Storage] Filtering by userIds:', filters.userIds);
+      const selectedUsers = await db.select({ id: users.id, name: users.name })
         .from(users)
-        .where(sql`${users.id} = ANY(${filters.userIds})`);
+        .where(inArray(users.id, filters.userIds));
+      console.log('[DEBUG Storage] Found users:', selectedUsers);
 
       if (selectedUsers.length > 0) {
         const userNames = selectedUsers.map(u => u.name);
+        console.log('[DEBUG Storage] User names to filter:', userNames);
         // Match if ANY of the selected user names appears in salesRepNames
         const userConditions = userNames.map(name =>
           sql`${name} = ANY(${cargoesFlowShipments.salesRepNames})`

@@ -1,10 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Ship, Package, TrendingUp, Search } from "lucide-react";
+import { Ship, Package, TrendingUp } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { useState } from "react";
 
 interface Vessel {
     id: string;
@@ -20,22 +18,12 @@ interface Vessel {
 
 export default function VesselDashboard() {
     const [, navigate] = useLocation();
-    const [searchQuery, setSearchQuery] = useState("");
 
     const { data: vesselsData, isLoading } = useQuery<{
         data: Vessel[];
         pagination: { page: number; pageSize: number; total: number; totalPages: number };
     }>({
-        queryKey: ["/api/vessels", searchQuery],
-        queryFn: async () => {
-            const params = new URLSearchParams({
-                pageSize: "500",
-                ...(searchQuery && { search: searchQuery }),
-            });
-            const response = await fetch(`/api/vessels?${params}`);
-            if (!response.ok) throw new Error("Failed to fetch vessels");
-            return response.json();
-        },
+        queryKey: ["/api/vessels"],
     });
 
     const vessels = vesselsData?.data || [];
@@ -144,22 +132,8 @@ export default function VesselDashboard() {
             {/* Vessels Table */}
             <Card>
                 <CardHeader>
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <CardTitle>All Vessels</CardTitle>
-                            <CardDescription>Complete list of tracked vessels - Click to view containers</CardDescription>
-                        </div>
-                        <div className="relative w-72">
-                            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                            <Input
-                                type="text"
-                                placeholder="Search vessels..."
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                className="pl-10"
-                            />
-                        </div>
-                    </div>
+                    <CardTitle>All Vessels</CardTitle>
+                    <CardDescription>Complete list of tracked vessels - Click to view containers</CardDescription>
                 </CardHeader>
                 <CardContent>
                     {isLoading ? (

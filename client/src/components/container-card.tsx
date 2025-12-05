@@ -252,13 +252,7 @@ export function ContainerCard({
           <ArrowRight className="h-4 w-4 text-muted-foreground" />
           <span className="font-medium">{destination}</span>
         </div>
-        <div className="space-y-2">
-          <div className="flex items-center justify-between text-xs">
-            <span className="text-muted-foreground">Progress</span>
-            <span className="font-medium">{progress}%</span>
-          </div>
-          <Progress value={progress} className="h-1.5" />
-        </div>
+
         <div className="grid grid-cols-2 gap-4 text-xs">
           <div>
             <p className="text-muted-foreground">Carrier</p>
@@ -329,18 +323,7 @@ export function ContainerCard({
               <Eye className="mr-2 h-4 w-4" />
               View Details
             </Button>
-            <Button variant="ghost" size="sm" data-testid={`button-track-${containerNumber}`}>
-              <MapPin className="mr-2 h-4 w-4" />
-              Track
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setIsEditing(true)}
-              data-testid={`button-edit-${containerNumber}`}
-            >
-              <Edit2 className="h-4 w-4" />
-            </Button>
+
           </>
         ) : (
           <>

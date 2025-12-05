@@ -1728,7 +1728,7 @@ export class DbStorage implements IStorage {
 
   async getGroupedCargoesFlowShipments(
     params?: PaginationParams,
-    filters?: ShipmentFilters & { search?: string; userName?: string; userOffice?: string; userRole?: string; kpiFilter?: string; completed?: boolean; noTrackingUpdate?: boolean }
+    filters?: ShipmentFilters & { search?: string; userName?: string; userOffice?: string; userRole?: string; kpiFilter?: string; completed?: boolean; noTrackingUpdate?: boolean; userIds?: string[] }
   ): Promise<PaginatedResult<any>> {
     const conditions: SQL[] = [];
 
@@ -1765,6 +1765,24 @@ export class DbStorage implements IStorage {
       conditions.push(sql`${filters.userName} = ANY(${cargoesFlowShipments.salesRepNames})`);
     } else if (filters?.userRole === 'Manager' && filters?.userOffice) {
       conditions.push(eq(cargoesFlowShipments.office, filters.userOffice));
+    }
+
+    // User IDs filtering (for Admin selecting specific users)
+    if (filters?.userIds && filters.userIds.length > 0) {
+      // Filter shipments where any of the selected user IDs appear in salesRepNames array
+      // We need to get user names from user IDs first
+      const selectedUsers = await db.select({ name: users.name })
+        .from(users)
+        .where(sql`${users.id} = ANY(${filters.userIds})`);
+
+      if (selectedUsers.length > 0) {
+        const userNames = selectedUsers.map(u => u.name);
+        // Match if ANY of the selected user names appears in salesRepNames
+        const userConditions = userNames.map(name =>
+          sql`${name} = ANY(${cargoesFlowShipments.salesRepNames})`
+        );
+        conditions.push(or(...userConditions)!);
+      }
     }
 
     // No Tracking Update filtering

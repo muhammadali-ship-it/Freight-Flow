@@ -88,8 +88,6 @@ export default function Dashboard() {
   const [, navigate] = useLocation();
   const [searchQuery, setSearchQuery] = useState("");
   const [filters, setFilters] = useState<FilterState>({
-    status: "all",
-    carrier: "all",
     origin: "all",
     users: [],
     etaFrom: undefined,
@@ -175,12 +173,16 @@ export default function Dashboard() {
       });
 
       if (searchQuery) params.append("search", searchQuery);
-      if (filters.status && filters.status !== "all") params.append("status", filters.status);
-      if (filters.carrier && filters.carrier !== "all") params.append("carrier", filters.carrier);
       if (filters.origin && filters.origin !== "all") params.append("originPort", filters.origin);
       if (filters.etaFrom) params.append("dateFrom", filters.etaFrom);
       if (filters.etaTo) params.append("dateTo", filters.etaTo);
+      if (filters.users && filters.users.length > 0) {
+        filters.users.forEach(userId => params.append("userIds", userId));
+      }
       if (kpiFilter) params.append("kpiFilter", kpiFilter);
+
+      console.log('[DEBUG] API Query Params:', params.toString());
+      console.log('[DEBUG] Filters:', filters);
 
       if (user?.id) params.append("userId", user.id);
       if (user?.role) params.append("userRole", user.role);
@@ -385,7 +387,7 @@ export default function Dashboard() {
   };
 
   const handleClearFilters = () => {
-    setFilters({ status: "all", carrier: "all", origin: "all", users: [], etaFrom: undefined, etaTo: undefined });
+    setFilters({ origin: "all", users: [], etaFrom: undefined, etaTo: undefined });
     setQuickFilter(null);
     setKpiFilter(null);
     // Clear saved state when filters are cleared
@@ -412,10 +414,8 @@ export default function Dashboard() {
     }
   };
 
-  const handleLoadView = (savedFilters: { status: string; carrier: string; origin: string; searchQuery: string; quickFilter: string | null }) => {
+  const handleLoadView = (savedFilters: { origin: string; searchQuery: string; quickFilter: string | null }) => {
     setFilters({
-      status: savedFilters.status,
-      carrier: savedFilters.carrier,
       origin: savedFilters.origin,
       users: [],
       etaFrom: undefined,
@@ -496,6 +496,34 @@ export default function Dashboard() {
     }
 
     return true;
+  }).sort((a, b) => {
+    // Client-side sorting
+    let aValue: any;
+    let bValue: any;
+
+    switch (sortField) {
+      case "eta":
+        aValue = a.eta ? new Date(a.eta).getTime() : 0;
+        bValue = b.eta ? new Date(b.eta).getTime() : 0;
+        break;
+      case "lastFreeDay":
+        aValue = a.lastFreeDay ? new Date(a.lastFreeDay).getTime() : 0;
+        bValue = b.lastFreeDay ? new Date(b.lastFreeDay).getTime() : 0;
+        break;
+      case "riskLevel":
+        const riskOrder = { critical: 4, high: 3, medium: 2, low: 1 };
+        aValue = riskOrder[a.riskLevel as keyof typeof riskOrder] || 0;
+        bValue = riskOrder[b.riskLevel as keyof typeof riskOrder] || 0;
+        break;
+      default:
+        return 0;
+    }
+
+    if (sortDirection === "asc") {
+      return aValue > bValue ? 1 : aValue < bValue ? -1 : 0;
+    } else {
+      return aValue < bValue ? 1 : aValue > bValue ? -1 : 0;
+    }
   });
 
   // Use backend-provided stats (accurate for full filtered dataset, not just current page)
@@ -557,8 +585,6 @@ export default function Dashboard() {
         <div className="flex flex-wrap gap-2">
           <SavedViewsMenu
             currentFilters={{
-              status: filters.status,
-              carrier: filters.carrier,
               origin: filters.origin,
               searchQuery,
               quickFilter,
@@ -677,41 +703,7 @@ export default function Dashboard() {
         </Button>
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        <Button
-          variant={quickFilter === "urgent" ? "default" : "outline"}
-          size="sm"
-          onClick={() => handleQuickFilter("urgent")}
-          data-testid="button-quick-filter-urgent"
-        >
-          <AlertTriangle className="mr-2 h-3 w-3" />
-          Urgent ({urgentCount})
-        </Button>
-        <Button
-          variant={quickFilter === "high-risk" ? "default" : "outline"}
-          size="sm"
-          onClick={() => handleQuickFilter("high-risk")}
-          data-testid="button-quick-filter-high-risk"
-        >
-          High Risk ({highRiskCount})
-        </Button>
-        <Button
-          variant={quickFilter === "exceptions" ? "default" : "outline"}
-          size="sm"
-          onClick={() => handleQuickFilter("exceptions")}
-          data-testid="button-quick-filter-exceptions"
-        >
-          Has Exceptions ({exceptionsCount})
-        </Button>
-        <Button
-          variant={quickFilter === "overdue" ? "default" : "outline"}
-          size="sm"
-          onClick={() => handleQuickFilter("overdue")}
-          data-testid="button-quick-filter-overdue"
-        >
-          Overdue ({overdueCount})
-        </Button>
-      </div>
+
 
       <FilterBar
         filters={filters}
@@ -729,10 +721,8 @@ export default function Dashboard() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="eta">ETA</SelectItem>
-              <SelectItem value="lastFreeDay">Last Free Day</SelectItem>
+              <SelectItem value="lastFreeDay">LFD</SelectItem>
               <SelectItem value="riskLevel">Risk Level</SelectItem>
-              <SelectItem value="status">Status</SelectItem>
-              <SelectItem value="containerNumber">Container #</SelectItem>
             </SelectContent>
           </Select>
           <Button

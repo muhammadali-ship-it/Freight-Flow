@@ -19,8 +19,6 @@ import { cn } from "@/lib/utils";
 import type { DateRange } from "react-day-picker";
 
 export interface FilterState {
-  status: string;
-  carrier: string;
   origin: string;
   users: string[];
   etaFrom?: string;
@@ -77,7 +75,7 @@ export function FilterBar({ filters, onFilterChange, onClearFilters, userRole }:
     setLocalUserSelection(newUsers);
   };
 
-  const hasActiveFilters = filters.status !== "all" || filters.carrier !== "all" || filters.origin !== "all" || (filters.users && filters.users.length > 0) || !!filters.etaFrom || !!filters.etaTo;
+  const hasActiveFilters = filters.origin !== "all" || (filters.users && filters.users.length > 0) || !!filters.etaFrom || !!filters.etaTo;
 
   const nonAdminUsers = users?.filter(user => user.role !== "Admin") || [];
 
@@ -104,7 +102,7 @@ export function FilterBar({ filters, onFilterChange, onClearFilters, userRole }:
 
   const handleDateRangeSelect = (range: DateRange | undefined) => {
     setDateRange(range);
-    
+
     // Only apply filter when both dates are selected or when clearing
     if (!range) {
       // Clearing the range
@@ -124,39 +122,7 @@ export function FilterBar({ filters, onFilterChange, onClearFilters, userRole }:
         <Filter className="h-4 w-4" />
         <span className="hidden sm:inline">Filters:</span>
       </div>
-      
-      <Select value={filters.status} onValueChange={(value) => onFilterChange("status", value)}>
-        <SelectTrigger className="w-[140px] sm:w-[160px]" data-testid="select-filter-status">
-          <SelectValue placeholder="Status" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">All Statuses</SelectItem>
-          <SelectItem value="in-transit">In Transit</SelectItem>
-          <SelectItem value="at-port">At Port</SelectItem>
-          <SelectItem value="delivered">Delivered</SelectItem>
-          <SelectItem value="delayed">Delayed</SelectItem>
-        </SelectContent>
-      </Select>
 
-      <Select value={filters.carrier} onValueChange={(value) => onFilterChange("carrier", value)}>
-        <SelectTrigger className="w-[140px] sm:w-[160px]" data-testid="select-filter-carrier">
-          <SelectValue placeholder="Carrier" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">All Carriers</SelectItem>
-          {isLoadingCarriers ? (
-            <SelectItem value="loading" disabled>Loading...</SelectItem>
-          ) : carriers.length === 0 ? (
-            <SelectItem value="empty" disabled>No carriers found</SelectItem>
-          ) : (
-            carriers.map((carrier) => (
-              <SelectItem key={carrier} value={carrier}>
-                {carrier}
-              </SelectItem>
-            ))
-          )}
-        </SelectContent>
-      </Select>
 
       <Select value={filters.origin} onValueChange={(value) => onFilterChange("origin", value)}>
         <SelectTrigger className="w-[140px] sm:w-[160px]" data-testid="select-filter-origin">
@@ -169,7 +135,7 @@ export function FilterBar({ filters, onFilterChange, onClearFilters, userRole }:
           ) : ports.length === 0 ? (
             <SelectItem value="empty" disabled>No ports found</SelectItem>
           ) : (
-            ports.map((port) => (
+            [...ports].sort().map((port) => (
               <SelectItem key={port} value={port}>
                 {port}
               </SelectItem>
@@ -218,7 +184,7 @@ export function FilterBar({ filters, onFilterChange, onClearFilters, userRole }:
           <PopoverTrigger asChild>
             <Button variant="outline" className="w-[140px] sm:w-[160px] justify-start" data-testid="button-filter-users">
               <Users className="mr-2 h-4 w-4" />
-              {localUserSelection.length > 0 
+              {localUserSelection.length > 0
                 ? `${localUserSelection.length} User${localUserSelection.length > 1 ? 's' : ''}`
                 : "All Users"}
             </Button>
@@ -274,22 +240,6 @@ export function FilterBar({ filters, onFilterChange, onClearFilters, userRole }:
           <X className="mr-1 h-4 w-4" />
           Clear Filters
         </Button>
-      )}
-
-      {hasActiveFilters && (
-        <div className="flex gap-2">
-          {filters.status !== "all" && (
-            <Badge variant="secondary" className="gap-1">
-              Status: {filters.status}
-              <button
-                onClick={() => onFilterChange("status", "all")}
-                className="ml-1 hover:bg-background/20 rounded-full"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </Badge>
-          )}
-        </div>
       )}
     </div>
   );

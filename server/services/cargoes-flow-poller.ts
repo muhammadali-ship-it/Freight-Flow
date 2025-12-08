@@ -245,9 +245,6 @@ async function processAndStoreShipmentsWithStats(shipments: CargoesFlowShipmentD
         console.log(`[Cargoes Flow Poller] Shipment ${shipmentRef}: existing=${!!existing ? 'YES' : 'NO'}, container=${shipment.containerNumber}`);
       }
 
-      // Note: We no longer skip completed shipments here.
-      // Completed shipments will still be updated with latest data from API,
-      // but they will be filtered out from active views by storage.ts filters.
 
       // For MBL-grouped shipments, collect ALL shipments with same MBL to merge their data
       let allMblShipments: any[] = [];

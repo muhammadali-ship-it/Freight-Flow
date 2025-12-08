@@ -1717,8 +1717,12 @@ export class DbStorage implements IStorage {
             db.select({ one: sql`1` })
               .from(users)
               .where(and(
-                sql`LOWER(REPLACE(${users.office}, ' ', '')) = LOWER(REPLACE(${filters.userOffice}, ' ', ''))`,
-                sql`${users.name} = ANY(${cargoesFlowShipments.salesRepNames})`
+                sql`LOWER(TRIM(${users.office})) = LOWER(TRIM(${filters.userOffice}))`,
+                // Robust matching of salesRepNames array like in routes.ts (trim+lower)
+                sql`EXISTS (
+                  SELECT 1 FROM unnest(${cargoesFlowShipments.salesRepNames}) AS s(name) 
+                  WHERE LOWER(TRIM(s.name)) = LOWER(TRIM(${users.name}))
+                )`
               ))
           )
         )
@@ -1846,8 +1850,12 @@ export class DbStorage implements IStorage {
             db.select({ one: sql`1` })
               .from(users)
               .where(and(
-                sql`LOWER(REPLACE(${users.office}, ' ', '')) = LOWER(REPLACE(${filters.userOffice}, ' ', ''))`,
-                sql`${users.name} = ANY(${cargoesFlowShipments.salesRepNames})`
+                sql`LOWER(TRIM(${users.office})) = LOWER(TRIM(${filters.userOffice}))`,
+                // Robust matching of salesRepNames array like in routes.ts (trim+lower)
+                sql`EXISTS (
+                  SELECT 1 FROM unnest(${cargoesFlowShipments.salesRepNames}) AS s(name) 
+                  WHERE LOWER(TRIM(s.name)) = LOWER(TRIM(${users.name}))
+                )`
               ))
           )
         )

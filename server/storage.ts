@@ -1702,19 +1702,19 @@ export class DbStorage implements IStorage {
       // User role: filter by name matching salesRepNames array
       conditions.push(sql`${filters.userName} = ANY(${cargoesFlowShipments.salesRepNames})`);
     } else if (filters?.userRole === 'Manager' && filters?.userOffice) {
-      // Manager role: filter by office matching office field OR rawData.office OR (office is null AND salesRepNames contains a user from that office)
-      // Use permissive matching (trim + lowercase)
+      // Manager role: filter by office matching office field OR rawData.office OR (office is null/empty AND salesRepNames contains a user from that office)
+      // Use permissive matching (trim + lowercase + remove all spaces to handle "Sales - Domestic" vs "Sales-Domestic")
       conditions.push(or(
-        sql`LOWER(TRIM(${cargoesFlowShipments.office})) = LOWER(TRIM(${filters.userOffice}))`,
-        sql`LOWER(TRIM(${cargoesFlowShipments.rawData}->>'office')) = LOWER(TRIM(${filters.userOffice}))`,
-        sql`LOWER(TRIM(${cargoesFlowShipments.rawData}->>'officeName')) = LOWER(TRIM(${filters.userOffice}))`,
+        sql`LOWER(REPLACE(${cargoesFlowShipments.office}, ' ', '')) = LOWER(REPLACE(${filters.userOffice}, ' ', ''))`,
+        sql`LOWER(REPLACE(${cargoesFlowShipments.rawData}->>'office', ' ', '')) = LOWER(REPLACE(${filters.userOffice}, ' ', ''))`,
+        sql`LOWER(REPLACE(${cargoesFlowShipments.rawData}->>'officeName', ' ', '')) = LOWER(REPLACE(${filters.userOffice}, ' ', ''))`,
         and(
-          isNull(cargoesFlowShipments.office),
+          or(isNull(cargoesFlowShipments.office), sql`${cargoesFlowShipments.office} = ''`),
           exists(
             db.select({ one: sql`1` })
               .from(users)
               .where(and(
-                sql`LOWER(TRIM(${users.office})) = LOWER(TRIM(${filters.userOffice}))`,
+                sql`LOWER(REPLACE(${users.office}, ' ', '')) = LOWER(REPLACE(${filters.userOffice}, ' ', ''))`,
                 sql`${users.name} = ANY(${cargoesFlowShipments.salesRepNames})`
               ))
           )
@@ -1831,16 +1831,16 @@ export class DbStorage implements IStorage {
       conditions.push(sql`${filters.userName} = ANY(${cargoesFlowShipments.salesRepNames})`);
     } else if (filters?.userRole === 'Manager' && filters?.userOffice) {
       conditions.push(or(
-        sql`LOWER(TRIM(${cargoesFlowShipments.office})) = LOWER(TRIM(${filters.userOffice}))`,
-        sql`LOWER(TRIM(${cargoesFlowShipments.rawData}->>'office')) = LOWER(TRIM(${filters.userOffice}))`,
-        sql`LOWER(TRIM(${cargoesFlowShipments.rawData}->>'officeName')) = LOWER(TRIM(${filters.userOffice}))`,
+        sql`LOWER(REPLACE(${cargoesFlowShipments.office}, ' ', '')) = LOWER(REPLACE(${filters.userOffice}, ' ', ''))`,
+        sql`LOWER(REPLACE(${cargoesFlowShipments.rawData}->>'office', ' ', '')) = LOWER(REPLACE(${filters.userOffice}, ' ', ''))`,
+        sql`LOWER(REPLACE(${cargoesFlowShipments.rawData}->>'officeName', ' ', '')) = LOWER(REPLACE(${filters.userOffice}, ' ', ''))`,
         and(
-          isNull(cargoesFlowShipments.office),
+          or(isNull(cargoesFlowShipments.office), sql`${cargoesFlowShipments.office} = ''`),
           exists(
             db.select({ one: sql`1` })
               .from(users)
               .where(and(
-                sql`LOWER(TRIM(${users.office})) = LOWER(TRIM(${filters.userOffice}))`,
+                sql`LOWER(REPLACE(${users.office}, ' ', '')) = LOWER(REPLACE(${filters.userOffice}, ' ', ''))`,
                 sql`${users.name} = ANY(${cargoesFlowShipments.salesRepNames})`
               ))
           )

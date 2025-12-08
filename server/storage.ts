@@ -1702,8 +1702,21 @@ export class DbStorage implements IStorage {
       // User role: filter by name matching salesRepNames array
       conditions.push(sql`${filters.userName} = ANY(${cargoesFlowShipments.salesRepNames})`);
     } else if (filters?.userRole === 'Manager' && filters?.userOffice) {
-      // Manager role: filter by office matching office field
-      conditions.push(eq(cargoesFlowShipments.office, filters.userOffice));
+      // Manager role: filter by office matching office field OR (office is null AND salesRepNames contains a user from that office)
+      conditions.push(or(
+        eq(cargoesFlowShipments.office, filters.userOffice),
+        and(
+          isNull(cargoesFlowShipments.office),
+          exists(
+            db.select({ one: sql`1` })
+              .from(users)
+              .where(and(
+                eq(users.office, filters.userOffice),
+                sql`${users.name} = ANY(${cargoesFlowShipments.salesRepNames})`
+              ))
+          )
+        )
+      )!);
     }
     // Admin role: no filtering (no conditions added)
 
@@ -1814,7 +1827,20 @@ export class DbStorage implements IStorage {
     if (filters?.userRole === 'User' && filters?.userName) {
       conditions.push(sql`${filters.userName} = ANY(${cargoesFlowShipments.salesRepNames})`);
     } else if (filters?.userRole === 'Manager' && filters?.userOffice) {
-      conditions.push(eq(cargoesFlowShipments.office, filters.userOffice));
+      conditions.push(or(
+        eq(cargoesFlowShipments.office, filters.userOffice),
+        and(
+          isNull(cargoesFlowShipments.office),
+          exists(
+            db.select({ one: sql`1` })
+              .from(users)
+              .where(and(
+                eq(users.office, filters.userOffice),
+                sql`${users.name} = ANY(${cargoesFlowShipments.salesRepNames})`
+              ))
+          )
+        )
+      )!);
     }
 
     // User IDs filtering (for Admin selecting specific users)

@@ -447,8 +447,8 @@ async function processAndStoreShipmentsWithStats(shipments: CargoesFlowShipmentD
           vesselName: shipment.vesselName || null,
           voyageNumber: shipment.voyageNumber || null,
           containerType: shipment.containerSize || shipment.containerType || null,
-          office,
-          salesRepNames,
+          office: office || existing.office,
+          salesRepNames: salesRepNames || existing.salesRepNames,
           rawData: mergedRawData,
           lastFetchedAt: new Date(),
         });

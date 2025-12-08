@@ -105,7 +105,7 @@ async function processTaiShipmentUpdate(payload: any, webhookId: string) {
   // Extract customer info
   const customerName = payload.customer?.name || null;
   const staffName = payload.customer?.staffName || null;
-  const officeName = payload.customer?.office || null;
+  const officeName = payload.customer?.office || payload.customer?.officeName || null;
 
   // Extract sales reps from customer.salesRepNames (comma-separated string)
   const salesRepNamesString = payload.customer?.salesRepNames || '';

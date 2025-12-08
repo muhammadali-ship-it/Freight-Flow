@@ -4,7 +4,7 @@
   "type": "module",
   "license": "MIT",
   "scripts": {
-    "dev": "tsx api/index.ts",
+    "dev": "tsx watch api/index.ts",
     "build": "esbuild api/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
     "vercel-build": "esbuild *.ts services/*.ts shared/*.ts integrations/*.ts api/*.ts webhooks/*.ts --platform=node --packages=external --format=esm --outdir=dist --out-extension:.js=.js",
     "start": "node dist/index.js",

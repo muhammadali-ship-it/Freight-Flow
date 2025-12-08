@@ -1790,6 +1790,7 @@ export class DbStorage implements IStorage {
     params?: PaginationParams,
     filters?: ShipmentFilters & { search?: string; userName?: string; userOffice?: string; userRole?: string; kpiFilter?: string; completed?: boolean; noTrackingUpdate?: boolean; userIds?: string[]; sortField?: string; sortDirection?: 'asc' | 'desc' }
   ): Promise<PaginatedResult<any>> {
+    console.log('[DEBUG Storage] getGroupedCargoesFlowShipments called with filters:', JSON.stringify(filters, null, 2));
     const conditions: SQL[] = [];
 
     if (filters?.search) {

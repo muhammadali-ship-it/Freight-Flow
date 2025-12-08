@@ -1703,15 +1703,16 @@ export class DbStorage implements IStorage {
       conditions.push(sql`${filters.userName} = ANY(${cargoesFlowShipments.salesRepNames})`);
     } else if (filters?.userRole === 'Manager' && filters?.userOffice) {
       // Manager role: filter by office matching office field OR (office is null AND salesRepNames contains a user from that office)
+      // Use case-insensitive matching for office names
       conditions.push(or(
-        eq(cargoesFlowShipments.office, filters.userOffice),
+        sql`LOWER(${cargoesFlowShipments.office}) = LOWER(${filters.userOffice})`,
         and(
           isNull(cargoesFlowShipments.office),
           exists(
             db.select({ one: sql`1` })
               .from(users)
               .where(and(
-                eq(users.office, filters.userOffice),
+                sql`LOWER(${users.office}) = LOWER(${filters.userOffice})`,
                 sql`${users.name} = ANY(${cargoesFlowShipments.salesRepNames})`
               ))
           )
@@ -1828,14 +1829,14 @@ export class DbStorage implements IStorage {
       conditions.push(sql`${filters.userName} = ANY(${cargoesFlowShipments.salesRepNames})`);
     } else if (filters?.userRole === 'Manager' && filters?.userOffice) {
       conditions.push(or(
-        eq(cargoesFlowShipments.office, filters.userOffice),
+        sql`LOWER(${cargoesFlowShipments.office}) = LOWER(${filters.userOffice})`,
         and(
           isNull(cargoesFlowShipments.office),
           exists(
             db.select({ one: sql`1` })
               .from(users)
               .where(and(
-                eq(users.office, filters.userOffice),
+                sql`LOWER(${users.office}) = LOWER(${filters.userOffice})`,
                 sql`${users.name} = ANY(${cargoesFlowShipments.salesRepNames})`
               ))
           )

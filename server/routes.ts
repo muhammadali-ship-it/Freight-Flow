@@ -438,8 +438,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
+
       res.json({
         ...cargoesFlowShipment,
+        office: cargoesFlowShipment.office || (cargoesFlowShipment.rawData as any)?.office || null,
         containers: allContainers,
         milestones,
         assignedUsers: assignedUsers.filter(Boolean), // Filter out any null users

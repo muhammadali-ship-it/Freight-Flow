@@ -1702,12 +1702,15 @@ export class DbStorage implements IStorage {
       // User role: filter by name matching salesRepNames array
       conditions.push(sql`${filters.userName} = ANY(${cargoesFlowShipments.salesRepNames})`);
     } else if (filters?.userRole === 'Manager' && filters?.userOffice) {
-      // Manager role: filter by office matching office field OR rawData.office OR (office is null/empty AND salesRepNames contains a user from that office)
-      // Use permissive matching (trim + lowercase + remove all spaces to handle "Sales - Domestic" vs "Sales-Domestic")
+      // Manager role: filter by office matching office field OR rawData.office OR nested customer.office pattern
+      // Use permissive matching (trim + lowercase + remove all spaces)
       conditions.push(or(
         sql`LOWER(REPLACE(${cargoesFlowShipments.office}, ' ', '')) = LOWER(REPLACE(${filters.userOffice}, ' ', ''))`,
         sql`LOWER(REPLACE(${cargoesFlowShipments.rawData}->>'office', ' ', '')) = LOWER(REPLACE(${filters.userOffice}, ' ', ''))`,
         sql`LOWER(REPLACE(${cargoesFlowShipments.rawData}->>'officeName', ' ', '')) = LOWER(REPLACE(${filters.userOffice}, ' ', ''))`,
+        // Check nested customer object (common pattern in some API responses)
+        sql`LOWER(REPLACE(${cargoesFlowShipments.rawData}->'customer'->>'office', ' ', '')) = LOWER(REPLACE(${filters.userOffice}, ' ', ''))`,
+        sql`LOWER(REPLACE(${cargoesFlowShipments.rawData}->'customer'->>'officeName', ' ', '')) = LOWER(REPLACE(${filters.userOffice}, ' ', ''))`,
         and(
           or(isNull(cargoesFlowShipments.office), sql`${cargoesFlowShipments.office} = ''`),
           exists(
@@ -1834,6 +1837,9 @@ export class DbStorage implements IStorage {
         sql`LOWER(REPLACE(${cargoesFlowShipments.office}, ' ', '')) = LOWER(REPLACE(${filters.userOffice}, ' ', ''))`,
         sql`LOWER(REPLACE(${cargoesFlowShipments.rawData}->>'office', ' ', '')) = LOWER(REPLACE(${filters.userOffice}, ' ', ''))`,
         sql`LOWER(REPLACE(${cargoesFlowShipments.rawData}->>'officeName', ' ', '')) = LOWER(REPLACE(${filters.userOffice}, ' ', ''))`,
+        // Check nested customer object
+        sql`LOWER(REPLACE(${cargoesFlowShipments.rawData}->'customer'->>'office', ' ', '')) = LOWER(REPLACE(${filters.userOffice}, ' ', ''))`,
+        sql`LOWER(REPLACE(${cargoesFlowShipments.rawData}->'customer'->>'officeName', ' ', '')) = LOWER(REPLACE(${filters.userOffice}, ' ', ''))`,
         and(
           or(isNull(cargoesFlowShipments.office), sql`${cargoesFlowShipments.office} = ''`),
           exists(

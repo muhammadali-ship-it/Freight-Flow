@@ -58,8 +58,71 @@ function detectDelays(milestones: Milestone[]): Milestone[] {
   });
 }
 
+// --- DEBUG ENDPOINT START ---
+function normalize(str: string | null | undefined) {
+  if (!str) return null;
+  return str.toLowerCase().trim();
+}
+
+import { users, cargoesFlowShipments } from "./shared/schema.js";
+import { eq, ilike } from "drizzle-orm";
+
+async function debugManagerCheck(req: any, res: any) {
+  const { mbl, office } = req.query;
+  try {
+    const results: any = {
+      query: { mbl, office },
+      checks: {}
+    };
+
+    // 1. Get Shipment
+    const shipment = await db.select().from(cargoesFlowShipments).where(eq(cargoesFlowShipments.mblNumber, mbl as string)).limit(1);
+    if (!shipment.length) {
+      return res.json({ error: "Shipment not found" });
+    }
+    const s = shipment[0];
+    const rawData = s.rawData as any;
+
+    results.shipment = {
+      id: s.id,
+      office: s.office,
+      rawDataOffice: rawData?.office,
+      rawDataOfficeName: rawData?.officeName,
+      salesRepNames: s.salesRepNames
+    };
+
+    // 2. Direct Office Match
+    const officeLower = normalize(office as string);
+    results.checks.directMatch = {
+      column: normalize(s.office) === officeLower,
+      rawOffice: normalize(rawData?.office) === officeLower,
+      rawOfficeName: normalize(rawData?.officeName) === officeLower
+    };
+
+    // 3. Sales Rep Match
+    if (s.salesRepNames && s.salesRepNames.length > 0) {
+      results.reps = [];
+      for (const name of s.salesRepNames) {
+        const rep = await db.select().from(users).where(eq(users.name, name)).limit(1);
+        const repOffice = rep.length ? rep[0].office : "NOT FOUND";
+        const match = normalize(repOffice) === officeLower;
+        results.reps.push({ name, office: repOffice, match });
+      }
+    }
+
+    res.json(results);
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+}
+// --- DEBUG ENDPOINT END ---
+
 export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
+
+  // Register debug route
+  app.get("/api/debug/manager-check", debugManagerCheck);
+
 
   app.post("/api/shipments", async (req, res) => {
     try {

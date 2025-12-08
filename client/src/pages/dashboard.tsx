@@ -13,8 +13,6 @@ import { RiskLevel } from "@/components/risk-priority-indicator";
 import { TerminalStatus } from "@/components/terminal-status-badge";
 import { ExceptionType } from "@/components/exception-alert";
 import { Button } from "@/components/ui/button";
-import { BarChart3 } from "lucide-react";
-import { AnalyticsDashboard } from "@/components/analytics-dashboard";
 import { SavedViewsMenu } from "@/components/saved-views-menu";
 import {
   Select,
@@ -89,6 +87,7 @@ export default function Dashboard() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filters, setFilters] = useState<FilterState>({
     origin: "all",
+    carrier: "all",
     users: [],
     etaFrom: undefined,
     etaTo: undefined,
@@ -103,7 +102,6 @@ export default function Dashboard() {
 
   const [sortField, setSortField] = useState<SortField>("eta");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
-  const [showAnalytics, setShowAnalytics] = useState(false);
 
   // Debug logging for sort changes
   useEffect(() => {
@@ -179,6 +177,7 @@ export default function Dashboard() {
 
       if (searchQuery) params.append("search", searchQuery);
       if (filters.origin && filters.origin !== "all") params.append("originPort", filters.origin);
+      if (filters.carrier && filters.carrier !== "all") params.append("carrier", filters.carrier);
       if (filters.etaFrom) params.append("dateFrom", filters.etaFrom);
       if (filters.etaTo) params.append("dateTo", filters.etaTo);
       if (filters.users && filters.users.length > 0) {
@@ -396,7 +395,7 @@ export default function Dashboard() {
   };
 
   const handleClearFilters = () => {
-    setFilters({ origin: "all", users: [], etaFrom: undefined, etaTo: undefined });
+    setFilters({ origin: "all", carrier: "all", users: [], etaFrom: undefined, etaTo: undefined });
     setQuickFilter(null);
     setKpiFilter(null);
     // Clear saved state when filters are cleared
@@ -594,36 +593,6 @@ export default function Dashboard() {
   const exceptionsCount = containers.filter(c => (c as any).hasExceptions).length;
   const overdueCount = containers.filter(c => isOverdue(c)).length;
 
-  if (showAnalytics) {
-    return (
-      <div className="space-y-4 sm:space-y-6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-xl sm:text-2xl font-semibold">Analytics Dashboard</h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              Performance metrics and operational insights
-            </p>
-          </div>
-          <Button
-            variant="outline"
-            onClick={() => setShowAnalytics(false)}
-            data-testid="button-back-to-containers"
-          >
-            <Package className="mr-2 h-4 w-4" />
-            <span className="hidden sm:inline">Back to Containers</span>
-            <span className="sm:hidden">Containers</span>
-          </Button>
-        </div>
-        <AnalyticsDashboard
-          onTimeDeliveryRate={91}
-          averageTransitDays={18}
-          exceptionRate={8}
-          totalDemurrageCost={4200}
-        />
-      </div>
-    );
-  }
-
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-96">
@@ -660,16 +629,6 @@ export default function Dashboard() {
           >
             <Plus className="mr-2 h-4 w-4" />
             Add Shipment
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => setShowAnalytics(true)}
-            data-testid="button-view-analytics"
-            className="flex-1 sm:flex-none"
-          >
-            <BarChart3 className="mr-2 h-4 w-4" />
-            <span className="hidden sm:inline">View Analytics</span>
-            <span className="sm:hidden">Analytics</span>
           </Button>
         </div>
       </div>

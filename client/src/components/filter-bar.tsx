@@ -20,6 +20,7 @@ import type { DateRange } from "react-day-picker";
 
 export interface FilterState {
   origin: string;
+  carrier?: string;
   users: string[];
   etaFrom?: string;
   etaTo?: string;
@@ -75,7 +76,7 @@ export function FilterBar({ filters, onFilterChange, onClearFilters, userRole }:
     setLocalUserSelection(newUsers);
   };
 
-  const hasActiveFilters = filters.origin !== "all" || (filters.users && filters.users.length > 0) || !!filters.etaFrom || !!filters.etaTo;
+  const hasActiveFilters = filters.origin !== "all" || filters.carrier !== "all" || (filters.users && filters.users.length > 0) || !!filters.etaFrom || !!filters.etaTo;
 
   const nonAdminUsers = users?.filter(user => user.role !== "Admin") || [];
 
@@ -138,6 +139,26 @@ export function FilterBar({ filters, onFilterChange, onClearFilters, userRole }:
             [...ports].sort().map((port) => (
               <SelectItem key={port} value={port}>
                 {port}
+              </SelectItem>
+            ))
+          )}
+        </SelectContent>
+      </Select>
+
+      <Select value={filters.carrier || "all"} onValueChange={(value) => onFilterChange("carrier", value)}>
+        <SelectTrigger className="w-[140px] sm:w-[160px]" data-testid="select-filter-carrier">
+          <SelectValue placeholder="Carrier" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">All Carriers</SelectItem>
+          {isLoadingCarriers ? (
+            <SelectItem value="loading" disabled>Loading...</SelectItem>
+          ) : carriers.length === 0 ? (
+            <SelectItem value="empty" disabled>No carriers found</SelectItem>
+          ) : (
+            [...carriers].sort().map((carrier) => (
+              <SelectItem key={carrier} value={carrier}>
+                {carrier}
               </SelectItem>
             ))
           )}

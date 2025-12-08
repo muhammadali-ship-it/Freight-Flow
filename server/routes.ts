@@ -3027,6 +3027,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/carriers", async (req, res) => {
+    try {
+      const carriers = await storage.getDistinctCarriers();
+      res.json(carriers);
+    } catch (error: any) {
+      console.error("Error fetching distinct carriers:", error);
+      res.status(500).json({ error: error.message || "Failed to fetch carriers" });
+    }
+  });
+
   app.post("/api/cargoes-flow/batch-process", async (req, res) => {
     try {
       console.log("[Cargoes Flow Batch] Starting batch processing of webhook logs...");

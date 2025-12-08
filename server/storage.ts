@@ -337,6 +337,7 @@ export interface IStorage {
 
   // Cargoes Flow Filters - Distinct values for dropdowns
   getDistinctPorts(): Promise<string[]>;
+  getDistinctCarriers(): Promise<string[]>;
 
   // Vessels
   upsertVessel(vessel: InsertVessel): Promise<Vessel>;
@@ -3068,6 +3069,19 @@ export class DbStorage implements IStorage {
     const normalizedPorts = this.normalizePortNames(allPorts);
     const uniquePorts = Array.from(new Set(normalizedPorts));
     return uniquePorts.sort();
+  }
+
+  async getDistinctCarriers(): Promise<string[]> {
+    const carriers = await db
+      .selectDistinct({ carrier: cargoesFlowShipments.carrier })
+      .from(cargoesFlowShipments)
+      .where(sql`${cargoesFlowShipments.carrier} IS NOT NULL AND ${cargoesFlowShipments.carrier} != ''`);
+
+    const uniqueCarriers = carriers
+      .map(row => row.carrier)
+      .filter((carrier): carrier is string => carrier !== null && carrier !== undefined);
+
+    return Array.from(new Set(uniqueCarriers)).sort();
   }
 
   // Helper function to normalize port names and remove duplicates

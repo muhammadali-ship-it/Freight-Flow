@@ -334,6 +334,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/shipments/:id", async (req, res) => {
     try {
+      // Get current user for role-based access control
+      const user = req.user as User | undefined;
+
       // First, try to fetch from user shipments (prioritize user-created data)
       let shipment = await storage.getShipmentById(req.params.id);
 
@@ -360,6 +363,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
             repName.toLowerCase().trim() === userNameLower
           );
         });
+
+        // Apply role-based access control
+        if (user) {
+          const shipmentOffice = shipment.officeName || '';
+          
+          if (user.role === 'User') {
+            // User role: check if user is in salesRepNames
+            const hasAccess = salesRepNames.some(repName => 
+              repName.toLowerCase().trim() === user.name.toLowerCase().trim()
+            );
+            if (!hasAccess) {
+              return res.status(403).json({ error: "Access denied. You don't have permission to view this shipment." });
+            }
+          } else if (user.role === 'Manager') {
+            // Manager role: check if office matches (case-insensitive, space-insensitive)
+            const userOffice = user.office || '';
+            const normalizeOffice = (office: string) => office.toLowerCase().replace(/\s+/g, '').trim();
+            const hasAccess = normalizeOffice(shipmentOffice) === normalizeOffice(userOffice);
+            if (!hasAccess) {
+              return res.status(403).json({ error: "Access denied. You don't have permission to view this shipment." });
+            }
+          }
+          // Admin users: no restrictions
+        }
 
         return res.json({
           ...shipment,
@@ -501,6 +528,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
+      // Apply role-based access control for Cargoes Flow shipments
+      if (user) {
+        const shipmentOffice = cargoesFlowShipment.office || (cargoesFlowShipment.rawData as any)?.office || '';
+        
+        if (user.role === 'User') {
+          // User role: check if user is in salesRepNames
+          const hasAccess = salesRepNames.some(repName => 
+            repName.toLowerCase().trim() === user.name.toLowerCase().trim()
+          );
+          if (!hasAccess) {
+            return res.status(403).json({ error: "Access denied. You don't have permission to view this shipment." });
+          }
+        } else if (user.role === 'Manager') {
+          // Manager role: check if office matches (case-insensitive, space-insensitive)
+          const userOffice = user.office || '';
+          const normalizeOffice = (office: string) => office.toLowerCase().replace(/\s+/g, '').trim();
+          const hasAccess = normalizeOffice(shipmentOffice) === normalizeOffice(userOffice);
+          if (!hasAccess) {
+            return res.status(403).json({ error: "Access denied. You don't have permission to view this shipment." });
+          }
+        }
+        // Admin users: no restrictions
+      }
 
       res.json({
         ...cargoesFlowShipment,

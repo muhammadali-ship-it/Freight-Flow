@@ -336,6 +336,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       // Get current user for role-based access control
       const user = req.user as User | undefined;
+      
+      // Debug logging
+      console.log('[Shipment Detail Auth]', {
+        shipmentId: req.params.id,
+        isAuthenticated: req.isAuthenticated ? req.isAuthenticated() : false,
+        user: user ? { id: user.id, name: user.name, role: user.role, office: user.office } : null
+      });
 
       // First, try to fetch from user shipments (prioritize user-created data)
       let shipment = await storage.getShipmentById(req.params.id);
@@ -368,11 +375,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (user) {
           const shipmentOffice = shipment.officeName || '';
           
+          console.log('[User Shipment Auth Check]', {
+            userRole: user.role,
+            userName: user.name,
+            userOffice: user.office,
+            shipmentOffice,
+            salesRepNames
+          });
+          
           if (user.role === 'User') {
             // User role: check if user is in salesRepNames
             const hasAccess = salesRepNames.some(repName => 
               repName.toLowerCase().trim() === user.name.toLowerCase().trim()
             );
+            console.log('[User Role Check]', { hasAccess });
             if (!hasAccess) {
               return res.status(403).json({ error: "Access denied. You don't have permission to view this shipment." });
             }
@@ -381,6 +397,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const userOffice = user.office || '';
             const normalizeOffice = (office: string) => office.toLowerCase().replace(/\s+/g, '').trim();
             const hasAccess = normalizeOffice(shipmentOffice) === normalizeOffice(userOffice);
+            console.log('[Manager Role Check]', { 
+              hasAccess, 
+              normalizedShipmentOffice: normalizeOffice(shipmentOffice),
+              normalizedUserOffice: normalizeOffice(userOffice)
+            });
             if (!hasAccess) {
               return res.status(403).json({ error: "Access denied. You don't have permission to view this shipment." });
             }
@@ -532,11 +553,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (user) {
         const shipmentOffice = cargoesFlowShipment.office || (cargoesFlowShipment.rawData as any)?.office || '';
         
+        console.log('[Cargoes Flow Shipment Auth Check]', {
+          userRole: user.role,
+          userName: user.name,
+          userOffice: user.office,
+          shipmentOffice,
+          rawDataOffice: (cargoesFlowShipment.rawData as any)?.office,
+          salesRepNames
+        });
+        
         if (user.role === 'User') {
           // User role: check if user is in salesRepNames
           const hasAccess = salesRepNames.some(repName => 
             repName.toLowerCase().trim() === user.name.toLowerCase().trim()
           );
+          console.log('[User Role Check]', { hasAccess });
           if (!hasAccess) {
             return res.status(403).json({ error: "Access denied. You don't have permission to view this shipment." });
           }
@@ -545,6 +576,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const userOffice = user.office || '';
           const normalizeOffice = (office: string) => office.toLowerCase().replace(/\s+/g, '').trim();
           const hasAccess = normalizeOffice(shipmentOffice) === normalizeOffice(userOffice);
+          console.log('[Manager Role Check]', { 
+            hasAccess, 
+            normalizedShipmentOffice: normalizeOffice(shipmentOffice),
+            normalizedUserOffice: normalizeOffice(userOffice)
+          });
           if (!hasAccess) {
             return res.status(403).json({ error: "Access denied. You don't have permission to view this shipment." });
           }

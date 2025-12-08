@@ -1246,14 +1246,16 @@ export class DbStorage implements IStorage {
       const demurrage = this.calculateDemurrageCost(
         rawData.lastFreeDay,
         rawData.demurrageCost,
-        rawData.terminalFullOut
+        rawData.terminalFullOut,
+        ship.lastFetchedAt
       );
 
       // Calculate detention cost
       const detention = this.calculateDetentionCost(
         rawData.lastReturnDate,
         rawData.detentionCost,
-        rawData.emptyInEvent?.actualDate
+        rawData.emptyInEvent?.actualDate,
+        ship.lastFetchedAt
       );
 
       const total = demurrage + detention;
@@ -2080,10 +2082,12 @@ export class DbStorage implements IStorage {
   }
 
   // Helper method to calculate demurrage cost based on LFD and Full Out date
+  // Helper method to calculate demurrage cost based on LFD and Full Out date
   public calculateDemurrageCost(
     lastFreeDay: string | null | undefined,
     demurrageCostPerDay: number | string | null | undefined,
-    terminalFullOut: string | null | undefined
+    terminalFullOut: string | null | undefined,
+    lastFetchedAt?: string | Date | null
   ): number {
     if (!lastFreeDay || !demurrageCostPerDay) {
       return 0;
@@ -2103,10 +2107,25 @@ export class DbStorage implements IStorage {
     startDate.setDate(startDate.getDate() + 1);
 
     // End date is either Full Out date or today
-    const endDate = terminalFullOut ? new Date(terminalFullOut) : new Date();
+    let endDate = terminalFullOut ? new Date(terminalFullOut) : new Date();
     endDate.setHours(0, 0, 0, 0);
 
+    // If still accumulating cost (no terminalFullOut) and we have a lastFetchedAt date
+    if (!terminalFullOut && lastFetchedAt) {
+      const lastFetchedDate = new Date(lastFetchedAt);
+      const now = new Date();
+      // Check if "No Tracking Update" (stale > 7 days)
+      const daysSinceFetch = (now.getTime() - lastFetchedDate.getTime()) / (1000 * 60 * 60 * 24);
+
+      if (daysSinceFetch > 7) {
+        // Stop cost accumulation at the point we lost tracking
+        endDate = lastFetchedDate;
+        endDate.setHours(0, 0, 0, 0);
+      }
+    }
+
     // If Full Out happened before or on LFD, no demurrage
+    // Also if capped (stale) date is before start date, no cost
     if (endDate <= lfdDate) {
       return 0;
     }
@@ -2121,7 +2140,8 @@ export class DbStorage implements IStorage {
   public calculateDetentionCost(
     lastReturnDate: string | null | undefined,
     detentionCostPerDay: number | string | null | undefined,
-    emptyInEventDate: string | null | undefined
+    emptyInEventDate: string | null | undefined,
+    lastFetchedAt?: string | Date | null
   ): number {
     if (!lastReturnDate || !detentionCostPerDay) {
       return 0;
@@ -2141,8 +2161,22 @@ export class DbStorage implements IStorage {
     startDate.setDate(startDate.getDate() + 1);
 
     // End date is either Empty In event date or today
-    const endDate = emptyInEventDate ? new Date(emptyInEventDate) : new Date();
+    let endDate = emptyInEventDate ? new Date(emptyInEventDate) : new Date();
     endDate.setHours(0, 0, 0, 0);
+
+    // If still accumulating cost (no emptyInEventDate) and we have a lastFetchedAt date
+    if (!emptyInEventDate && lastFetchedAt) {
+      const lastFetchedDate = new Date(lastFetchedAt);
+      const now = new Date();
+      // Check if "No Tracking Update" (stale > 7 days)
+      const daysSinceFetch = (now.getTime() - lastFetchedDate.getTime()) / (1000 * 60 * 60 * 24);
+
+      if (daysSinceFetch > 7) {
+        // Stop cost accumulation at the point we lost tracking
+        endDate = lastFetchedDate;
+        endDate.setHours(0, 0, 0, 0);
+      }
+    }
 
     // If Empty In happened before or on LRD, no detention
     if (endDate <= lrdDate) {

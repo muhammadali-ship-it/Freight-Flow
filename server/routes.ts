@@ -336,7 +336,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       // Get current user for role-based access control
       const user = req.user as User | undefined;
-      
+
       // Debug logging
       console.log('[Shipment Detail Auth]', {
         shipmentId: req.params.id,
@@ -374,7 +374,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Apply role-based access control
         if (user) {
           const shipmentOffice = shipment.officeName || '';
-          
+
           console.log('[User Shipment Auth Check]', {
             userRole: user.role,
             userName: user.name,
@@ -382,10 +382,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
             shipmentOffice,
             salesRepNames
           });
-          
+
           if (user.role === 'User') {
             // User role: check if user is in salesRepNames
-            const hasAccess = salesRepNames.some(repName => 
+            const hasAccess = salesRepNames.some(repName =>
               repName.toLowerCase().trim() === user.name.toLowerCase().trim()
             );
             console.log('[User Role Check]', { hasAccess });
@@ -397,8 +397,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const userOffice = user.office || '';
             const normalizeOffice = (office: string) => office.toLowerCase().replace(/\s+/g, '').trim();
             const hasAccess = normalizeOffice(shipmentOffice) === normalizeOffice(userOffice);
-            console.log('[Manager Role Check]', { 
-              hasAccess, 
+            console.log('[Manager Role Check]', {
+              hasAccess,
               normalizedShipmentOffice: normalizeOffice(shipmentOffice),
               normalizedUserOffice: normalizeOffice(userOffice)
             });
@@ -487,13 +487,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
               calculatedDemurrageCost: storage.calculateDemurrageCost(
                 shipRawData.lastFreeDay || containerRawData.lastFreeDay,
                 shipRawData.demurrageCost || containerRawData.demurrageCost,
-                shipRawData.terminalFullOut || containerRawData.terminalFullOut
+                shipRawData.terminalFullOut || containerRawData.terminalFullOut,
+                ship.lastFetchedAt
               ),
               // Calculate total detention cost based on LRD and Empty In event date
               calculatedDetentionCost: storage.calculateDetentionCost(
                 shipRawData.lastReturnDate || containerRawData.lastReturnDate,
                 shipRawData.detentionCost || containerRawData.detentionCost,
-                shipRawData.emptyInEvent?.actualDate || containerRawData.emptyInEvent?.actualDate
+                shipRawData.emptyInEvent?.actualDate || containerRawData.emptyInEvent?.actualDate,
+                ship.lastFetchedAt
               ),
             },
           };
@@ -552,7 +554,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Apply role-based access control for Cargoes Flow shipments
       if (user) {
         const shipmentOffice = cargoesFlowShipment.office || (cargoesFlowShipment.rawData as any)?.office || '';
-        
+
         console.log('[Cargoes Flow Shipment Auth Check]', {
           userRole: user.role,
           userName: user.name,
@@ -561,10 +563,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           rawDataOffice: (cargoesFlowShipment.rawData as any)?.office,
           salesRepNames
         });
-        
+
         if (user.role === 'User') {
           // User role: check if user is in salesRepNames
-          const hasAccess = salesRepNames.some(repName => 
+          const hasAccess = salesRepNames.some(repName =>
             repName.toLowerCase().trim() === user.name.toLowerCase().trim()
           );
           console.log('[User Role Check]', { hasAccess });
@@ -576,8 +578,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const userOffice = user.office || '';
           const normalizeOffice = (office: string) => office.toLowerCase().replace(/\s+/g, '').trim();
           const hasAccess = normalizeOffice(shipmentOffice) === normalizeOffice(userOffice);
-          console.log('[Manager Role Check]', { 
-            hasAccess, 
+          console.log('[Manager Role Check]', {
+            hasAccess,
             normalizedShipmentOffice: normalizeOffice(shipmentOffice),
             normalizedUserOffice: normalizeOffice(userOffice)
           });

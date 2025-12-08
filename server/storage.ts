@@ -179,6 +179,7 @@ export interface IStorage {
   getShipments(params?: PaginationParams, filters?: ShipmentFilters, userId?: string, userRole?: string): Promise<PaginatedResult<Shipment>>;
   getShipmentById(id: string): Promise<(Shipment & { containers: Container[]; milestones: Milestone[]; assignedUsers?: User[] }) | undefined>;
   getShipmentByReference(referenceNumber: string): Promise<Shipment | undefined>;
+  getShipmentByMbl(mbl: string): Promise<Shipment | undefined>;
   createShipment(shipment: InsertShipment): Promise<Shipment>;
   updateShipment(id: string, shipment: Partial<InsertShipment>): Promise<Shipment | undefined>;
   deleteShipment(id: string): Promise<boolean>;
@@ -686,6 +687,11 @@ export class DbStorage implements IStorage {
 
   async getShipmentByReference(referenceNumber: string): Promise<Shipment | undefined> {
     const result = await db.select().from(shipments).where(eq(shipments.referenceNumber, referenceNumber));
+    return result[0];
+  }
+
+  async getShipmentByMbl(mbl: string): Promise<Shipment | undefined> {
+    const result = await db.select().from(shipments).where(eq(shipments.masterBillOfLading, mbl));
     return result[0];
   }
 

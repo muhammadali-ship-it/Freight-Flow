@@ -218,6 +218,24 @@ async function processAndStoreShipmentsWithStats(shipments: CargoesFlowShipmentD
         }
       }
 
+      // Fallback: Check manual shipments for Office if not found
+      if (!office && mblNumber) {
+        const manualShipment = await storage.getShipmentByMbl(mblNumber);
+        if (manualShipment && manualShipment.officeName) {
+          office = manualShipment.officeName;
+          if (i < 3) {
+            console.log(`[Cargoes Flow Poller] Found Office from Manual Shipment MBL ${mblNumber}: ${office}`);
+          }
+        }
+      }
+
+      // Fallback: Check customer object in shipment data
+      if (!office && (shipment as any).customer) {
+        const customer = (shipment as any).customer;
+        if (customer.office) office = customer.office;
+        else if (customer.officeName) office = customer.officeName;
+      }
+
       // Get existing shipment to preserve manually added data (rail, terminal info)
       // Try multiple lookup strategies to find the correct shipment
       let existing = await storage.getCargoesFlowShipmentByReference(shipmentRef);

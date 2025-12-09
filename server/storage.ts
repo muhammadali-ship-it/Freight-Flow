@@ -1719,6 +1719,9 @@ export class DbStorage implements IStorage {
         // Check nested customer object (common pattern in some API responses)
         sql`LOWER(REPLACE(${cargoesFlowShipments.rawData}->'customer'->>'office', ' ', '')) = LOWER(REPLACE(${filters.userOffice}, ' ', ''))`,
         sql`LOWER(REPLACE(${cargoesFlowShipments.rawData}->'customer'->>'officeName', ' ', '')) = LOWER(REPLACE(${filters.userOffice}, ' ', ''))`,
+        // Allow seeing shipments with NULL or empty office
+        isNull(cargoesFlowShipments.office),
+        sql`${cargoesFlowShipments.office} = ''`,
         and(
           or(isNull(cargoesFlowShipments.office), sql`${cargoesFlowShipments.office} = ''`),
           exists(
@@ -1853,6 +1856,9 @@ export class DbStorage implements IStorage {
         // Check nested customer object
         sql`LOWER(REPLACE(${cargoesFlowShipments.rawData}->'customer'->>'office', ' ', '')) = LOWER(REPLACE(${filters.userOffice}, ' ', ''))`,
         sql`LOWER(REPLACE(${cargoesFlowShipments.rawData}->'customer'->>'officeName', ' ', '')) = LOWER(REPLACE(${filters.userOffice}, ' ', ''))`,
+        // Allow seeing shipments with NULL or empty office
+        isNull(cargoesFlowShipments.office),
+        sql`${cargoesFlowShipments.office} = ''`,
         and(
           or(isNull(cargoesFlowShipments.office), sql`${cargoesFlowShipments.office} = ''`),
           exists(

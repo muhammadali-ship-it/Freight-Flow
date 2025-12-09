@@ -393,14 +393,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
               return res.status(403).json({ error: "Access denied. You don't have permission to view this shipment." });
             }
           } else if (user.role === 'Manager') {
-            // Manager role: check if office matches (case-insensitive, space-insensitive)
+            // Manager role: check if office matches (case-insensitive, space-insensitive, punctuation-insensitive)
             const userOffice = user.office || '';
-            const normalizeOffice = (office: string) => office.toLowerCase().replace(/\s+/g, '').trim();
-            const hasAccess = normalizeOffice(shipmentOffice) === normalizeOffice(userOffice);
+            // Match storage.ts logic: remove everything that isn't alphanumeric
+            const normalizeOffice = (office: string) => office.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+            // Also allow access if shipment office is null/empty (consistent with storage.ts list filtering)
+            const hasAccess = !shipmentOffice || normalizeOffice(shipmentOffice) === normalizeOffice(userOffice);
+
             console.log('[Manager Role Check]', {
               hasAccess,
               normalizedShipmentOffice: normalizeOffice(shipmentOffice),
-              normalizedUserOffice: normalizeOffice(userOffice)
+              normalizedUserOffice: normalizeOffice(userOffice),
+              shipmentOfficeOriginal: shipmentOffice
             });
             if (!hasAccess) {
               return res.status(403).json({ error: "Access denied. You don't have permission to view this shipment." });
@@ -576,12 +581,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         } else if (user.role === 'Manager') {
           // Manager role: check if office matches (case-insensitive, space-insensitive)
           const userOffice = user.office || '';
-          const normalizeOffice = (office: string) => office.toLowerCase().replace(/\s+/g, '').trim();
-          const hasAccess = normalizeOffice(shipmentOffice) === normalizeOffice(userOffice);
+          // Match storage.ts logic: remove everything that isn't alphanumeric
+          const normalizeOffice = (office: string) => office.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+          // Also allow access if shipment office is null/empty (consistent with storage.ts list filtering)
+          const hasAccess = !shipmentOffice || normalizeOffice(shipmentOffice) === normalizeOffice(userOffice);
+
           console.log('[Manager Role Check]', {
             hasAccess,
             normalizedShipmentOffice: normalizeOffice(shipmentOffice),
-            normalizedUserOffice: normalizeOffice(userOffice)
+            normalizedUserOffice: normalizeOffice(userOffice),
+            shipmentOfficeOriginal: shipmentOffice
           });
           if (!hasAccess) {
             return res.status(403).json({ error: "Access denied. You don't have permission to view this shipment." });

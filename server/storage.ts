@@ -1711,14 +1711,22 @@ export class DbStorage implements IStorage {
       conditions.push(sql`${filters.userName} = ANY(${cargoesFlowShipments.salesRepNames})`);
     } else if (filters?.userRole === 'Manager' && filters?.userOffice) {
       // Manager role: filter by office matching office field OR rawData.office OR nested customer.office pattern
-      // Use permissive matching (trim + lowercase + remove all spaces)
+      // Use permissive matching: lowercase + remove EVERYTHING except alphanumeric chars (a-z, 0-9)
+      // This handles "Logistics Sales - Domestic Operations" vs "Logistics Sales-Domestic Operations"
+      // Postgres REGEXP_REPLACE(str, '[^a-zA-Z0-9]', '', 'g')
+
+      const debugLog = sql`
+        CASE WHEN LOWER(REGEXP_REPLACE(${cargoesFlowShipments.office}, '[^a-zA-Z0-9]', '', 'g')) = LOWER(REGEXP_REPLACE(${filters.userOffice}, '[^a-zA-Z0-9]', '', 'g')) 
+        THEN true ELSE false END
+      `;
+
       conditions.push(or(
-        sql`LOWER(REPLACE(${cargoesFlowShipments.office}, ' ', '')) = LOWER(REPLACE(${filters.userOffice}, ' ', ''))`,
-        sql`LOWER(REPLACE(${cargoesFlowShipments.rawData}->>'office', ' ', '')) = LOWER(REPLACE(${filters.userOffice}, ' ', ''))`,
-        sql`LOWER(REPLACE(${cargoesFlowShipments.rawData}->>'officeName', ' ', '')) = LOWER(REPLACE(${filters.userOffice}, ' ', ''))`,
+        sql`LOWER(REGEXP_REPLACE(${cargoesFlowShipments.office}, '[^a-zA-Z0-9]', '', 'g')) = LOWER(REGEXP_REPLACE(${filters.userOffice}, '[^a-zA-Z0-9]', '', 'g'))`,
+        sql`LOWER(REGEXP_REPLACE(${cargoesFlowShipments.rawData}->>'office', '[^a-zA-Z0-9]', '', 'g')) = LOWER(REGEXP_REPLACE(${filters.userOffice}, '[^a-zA-Z0-9]', '', 'g'))`,
+        sql`LOWER(REGEXP_REPLACE(${cargoesFlowShipments.rawData}->>'officeName', '[^a-zA-Z0-9]', '', 'g')) = LOWER(REGEXP_REPLACE(${filters.userOffice}, '[^a-zA-Z0-9]', '', 'g'))`,
         // Check nested customer object (common pattern in some API responses)
-        sql`LOWER(REPLACE(${cargoesFlowShipments.rawData}->'customer'->>'office', ' ', '')) = LOWER(REPLACE(${filters.userOffice}, ' ', ''))`,
-        sql`LOWER(REPLACE(${cargoesFlowShipments.rawData}->'customer'->>'officeName', ' ', '')) = LOWER(REPLACE(${filters.userOffice}, ' ', ''))`,
+        sql`LOWER(REGEXP_REPLACE(${cargoesFlowShipments.rawData}->'customer'->>'office', '[^a-zA-Z0-9]', '', 'g')) = LOWER(REGEXP_REPLACE(${filters.userOffice}, '[^a-zA-Z0-9]', '', 'g'))`,
+        sql`LOWER(REGEXP_REPLACE(${cargoesFlowShipments.rawData}->'customer'->>'officeName', '[^a-zA-Z0-9]', '', 'g')) = LOWER(REGEXP_REPLACE(${filters.userOffice}, '[^a-zA-Z0-9]', '', 'g'))`,
         // Allow seeing shipments with NULL or empty office
         isNull(cargoesFlowShipments.office),
         sql`${cargoesFlowShipments.office} = ''`,
@@ -1728,7 +1736,7 @@ export class DbStorage implements IStorage {
             db.select({ one: sql`1` })
               .from(users)
               .where(and(
-                sql`LOWER(TRIM(${users.office})) = LOWER(TRIM(${filters.userOffice}))`,
+                sql`LOWER(REGEXP_REPLACE(${users.office}, '[^a-zA-Z0-9]', '', 'g')) = LOWER(REGEXP_REPLACE(${filters.userOffice}, '[^a-zA-Z0-9]', '', 'g'))`,
                 // Robust matching of salesRepNames array like in routes.ts (trim+lower)
                 sql`EXISTS (
                   SELECT 1 FROM unnest(${cargoesFlowShipments.salesRepNames}) AS s(name) 
@@ -1850,12 +1858,12 @@ export class DbStorage implements IStorage {
       conditions.push(sql`${filters.userName} = ANY(${cargoesFlowShipments.salesRepNames})`);
     } else if (filters?.userRole === 'Manager' && filters?.userOffice) {
       conditions.push(or(
-        sql`LOWER(REPLACE(${cargoesFlowShipments.office}, ' ', '')) = LOWER(REPLACE(${filters.userOffice}, ' ', ''))`,
-        sql`LOWER(REPLACE(${cargoesFlowShipments.rawData}->>'office', ' ', '')) = LOWER(REPLACE(${filters.userOffice}, ' ', ''))`,
-        sql`LOWER(REPLACE(${cargoesFlowShipments.rawData}->>'officeName', ' ', '')) = LOWER(REPLACE(${filters.userOffice}, ' ', ''))`,
+        sql`LOWER(REGEXP_REPLACE(${cargoesFlowShipments.office}, '[^a-zA-Z0-9]', '', 'g')) = LOWER(REGEXP_REPLACE(${filters.userOffice}, '[^a-zA-Z0-9]', '', 'g'))`,
+        sql`LOWER(REGEXP_REPLACE(${cargoesFlowShipments.rawData}->>'office', '[^a-zA-Z0-9]', '', 'g')) = LOWER(REGEXP_REPLACE(${filters.userOffice}, '[^a-zA-Z0-9]', '', 'g'))`,
+        sql`LOWER(REGEXP_REPLACE(${cargoesFlowShipments.rawData}->>'officeName', '[^a-zA-Z0-9]', '', 'g')) = LOWER(REGEXP_REPLACE(${filters.userOffice}, '[^a-zA-Z0-9]', '', 'g'))`,
         // Check nested customer object
-        sql`LOWER(REPLACE(${cargoesFlowShipments.rawData}->'customer'->>'office', ' ', '')) = LOWER(REPLACE(${filters.userOffice}, ' ', ''))`,
-        sql`LOWER(REPLACE(${cargoesFlowShipments.rawData}->'customer'->>'officeName', ' ', '')) = LOWER(REPLACE(${filters.userOffice}, ' ', ''))`,
+        sql`LOWER(REGEXP_REPLACE(${cargoesFlowShipments.rawData}->'customer'->>'office', '[^a-zA-Z0-9]', '', 'g')) = LOWER(REGEXP_REPLACE(${filters.userOffice}, '[^a-zA-Z0-9]', '', 'g'))`,
+        sql`LOWER(REGEXP_REPLACE(${cargoesFlowShipments.rawData}->'customer'->>'officeName', '[^a-zA-Z0-9]', '', 'g')) = LOWER(REGEXP_REPLACE(${filters.userOffice}, '[^a-zA-Z0-9]', '', 'g'))`,
         // Allow seeing shipments with NULL or empty office
         isNull(cargoesFlowShipments.office),
         sql`${cargoesFlowShipments.office} = ''`,
@@ -1865,7 +1873,7 @@ export class DbStorage implements IStorage {
             db.select({ one: sql`1` })
               .from(users)
               .where(and(
-                sql`LOWER(TRIM(${users.office})) = LOWER(TRIM(${filters.userOffice}))`,
+                sql`LOWER(REGEXP_REPLACE(${users.office}, '[^a-zA-Z0-9]', '', 'g')) = LOWER(REGEXP_REPLACE(${filters.userOffice}, '[^a-zA-Z0-9]', '', 'g'))`,
                 // Robust matching of salesRepNames array like in routes.ts (trim+lower)
                 sql`EXISTS (
                   SELECT 1 FROM unnest(${cargoesFlowShipments.salesRepNames}) AS s(name) 

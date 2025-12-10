@@ -88,7 +88,7 @@ import {
   type Vessel,
 } from "./shared/schema.js";
 import { db, pool } from "./db.js";
-import { eq, or, like, desc, asc, sql, SQL, and, inArray, isNull, ne, not } from "drizzle-orm";
+import { eq, or, like, desc, asc, sql, SQL, and, inArray, isNull, ne, not, exists, isNotNull } from "drizzle-orm";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
 
@@ -1727,6 +1727,18 @@ export class DbStorage implements IStorage {
         // Check nested customer object (common pattern in some API responses)
         sql`LOWER(REGEXP_REPLACE(${cargoesFlowShipments.rawData}->'customer'->>'office', '[^a-zA-Z0-9]', '', 'g')) = LOWER(REGEXP_REPLACE(${filters.userOffice}, '[^a-zA-Z0-9]', '', 'g'))`,
         sql`LOWER(REGEXP_REPLACE(${cargoesFlowShipments.rawData}->'customer'->>'officeName', '[^a-zA-Z0-9]', '', 'g')) = LOWER(REGEXP_REPLACE(${filters.userOffice}, '[^a-zA-Z0-9]', '', 'g'))`,
+        // Check linked manual shipment officeName
+        exists(
+          db.select({ one: sql`1` })
+            .from(shipments)
+            .where(and(
+              or(
+                and(isNotNull(cargoesFlowShipments.mblNumber), eq(shipments.masterBillOfLading, cargoesFlowShipments.mblNumber)),
+                and(isNotNull(cargoesFlowShipments.shipmentReference), eq(shipments.referenceNumber, cargoesFlowShipments.shipmentReference))
+              ),
+              sql`LOWER(REGEXP_REPLACE(${shipments.officeName}, '[^a-zA-Z0-9]', '', 'g')) = LOWER(REGEXP_REPLACE(${filters.userOffice}, '[^a-zA-Z0-9]', '', 'g'))`
+            ))
+        ),
         // Allow seeing shipments with NULL or empty office
         isNull(cargoesFlowShipments.office),
         sql`${cargoesFlowShipments.office} = ''`,

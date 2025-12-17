@@ -156,16 +156,6 @@ async function processAndStoreShipmentsWithStats(shipments: CargoesFlowShipmentD
         continue;
       }
 
-      // Skip COMPLETED shipments to avoid storing them
-      // The API returns COMPLETED shipments even though we request status=ACTIVE
-      // Check case-insensitively to handle 'COMPLETED', 'completed', 'Completed', etc.
-      if (shipment.status && shipment.status.toUpperCase() === 'COMPLETED') {
-        if (i < 3) {
-          console.log(`[Cargoes Flow Poller] Skipping COMPLETED shipment ${shipmentRef} (status: ${shipment.status})`);
-        }
-        skippedCount++;
-        continue;
-      }
 
       // Extract carrier name from carrierScac if carrier is null
       const carrierName = shipment.carrier || shipment.carrierScac || null;

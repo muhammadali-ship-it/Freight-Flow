@@ -1669,7 +1669,7 @@ export class DbStorage implements IStorage {
 
   async getCargoesFlowShipments(
     params?: PaginationParams,
-    filters?: ShipmentFilters & { search?: string; userName?: string; userOffice?: string; userRole?: string; completed?: boolean; noTrackingUpdate?: boolean }
+    filters?: ShipmentFilters & { search?: string; userName?: string; userOffice?: string; userRole?: string; completed?: boolean; noTrackingUpdate?: boolean; isCompleted?: boolean }
   ): Promise<PaginatedResult<CargoesFlowShipment>> {
     const page = params?.page || 1;
     const pageSize = params?.pageSize || 25;
@@ -1761,32 +1761,40 @@ export class DbStorage implements IStorage {
     }
     // Admin role: no filtering (no conditions added)
 
-    // No Tracking Update filtering
-    // If noTrackingUpdate is true, show shipments with no updates for > 7 days
-    // If noTrackingUpdate is false/undefined, show shipments with updates within last 7 days (default)
-    // This effectively splits shipments into "Recent" (Dashboard) and "Stale" (NoTrackingUpdate)
-    // NOTE: We use lastFetchedAt instead of updatedAt because updatedAt is updated on every upsert,
-    // while lastFetchedAt represents when we last got tracking data from the API
-    console.log('[DEBUG Storage] noTrackingUpdate filter value:', filters?.noTrackingUpdate);
-    if (filters?.noTrackingUpdate === true) {
-      console.log('[DEBUG Storage] Applying STALE filter: lastFetchedAt <= NOW() - 7 days');
-      conditions.push(sql`${cargoesFlowShipments.lastFetchedAt} <= NOW() - INTERVAL '7 days'`);
+    // Completed Shipments filtering
+    // If isCompleted is true, show only COMPLETED shipments
+    // If isCompleted is false/undefined, exclude COMPLETED shipments (default behavior)
+    if (filters?.isCompleted === true) {
+      console.log('[DEBUG Storage] Filtering for COMPLETED shipments only');
+      conditions.push(sql`UPPER(${cargoesFlowShipments.status}) = 'COMPLETED'`);
     } else {
-      // Default: Exclude stale shipments (show only recent)
-      console.log('[DEBUG Storage] Applying RECENT filter: lastFetchedAt > NOW() - 7 days');
-      conditions.push(sql`${cargoesFlowShipments.lastFetchedAt} > NOW() - INTERVAL '7 days'`);
-
-      // Also exclude shipments where origin = destination (these are likely completed/delivered)
-      conditions.push(sql`${cargoesFlowShipments.originPort} IS DISTINCT FROM ${cargoesFlowShipments.destinationPort}`);
-
-      // Keep existing completed status filtering for the "Recent" view
-      if (filters?.completed === true) {
-        conditions.push(sql`LOWER(${cargoesFlowShipments.status}) = 'completed'`);
+      // No Tracking Update filtering
+      // If noTrackingUpdate is true, show shipments with no updates for > 7 days
+      // If noTrackingUpdate is false/undefined, show shipments with updates within last 7 days (default)
+      // This effectively splits shipments into "Recent" (Dashboard) and "Stale" (NoTrackingUpdate)
+      // NOTE: We use lastFetchedAt instead of updatedAt because updatedAt is updated on every upsert,
+      // while lastFetchedAt represents when we last got tracking data from the API
+      console.log('[DEBUG Storage] noTrackingUpdate filter value:', filters?.noTrackingUpdate);
+      if (filters?.noTrackingUpdate === true) {
+        console.log('[DEBUG Storage] Applying STALE filter: lastFetchedAt <= NOW() - 7 days');
+        conditions.push(sql`${cargoesFlowShipments.lastFetchedAt} <= NOW() - INTERVAL '7 days'`);
       } else {
-        conditions.push(or(
-          isNull(cargoesFlowShipments.status),
-          sql`LOWER(${cargoesFlowShipments.status}) != 'completed'`
-        ));
+        // Default: Exclude stale shipments (show only recent)
+        console.log('[DEBUG Storage] Applying RECENT filter: lastFetchedAt > NOW() - 7 days');
+        conditions.push(sql`${cargoesFlowShipments.lastFetchedAt} > NOW() - INTERVAL '7 days'`);
+
+        // Also exclude shipments where origin = destination (these are likely completed/delivered)
+        conditions.push(sql`${cargoesFlowShipments.originPort} IS DISTINCT FROM ${cargoesFlowShipments.destinationPort}`);
+
+        // Keep existing completed status filtering for the "Recent" view
+        if (filters?.completed === true) {
+          conditions.push(sql`LOWER(${cargoesFlowShipments.status}) = 'completed'`);
+        } else {
+          conditions.push(or(
+            isNull(cargoesFlowShipments.status),
+            sql`LOWER(${cargoesFlowShipments.status}) != 'completed'`
+          ));
+        }
       }
     }
 
@@ -1819,7 +1827,7 @@ export class DbStorage implements IStorage {
 
   async getGroupedCargoesFlowShipments(
     params?: PaginationParams,
-    filters?: ShipmentFilters & { search?: string; userName?: string; userOffice?: string; userRole?: string; kpiFilter?: string; completed?: boolean; noTrackingUpdate?: boolean; userIds?: string[]; sortField?: string; sortDirection?: 'asc' | 'desc' }
+    filters?: ShipmentFilters & { search?: string; userName?: string; userOffice?: string; userRole?: string; kpiFilter?: string; completed?: boolean; noTrackingUpdate?: boolean; isCompleted?: boolean; userIds?: string[]; sortField?: string; sortDirection?: 'asc' | 'desc' }
   ): Promise<PaginatedResult<any>> {
     console.log('[DEBUG Storage] getGroupedCargoesFlowShipments called with filters:', JSON.stringify(filters, null, 2));
     const conditions: SQL[] = [];
@@ -1916,28 +1924,36 @@ export class DbStorage implements IStorage {
       }
     }
 
-    // No Tracking Update filtering
-    // If noTrackingUpdate is true, show shipments with no updates for > 7 days
-    // If noTrackingUpdate is false/undefined, show shipments with updates within last 7 days (default)
-    // NOTE: We use lastFetchedAt instead of updatedAt because updatedAt is updated on every upsert,
-    // while lastFetchedAt represents when we last got tracking data from the API
-    if (filters?.noTrackingUpdate === true) {
-      conditions.push(sql`${cargoesFlowShipments.lastFetchedAt} <= NOW() - INTERVAL '7 days'`);
+    // Completed Shipments filtering
+    // If isCompleted is true, show only COMPLETED shipments
+    // If isCompleted is false/undefined, exclude COMPLETED shipments (default behavior)
+    if (filters?.isCompleted === true) {
+      console.log('[DEBUG Storage] Filtering for COMPLETED shipments only');
+      conditions.push(sql`UPPER(${cargoesFlowShipments.status}) = 'COMPLETED'`);
     } else {
-      // Default: Exclude stale shipments (show only recent)
-      conditions.push(sql`${cargoesFlowShipments.lastFetchedAt} > NOW() - INTERVAL '7 days'`);
-
-      // Also exclude shipments where origin = destination (these are likely completed/delivered)
-      conditions.push(sql`${cargoesFlowShipments.originPort} IS DISTINCT FROM ${cargoesFlowShipments.destinationPort}`);
-
-      // Keep existing completed status filtering for the "Recent" view
-      if (filters?.completed === true) {
-        conditions.push(sql`LOWER(${cargoesFlowShipments.status}) = 'completed'`);
+      // No Tracking Update filtering
+      // If noTrackingUpdate is true, show shipments with no updates for > 7 days
+      // If noTrackingUpdate is false/undefined, show shipments with updates within last 7 days (default)
+      // NOTE: We use lastFetchedAt instead of updatedAt because updatedAt is updated on every upsert,
+      // while lastFetchedAt represents when we last got tracking data from the API
+      if (filters?.noTrackingUpdate === true) {
+        conditions.push(sql`${cargoesFlowShipments.lastFetchedAt} <= NOW() - INTERVAL '7 days'`);
       } else {
-        conditions.push(or(
-          isNull(cargoesFlowShipments.status),
-          sql`LOWER(${cargoesFlowShipments.status}) != 'completed'`
-        ));
+        // Default: Exclude stale shipments (show only recent)
+        conditions.push(sql`${cargoesFlowShipments.lastFetchedAt} > NOW() - INTERVAL '7 days'`);
+
+        // Also exclude shipments where origin = destination (these are likely completed/delivered)
+        conditions.push(sql`${cargoesFlowShipments.originPort} IS DISTINCT FROM ${cargoesFlowShipments.destinationPort}`);
+
+        // Keep existing completed status filtering for the "Recent" view
+        if (filters?.completed === true) {
+          conditions.push(sql`LOWER(${cargoesFlowShipments.status}) = 'completed'`);
+        } else {
+          conditions.push(or(
+            isNull(cargoesFlowShipments.status),
+            sql`LOWER(${cargoesFlowShipments.status}) != 'completed'`
+          ));
+        }
       }
     }
 

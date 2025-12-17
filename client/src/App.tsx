@@ -17,6 +17,7 @@ import Shipments from "@/pages/shipments";
 import ShipmentForm from "@/pages/shipment-form";
 import ShipmentDetail from "@/pages/shipment-detail";
 import NoTrackingUpdate from "@/pages/no-tracking-update";
+import CompletedShipments from "@/pages/completed-shipments";
 import CargoesFlowShipmentDetail from "@/pages/cargoes-flow-shipment-detail";
 import Integrations from "@/pages/integrations";
 import Users from "@/pages/users";
@@ -45,6 +46,7 @@ function Router() {
       <ProtectedRoute path="/shipments/:id" component={CargoesFlowShipmentDetail} />
       <ProtectedRoute path="/shipments" component={Shipments} />
       <ProtectedRoute path="/no-tracking-update" component={NoTrackingUpdate} />
+      <ProtectedRoute path="/completed-shipments" component={CompletedShipments} />
       <ProtectedRoute path="/bulk-import" component={BulkImport} />
       <ProtectedRoute path="/analytics" component={CostAnalytics} />
       <ProtectedRoute path="/webhooks" component={ShipNexusWebhooks} />

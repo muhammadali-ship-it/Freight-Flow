@@ -128,6 +128,47 @@ async function fetchShipmentsFromCargoesFlow(): Promise<CargoesFlowShipmentData[
   }
 }
 
+async function fetchCompletedShipment(shipmentReference: string): Promise<CargoesFlowShipmentData | null> {
+  try {
+    const timestamp = Date.now();
+    // Use search parameter with status=COMPLETED to find specific finished shipment
+    const url = `${CARGOES_FLOW_API_URL}?shipmentType=INTERMODAL_SHIPMENT&status=COMPLETED&search=${encodeURIComponent(shipmentReference)}&_t=${timestamp}`;
+
+    console.log(`[Cargoes Flow Poller] 🔍 Fetching completed shipment ${shipmentReference}: ${url}`);
+
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'X-DPW-ApiKey': CARGOES_FLOW_API_KEY,
+        'X-DPW-Org-Token': CARGOES_FLOW_ORG_TOKEN,
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache',
+      },
+    });
+
+    if (!response.ok) {
+      console.warn(`[Cargoes Flow Poller] Failed to fetch completed shipment ${shipmentReference}: ${response.status}`);
+      return null;
+    }
+
+    const data: CargoesFlowApiResponse = await response.json();
+
+    if (Array.isArray(data) && data.length > 0) {
+      // Find exact match just in case search is fuzzy
+      const match = data.find(s =>
+        String(s.shipmentNumber) === shipmentReference ||
+        String(s.referenceNumber) === shipmentReference
+      );
+      return match || data[0]; // Fallback to first if no exact match (search is usually precise)
+    }
+
+    return null;
+  } catch (error: any) {
+    console.error(`[Cargoes Flow Poller] Error fetching completed shipment ${shipmentReference}:`, error.message);
+    return null;
+  }
+}
+
 async function processAndStoreShipmentsWithStats(shipments: CargoesFlowShipmentData[]) {
   let newCount = 0;
   let updatedCount = 0;
@@ -578,6 +619,48 @@ async function pollShipments() {
     } else {
       console.log('[Cargoes Flow Poller] ⚠️ No shipments received from API');
     }
+
+    // --- Check for completed shipments ---
+    // If we successfully fetched active shipments (even if 0), we can check for missing ones
+    if (shipments) {
+      // Collect IDs of all currently active shipments from the API
+      const activeShipmentRefs = shipments
+        .map(s => String(s.shipmentNumber || s.referenceNumber || ''))
+        .filter(id => id !== '');
+
+      // Ask storage for active shipments that are NOT in this list
+      console.log('[Cargoes Flow Poller] 🕵️ Checking for shipments that moved to COMPLETED...');
+      const missingShipments = await storage.findMissingShipmentsFromList(activeShipmentRefs);
+
+      if (missingShipments.length > 0) {
+        console.log(`[Cargoes Flow Poller] Found ${missingShipments.length} potential completed shipments. Verifying with API...`);
+
+        const completedShipments: CargoesFlowShipmentData[] = [];
+
+        // Process in chunks to avoid slamming API? No, simplistic loop for now.
+        for (const missing of missingShipments) {
+          const completedData = await fetchCompletedShipment(missing.shipmentReference);
+          if (completedData) {
+            completedShipments.push(completedData);
+          }
+        }
+
+        if (completedShipments.length > 0) {
+          console.log(`[Cargoes Flow Poller] 💾 Processing ${completedShipments.length} verified completed shipments...`);
+          const completedStats = await processAndStoreShipmentsWithStats(completedShipments);
+          // processAndStoreShipmentsWithStats handles the upsert, so these will obtain their new status and events
+
+          // Add to total counts for the log
+          newCount += completedStats.newCount;
+          updatedCount += completedStats.updatedCount;
+        } else {
+          console.log('[Cargoes Flow Poller] No verified completed shipments found among candidates.');
+        }
+      } else {
+        console.log('[Cargoes Flow Poller] No missing active shipments found.');
+      }
+    }
+    // -------------------------------------
 
     const syncDuration = Date.now() - startTime;
     syncLog = await storage.createCargoesFlowSyncLog({

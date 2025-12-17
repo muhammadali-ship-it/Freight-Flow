@@ -344,6 +344,8 @@ export interface IStorage {
   upsertVessel(vessel: InsertVessel): Promise<Vessel>;
   getVessels(params?: PaginationParams, filters?: { search?: string }): Promise<PaginatedResult<Vessel>>;
   getVesselById(id: string): Promise<Vessel | undefined>;
+
+  findMissingShipmentsFromList(activeShipmentNumbers: string[]): Promise<CargoesFlowShipment[]>;
 }
 
 const PostgresSessionStore = connectPg(session);
@@ -2834,6 +2836,20 @@ export class DbStorage implements IStorage {
   async getAllCargoesFlowShipmentsByMbl(mblNumber: string): Promise<CargoesFlowShipment[]> {
     const result = await db.select().from(cargoesFlowShipments).where(eq(cargoesFlowShipments.mblNumber, mblNumber));
     return result;
+  }
+
+  async findMissingShipmentsFromList(activeShipmentNumbers: string[]): Promise<CargoesFlowShipment[]> {
+    const activeShipments = await db.select()
+      .from(cargoesFlowShipments)
+      .where(or(
+        eq(cargoesFlowShipments.status, 'ACTIVE'),
+        eq(cargoesFlowShipments.status, 'active')
+      ));
+
+    // Filter in-memory to avoid complex SQL NOT IN with potentially thousands of IDs
+    // We want shipments that are currently ACTIVE in DB but NOT in the provided list
+    const activeSet = new Set(activeShipmentNumbers);
+    return activeShipments.filter(shipment => !activeSet.has(shipment.shipmentReference));
   }
 
   async getTaiShipmentIdByMbl(mblNumber: string): Promise<string | null> {

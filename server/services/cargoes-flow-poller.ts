@@ -54,7 +54,7 @@ type CargoesFlowApiResponse = CargoesFlowShipmentData[];
 let pollingInterval: NodeJS.Timeout | null = null;
 let isPolling = false; // Prevent concurrent polls
 
-async function fetchShipmentsFromCargoesFlow(): Promise<CargoesFlowShipmentData[]> {
+async function fetchShipmentsFromCargoesFlow(): Promise<CargoesFlowShipmentData[] | null> {
   try {
     let allShipments: CargoesFlowShipmentData[] = [];
     const seenShipmentIds = new Set<string>();
@@ -124,7 +124,7 @@ async function fetchShipmentsFromCargoesFlow(): Promise<CargoesFlowShipmentData[
     return allShipments;
   } catch (error: any) {
     console.error('[Cargoes Flow Poller] Error:', error.message);
-    return [];
+    return null; // Return null to indicate failure, distinguishing from empty result
   }
 }
 
@@ -605,6 +605,11 @@ async function pollShipments() {
     console.log('[Cargoes Flow Poller] 🚀 Starting sync...');
     const shipments = await fetchShipmentsFromCargoesFlow();
 
+    // If fetch failed (returned null), abort sync to prevent data corruption
+    if (shipments === null) {
+      throw new Error('Failed to fetch active shipments from Cargoes Flow');
+    }
+
     console.log(`[Cargoes Flow Poller] 📦 Fetched ${shipments.length} shipments from API`);
 
     let newCount = 0;
@@ -621,44 +626,46 @@ async function pollShipments() {
     }
 
     // --- Check for completed shipments ---
-    // If we successfully fetched active shipments (even if 0), we can check for missing ones
-    if (shipments) {
-      // Collect IDs of all currently active shipments from the API
-      const activeShipmentRefs = shipments
-        .map(s => String(s.shipmentNumber || s.referenceNumber || ''))
-        .filter(id => id !== '');
+    // Only check if we successfully fetched a list (null check passed above)
+    try {
+      if (shipments) {
+        // Collect IDs of all currently active shipments from the API
+        const activeShipmentRefs = shipments
+          .map(s => String(s.shipmentNumber || s.referenceNumber || ''))
+          .filter(id => id !== '');
 
-      // Ask storage for active shipments that are NOT in this list
-      console.log('[Cargoes Flow Poller] 🕵️ Checking for shipments that moved to COMPLETED...');
-      const missingShipments = await storage.findMissingShipmentsFromList(activeShipmentRefs);
+        // Ask storage for active shipments that are NOT in this list
+        console.log('[Cargoes Flow Poller] 🕵️ Checking for shipments that moved to COMPLETED...');
+        const missingShipments = await storage.findMissingShipmentsFromList(activeShipmentRefs);
 
-      if (missingShipments.length > 0) {
-        console.log(`[Cargoes Flow Poller] Found ${missingShipments.length} potential completed shipments. Verifying with API...`);
+        if (missingShipments.length > 0) {
+          console.log(`[Cargoes Flow Poller] Found ${missingShipments.length} potential completed shipments. Verifying with API...`);
 
-        const completedShipments: CargoesFlowShipmentData[] = [];
+          const completedShipments: CargoesFlowShipmentData[] = [];
 
-        // Process in chunks to avoid slamming API? No, simplistic loop for now.
-        for (const missing of missingShipments) {
-          const completedData = await fetchCompletedShipment(missing.shipmentReference);
-          if (completedData) {
-            completedShipments.push(completedData);
+          for (const missing of missingShipments) {
+            const completedData = await fetchCompletedShipment(missing.shipmentReference);
+            if (completedData) {
+              completedShipments.push(completedData);
+            }
           }
-        }
 
-        if (completedShipments.length > 0) {
-          console.log(`[Cargoes Flow Poller] 💾 Processing ${completedShipments.length} verified completed shipments...`);
-          const completedStats = await processAndStoreShipmentsWithStats(completedShipments);
-          // processAndStoreShipmentsWithStats handles the upsert, so these will obtain their new status and events
+          if (completedShipments.length > 0) {
+            console.log(`[Cargoes Flow Poller] 💾 Processing ${completedShipments.length} verified completed shipments...`);
+            const completedStats = await processAndStoreShipmentsWithStats(completedShipments);
 
-          // Add to total counts for the log
-          newCount += completedStats.newCount;
-          updatedCount += completedStats.updatedCount;
+            // Add to total counts for the log
+            newCount += completedStats.newCount;
+            updatedCount += completedStats.updatedCount;
+          } else {
+            console.log('[Cargoes Flow Poller] No verified completed shipments found among candidates.');
+          }
         } else {
-          console.log('[Cargoes Flow Poller] No verified completed shipments found among candidates.');
+          console.log('[Cargoes Flow Poller] No missing active shipments found.');
         }
-      } else {
-        console.log('[Cargoes Flow Poller] No missing active shipments found.');
       }
+    } catch (completionError: any) {
+      console.error('[Cargoes Flow Poller] ⚠️ Error during completion sync:', completionError.message);
     }
     // -------------------------------------
 

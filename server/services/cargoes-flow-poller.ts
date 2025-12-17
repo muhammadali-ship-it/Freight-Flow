@@ -235,18 +235,6 @@ async function processAndStoreShipmentsWithStats(shipments: CargoesFlowShipmentD
         existing = await storage.getCargoesFlowShipmentByContainer(shipment.containerNumber);
       }
 
-      // Check if shipment is stale (lastFetchedAt > 7 days old)
-      // If stale, skip updating to prevent updates to "No Tracking Update" page shipments
-      if (existing && existing.lastFetchedAt) {
-        const daysSinceLastFetch = Math.floor((Date.now() - new Date(existing.lastFetchedAt).getTime()) / (1000 * 60 * 60 * 24));
-        if (daysSinceLastFetch > 7) {
-          if (i < 3) {
-            console.log(`[Cargoes Flow Poller] ⏭️ Skipping STALE shipment ${shipmentRef} (last fetched ${daysSinceLastFetch} days ago)`);
-          }
-          skippedCount++;
-          continue;
-        }
-      }
 
       // Debug: Log first few shipments to see what's happening
       if (i < 3) {

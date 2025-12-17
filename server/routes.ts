@@ -254,7 +254,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           : undefined,
         kpiFilter: req.query.kpiFilter as string,
         completed: req.query.completed === 'true' ? true : undefined,
-        noTrackingUpdate: req.query.noTrackingUpdate === 'true' ? true : undefined,
         isCompleted: req.query.isCompleted === 'true' ? true : undefined,
         userIds: req.query.userIds ? (Array.isArray(req.query.userIds) ? req.query.userIds as string[] : [req.query.userIds as string]) : undefined,
         sortField: req.query.sortField as string,

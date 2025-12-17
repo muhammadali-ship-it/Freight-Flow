@@ -1,4 +1,4 @@
-import { Home, Package, BarChart3, Settings, Plug, Users, LogOut, Upload, Webhook, Boxes, Activity, RefreshCw, Ship, CheckSquare, CheckCircle2 } from "lucide-react";
+import { Home, Package, BarChart3, Settings, Plug, Users, LogOut, Upload, Webhook, Boxes, Activity, RefreshCw, Ship, CheckCircle2 } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -26,12 +26,6 @@ const menuItems = [
     title: "Active Shipments",
     url: "/shipments",
     icon: Package,
-    roles: ["User", "Manager", "Admin"],
-  },
-  {
-    title: "No Tracking Update",
-    url: "/no-tracking-update",
-    icon: CheckSquare,
     roles: ["User", "Manager", "Admin"],
   },
   {

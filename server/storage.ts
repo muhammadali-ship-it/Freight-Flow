@@ -1762,15 +1762,19 @@ export class DbStorage implements IStorage {
     // Admin role: no filtering (no conditions added)
 
     // Completed Shipments filtering
-    // If isCompleted is true, show only COMPLETED shipments
-    // If isCompleted is false/undefined, show only active shipments (exclude COMPLETED)
+    // If isCompleted is true, show COMPLETED or UNTRACKABLE shipments
+    // If isCompleted is false/undefined, show only active shipments (exclude COMPLETED/UNTRACKABLE)
     if (filters?.isCompleted === true) {
-      console.log('[DEBUG Storage] Filtering for COMPLETED shipments only');
-      conditions.push(sql`UPPER(${cargoesFlowShipments.status}) = 'COMPLETED'`);
+      console.log('[DEBUG Storage] Filtering for COMPLETED or UNTRACKABLE shipments');
+      conditions.push(or(
+        sql`UPPER(${cargoesFlowShipments.status}) = 'COMPLETED'`,
+        sql`UPPER(${cargoesFlowShipments.status}) = 'UNTRACKABLE'`
+      )!);
     } else {
-      // Default: Active shipments only - exclude COMPLETED
+      // Default: Active shipments only - exclude COMPLETED and UNTRACKABLE
       console.log('[DEBUG Storage] Filtering for ACTIVE shipments only');
       conditions.push(sql`UPPER(${cargoesFlowShipments.status}) != 'COMPLETED'`);
+      conditions.push(sql`UPPER(${cargoesFlowShipments.status}) != 'UNTRACKABLE'`);
 
       // Also exclude shipments where origin = destination (these are likely completed/delivered)
       conditions.push(sql`${cargoesFlowShipments.originPort} IS DISTINCT FROM ${cargoesFlowShipments.destinationPort}`);
@@ -1913,15 +1917,19 @@ export class DbStorage implements IStorage {
     }
 
     // Completed Shipments filtering
-    // If isCompleted is true, show only COMPLETED shipments
-    // If isCompleted is false/undefined, show only active shipments (exclude COMPLETED)
+    // If isCompleted is true, show COMPLETED or UNTRACKABLE shipments
+    // If isCompleted is false/undefined, show only active shipments (exclude COMPLETED/UNTRACKABLE)
     if (filters?.isCompleted === true) {
-      console.log('[DEBUG Storage] Filtering for COMPLETED shipments only');
-      conditions.push(sql`UPPER(${cargoesFlowShipments.status}) = 'COMPLETED'`);
+      console.log('[DEBUG Storage] Filtering for COMPLETED or UNTRACKABLE shipments');
+      conditions.push(or(
+        sql`UPPER(${cargoesFlowShipments.status}) = 'COMPLETED'`,
+        sql`UPPER(${cargoesFlowShipments.status}) = 'UNTRACKABLE'`
+      )!);
     } else {
-      // Default: Active shipments only - exclude COMPLETED
+      // Default: Active shipments only - exclude COMPLETED and UNTRACKABLE
       console.log('[DEBUG Storage] Filtering for ACTIVE shipments only');
       conditions.push(sql`UPPER(${cargoesFlowShipments.status}) != 'COMPLETED'`);
+      conditions.push(sql`UPPER(${cargoesFlowShipments.status}) != 'UNTRACKABLE'`);
 
       // Also exclude shipments where origin = destination (these are likely completed/delivered)
       conditions.push(sql`${cargoesFlowShipments.originPort} IS DISTINCT FROM ${cargoesFlowShipments.destinationPort}`);

@@ -186,7 +186,7 @@ export default function CompletedShipments() {
                         Completed Shipments
                     </h1>
                     <p className="text-sm sm:text-base text-muted-foreground">
-                        Shipments that have completed their lifecycle
+                        Shipments that have completed their lifecycle or are untrackable
                     </p>
                 </div>
             </div>

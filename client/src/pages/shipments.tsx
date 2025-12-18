@@ -201,6 +201,41 @@ export default function Shipments() {
     },
   });
 
+  // Mutation for syncing completed shipments separately
+  const syncCompletedMutation = useMutation({
+    mutationFn: async () => {
+      const response = await fetch("/api/cargoes-flow/sync-completed", {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to sync completed shipments");
+      }
+      const data = await response.json();
+      return data;
+    },
+    onSuccess: async (data) => {
+      const syncLog = data?.syncLog;
+      if (syncLog) {
+        queryClient.invalidateQueries({ queryKey: ["/api/cargoes-flow/sync-status"] });
+        toast({
+          title: "Completed sync finished",
+          description: `Found ${syncLog.shipmentsProcessed || 0} completed shipments (${syncLog.shipmentsCreated || 0} new, ${syncLog.shipmentsUpdated || 0} updated)`,
+        });
+      }
+      queryClient.invalidateQueries({ queryKey: ["/api/shipments"] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Completed sync failed",
+        description: error.message || "Failed to sync completed shipments",
+        variant: "destructive",
+      });
+    },
+  });
+
+
   const { data: shipmentsData, isLoading } = useQuery<ShipmentsResponse>({
     queryKey: [
       "/api/shipments",
@@ -368,6 +403,15 @@ export default function Shipments() {
               >
                 <RefreshCw className={`mr-2 h-4 w-4 ${triggerSyncMutation.isPending ? 'animate-spin' : ''}`} />
                 {triggerSyncMutation.isPending ? 'Syncing...' : 'Sync Now'}
+              </Button>
+              <Button
+                onClick={() => syncCompletedMutation.mutate()}
+                disabled={syncCompletedMutation.isPending}
+                variant="outline"
+                data-testid="button-sync-completed"
+              >
+                <RefreshCw className={`mr-2 h-4 w-4 ${syncCompletedMutation.isPending ? 'animate-spin' : ''}`} />
+                {syncCompletedMutation.isPending ? 'Syncing Completed...' : 'Sync Completed'}
               </Button>
             </div>
           </div>

@@ -5,7 +5,7 @@ import { sql } from "drizzle-orm";
 import { insertContainerSchema, insertExceptionSchema, insertVesselPositionSchema, insertRailSegmentSchema, insertTimelineEventSchema, insertSavedViewSchema, insertIntegrationConfigSchema, insertUserSchema, insertShipmentSchema, insertMilestoneSchema, insertCustomEntrySchema, type Milestone, type User, type Shipment } from "./shared/schema.js";
 import { integrationOrchestrator } from "./integrations/integration-orchestrator.js";
 import { riskScheduler } from "./services/risk-scheduler.js";
-import { startPolling as startCargoesFlowPolling, triggerManualPoll, resetPollingState } from "./services/cargoes-flow-poller.js";
+import { startPolling as startCargoesFlowPolling, triggerManualPoll, resetPollingState, syncCompletedShipments } from "./services/cargoes-flow-poller.js";
 import { setupAuth, hashPassword } from "./auth.js";
 import { sendShipmentToCargoesFlow, trackCargoesFlowPost, uploadDocumentsToCargoesFlow } from "./services/cargoes-flow.js";
 import { handleTmsWebhook, sendTestWebhook, retryWebhook } from "./webhooks/tms-webhook.js";
@@ -4057,6 +4057,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: "Failed to fetch debug info" });
     }
   });
+
+  // Sync completed shipments separately
+  app.post("/api/cargoes-flow/sync-completed", async (req, res) => {
+    try {
+      console.log("[API] Completed shipments sync triggered");
+      const syncLog = await syncCompletedShipments();
+
+      // Ensure createdAt is serialized as ISO string
+      const serializedSyncLog = {
+        ...syncLog,
+        createdAt: syncLog.createdAt instanceof Date
+          ? syncLog.createdAt.toISOString()
+          : syncLog.createdAt,
+      };
+
+      res.json({
+        success: true,
+        message: "Completed shipments sync finished",
+        syncLog: serializedSyncLog
+      });
+    } catch (error: any) {
+      console.error("Error syncing completed shipments:", error);
+      res.status(500).json({ error: error.message || "Failed to sync completed shipments" });
+    }
+  });
+
 
   integrationOrchestrator.startAllActiveIntegrations();
   riskScheduler.start();

@@ -642,48 +642,9 @@ async function pollShipments() {
       console.log('[Cargoes Flow Poller] ⚠️ No shipments received from API');
     }
 
-    // --- Check for completed shipments ---
-    // Only check if we successfully fetched a list (null check passed above)
-    try {
-      if (shipments) {
-        // Collect IDs of all currently active shipments from the API
-        const activeShipmentRefs = shipments
-          .map(s => String(s.shipmentNumber || s.referenceNumber || ''))
-          .filter(id => id !== '');
-
-        // Ask storage for active shipments that are NOT in this list
-        console.log('[Cargoes Flow Poller] 🕵️ Checking for shipments that moved to COMPLETED...');
-        const missingShipments = await storage.findMissingShipmentsFromList(activeShipmentRefs);
-
-        if (missingShipments.length > 0) {
-          console.log(`[Cargoes Flow Poller] Found ${missingShipments.length} potential completed shipments. Verifying with API...`);
-
-          const completedShipments: CargoesFlowShipmentData[] = [];
-
-          for (const missing of missingShipments) {
-            const completedData = await fetchCompletedShipment(missing.shipmentReference);
-            if (completedData) {
-              completedShipments.push(completedData);
-            }
-          }
-
-          if (completedShipments.length > 0) {
-            console.log(`[Cargoes Flow Poller] 💾 Processing ${completedShipments.length} verified completed shipments...`);
-            const completedStats = await processAndStoreShipmentsWithStats(completedShipments);
-
-            // Add to total counts for the log
-            newCount += completedStats.newCount;
-            updatedCount += completedStats.updatedCount;
-          } else {
-            console.log('[Cargoes Flow Poller] No verified completed shipments found among candidates.');
-          }
-        } else {
-          console.log('[Cargoes Flow Poller] No missing active shipments found.');
-        }
-      }
-    } catch (completionError: any) {
-      console.error('[Cargoes Flow Poller] ⚠️ Error during completion sync:', completionError.message);
-    }
+    // --- Completed shipments check is now in a separate function ---
+    // See syncCompletedShipments() function below
+    // This keeps the main sync fast and prevents timeouts
     // -------------------------------------
 
     const syncDuration = Date.now() - startTime;
@@ -910,4 +871,111 @@ export async function triggerManualPoll() {
 export function resetPollingState() {
   console.log('[Cargoes Flow Poller] 🔄 Manually resetting isPolling to false');
   isPolling = false;
+}
+
+// Separate function to sync completed shipments
+// This runs independently from the main active shipments sync to avoid timeouts
+export async function syncCompletedShipments() {
+  console.log('[Cargoes Flow Poller] 🔍 Starting completed shipments sync...');
+  const startTime = Date.now();
+
+  try {
+    // First, fetch all active shipments to know which ones are still active
+    const activeShipments = await fetchShipmentsFromCargoesFlow();
+
+    if (activeShipments === null) {
+      throw new Error('Failed to fetch active shipments list');
+    }
+
+    // Collect IDs of all currently active shipments
+    const activeShipmentRefs = activeShipments
+      .map(s => String(s.shipmentNumber || s.referenceNumber || ''))
+      .filter(id => id !== '');
+
+    console.log(`[Cargoes Flow Poller] Found ${activeShipmentRefs.length} active shipments`);
+
+    // Find shipments in our DB that are NOT in the active list
+    const missingShipments = await storage.findMissingShipmentsFromList(activeShipmentRefs);
+
+    if (missingShipments.length === 0) {
+      console.log('[Cargoes Flow Poller] ✅ No missing shipments found. All shipments are accounted for.');
+      const syncDuration = Date.now() - startTime;
+      return await storage.createCargoesFlowSyncLog({
+        status: 'success',
+        shipmentsProcessed: 0,
+        shipmentsCreated: 0,
+        shipmentsUpdated: 0,
+        syncDurationMs: syncDuration,
+        metadata: {
+          type: 'completed_sync',
+          message: 'No completed shipments found',
+          timestamp: new Date().toISOString()
+        },
+      });
+    }
+
+    console.log(`[Cargoes Flow Poller] Found ${missingShipments.length} potential completed shipments. Verifying with API...`);
+
+    const completedShipments: CargoesFlowShipmentData[] = [];
+    let fetchErrors = 0;
+
+    // Fetch each completed shipment from the API
+    for (const missing of missingShipments) {
+      try {
+        const completedData = await fetchCompletedShipment(missing.shipmentReference);
+        if (completedData) {
+          completedShipments.push(completedData);
+        }
+      } catch (error: any) {
+        fetchErrors++;
+        console.error(`[Cargoes Flow Poller] Error fetching completed shipment ${missing.shipmentReference}:`, error.message);
+      }
+    }
+
+    let newCount = 0;
+    let updatedCount = 0;
+
+    if (completedShipments.length > 0) {
+      console.log(`[Cargoes Flow Poller] 💾 Processing ${completedShipments.length} verified completed shipments...`);
+      const stats = await processAndStoreShipmentsWithStats(completedShipments);
+      newCount = stats.newCount;
+      updatedCount = stats.updatedCount;
+    }
+
+    const syncDuration = Date.now() - startTime;
+    const syncLog = await storage.createCargoesFlowSyncLog({
+      status: 'success',
+      shipmentsProcessed: completedShipments.length,
+      shipmentsCreated: newCount,
+      shipmentsUpdated: updatedCount,
+      syncDurationMs: syncDuration,
+      metadata: {
+        type: 'completed_sync',
+        totalMissing: missingShipments.length,
+        verified: completedShipments.length,
+        fetchErrors,
+        timestamp: new Date().toISOString()
+      },
+    });
+
+    console.log(`[Cargoes Flow Poller] ✅ Completed sync finished: ${newCount} new, ${updatedCount} updated`);
+    return syncLog;
+
+  } catch (error: any) {
+    console.error('[Cargoes Flow Poller] ❌ Completed shipments sync failed:', error.message);
+    const syncDuration = Date.now() - startTime;
+    return await storage.createCargoesFlowSyncLog({
+      status: 'error',
+      shipmentsProcessed: 0,
+      shipmentsCreated: 0,
+      shipmentsUpdated: 0,
+      errorMessage: error.message,
+      syncDurationMs: syncDuration,
+      metadata: {
+        type: 'completed_sync',
+        error: error.message,
+        timestamp: new Date().toISOString()
+      },
+    });
+  }
 }

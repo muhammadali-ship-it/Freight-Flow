@@ -4092,6 +4092,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
           ORDER BY count DESC
         `);
         console.log("[API] Recent status distribution:", statusCheck.rows);
+        
+        // Also check for COMPLETED specifically
+        const completedCheck = await db.execute(sql`
+          SELECT shipment_reference, status, updated_at
+          FROM cargoes_flow_shipments 
+          WHERE UPPER(status) = 'COMPLETED'
+          AND updated_at > NOW() - INTERVAL '5 minutes'
+          ORDER BY updated_at DESC
+          LIMIT 10
+        `);
+        console.log("[API] Recently updated COMPLETED shipments:", completedCheck.rows);
       } catch (debugError) {
         console.error("[API] Debug query failed:", debugError);
       }

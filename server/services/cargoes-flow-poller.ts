@@ -503,7 +503,7 @@ async function processAndStoreShipmentsWithStats(shipments: CargoesFlowShipmentD
       // Otherwise, use upsert to create a new one
       if (existing) {
         // Update the existing shipment with merged data
-        await storage.updateCargoesFlowShipment(existing.id, {
+        const updateData = {
           shipmentReference: shipmentRef,
           taiShipmentId,
           mblNumber,
@@ -526,7 +526,19 @@ async function processAndStoreShipmentsWithStats(shipments: CargoesFlowShipmentD
           salesRepNames: salesRepNames || existing.salesRepNames,
           rawData: mergedRawData,
           lastFetchedAt: new Date(),
-        });
+        };
+        
+        if (i < 3) {
+          console.log(`[Cargoes Flow Poller] Updating ${shipmentRef} with status: ${updateData.status}`);
+        }
+        
+        await storage.updateCargoesFlowShipment(existing.id, updateData);
+        
+        // Verify the update
+        if (i < 3) {
+          const verifyUpdate = await storage.getCargoesFlowShipmentById(existing.id);
+          console.log(`[Cargoes Flow Poller] Verified ${shipmentRef} status after update: ${verifyUpdate?.status}`);
+        }
 
         // For MBL-grouped shipments, also update all other shipments with same MBL
         // to ensure terminal and rail data is consistent across all records

@@ -554,7 +554,9 @@ async function processAndStoreShipmentsWithStats(shipments: CargoesFlowShipmentD
               };
 
               await storage.updateCargoesFlowShipment(mblShipment.id, {
+                status: shipment.status || null, // Also update status for all MBL shipments
                 rawData: otherMblMergedRawData,
+                lastFetchedAt: new Date(),
               });
             }
           }

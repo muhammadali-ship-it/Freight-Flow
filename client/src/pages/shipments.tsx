@@ -204,15 +204,9 @@ export default function Shipments() {
   // Mutation for syncing completed shipments separately
   const syncCompletedMutation = useMutation({
     mutationFn: async () => {
-      const response = await fetch("/api/cargoes-flow/sync-completed", {
+      const data = await apiRequest("/api/cargoes-flow/sync-completed", {
         method: "POST",
-        credentials: "include",
       });
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Failed to sync completed shipments");
-      }
-      const data = await response.json();
       return data;
     },
     onSuccess: async (data) => {

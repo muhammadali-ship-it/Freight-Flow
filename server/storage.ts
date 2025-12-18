@@ -2839,17 +2839,33 @@ export class DbStorage implements IStorage {
   }
 
   async findMissingShipmentsFromList(activeShipmentNumbers: string[]): Promise<CargoesFlowShipment[]> {
-    const activeShipments = await db.select()
-      .from(cargoesFlowShipments)
-      .where(or(
-        eq(cargoesFlowShipments.status, 'ACTIVE'),
-        eq(cargoesFlowShipments.status, 'active')
-      ));
+    try {
+      console.log(`[Storage] Finding missing shipments from list of ${activeShipmentNumbers.length} active shipments`);
+      
+      // Query for shipments with ACTIVE status (case-insensitive)
+      const activeShipments = await db.select()
+        .from(cargoesFlowShipments)
+        .where(
+          sql`UPPER(${cargoesFlowShipments.status}) = 'ACTIVE'`
+        );
 
-    // Filter in-memory to avoid complex SQL NOT IN with potentially thousands of IDs
-    // We want shipments that are currently ACTIVE in DB but NOT in the provided list
-    const activeSet = new Set(activeShipmentNumbers);
-    return activeShipments.filter(shipment => !activeSet.has(shipment.shipmentReference));
+      console.log(`[Storage] Found ${activeShipments.length} ACTIVE shipments in database`);
+
+      // Filter in-memory to avoid complex SQL NOT IN with potentially thousands of IDs
+      // We want shipments that are currently ACTIVE in DB but NOT in the provided list
+      const activeSet = new Set(activeShipmentNumbers);
+      const missingShipments = activeShipments.filter(shipment => 
+        shipment.shipmentReference && !activeSet.has(shipment.shipmentReference)
+      );
+      
+      console.log(`[Storage] Identified ${missingShipments.length} missing shipments (ACTIVE in DB but not in API response)`);
+      
+      return missingShipments;
+    } catch (error: any) {
+      console.error('[Storage] Error in findMissingShipmentsFromList:', error.message);
+      console.error('[Storage] Error stack:', error.stack);
+      throw error;
+    }
   }
 
   async getTaiShipmentIdByMbl(mblNumber: string): Promise<string | null> {

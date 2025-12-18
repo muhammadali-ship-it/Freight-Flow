@@ -881,11 +881,23 @@ export async function syncCompletedShipments() {
 
   try {
     // First, fetch all active shipments to know which ones are still active
-    const activeShipments = await fetchShipmentsFromCargoesFlow();
+    console.log('[Cargoes Flow Poller] Step 1: Fetching active shipments from API...');
+    
+    // Add timeout to prevent hanging
+    const fetchTimeout = new Promise<null>((_, reject) => {
+      setTimeout(() => reject(new Error('Fetch active shipments timeout after 2 minutes')), 120000);
+    });
+    
+    const activeShipments = await Promise.race([
+      fetchShipmentsFromCargoesFlow(),
+      fetchTimeout
+    ]);
 
     if (activeShipments === null) {
       throw new Error('Failed to fetch active shipments list');
     }
+    
+    console.log('[Cargoes Flow Poller] Successfully fetched active shipments from API');
 
     // Collect IDs of all currently active shipments
     const activeShipmentRefs = activeShipments
@@ -895,7 +907,9 @@ export async function syncCompletedShipments() {
     console.log(`[Cargoes Flow Poller] Found ${activeShipmentRefs.length} active shipments`);
 
     // Find shipments in our DB that are NOT in the active list
+    console.log('[Cargoes Flow Poller] Step 2: Querying database for missing shipments...');
     const missingShipments = await storage.findMissingShipmentsFromList(activeShipmentRefs);
+    console.log(`[Cargoes Flow Poller] Database query completed. Found ${missingShipments.length} potential completed shipments.`);
 
     if (missingShipments.length === 0) {
       console.log('[Cargoes Flow Poller] ✅ No missing shipments found. All shipments are accounted for.');
@@ -963,19 +977,34 @@ export async function syncCompletedShipments() {
 
   } catch (error: any) {
     console.error('[Cargoes Flow Poller] ❌ Completed shipments sync failed:', error.message);
-    const syncDuration = Date.now() - startTime;
-    return await storage.createCargoesFlowSyncLog({
-      status: 'error',
-      shipmentsProcessed: 0,
-      shipmentsCreated: 0,
-      shipmentsUpdated: 0,
-      errorMessage: error.message,
-      syncDurationMs: syncDuration,
-      metadata: {
-        type: 'completed_sync',
-        error: error.message,
-        timestamp: new Date().toISOString()
-      },
+    console.error('[Cargoes Flow Poller] Error stack:', error.stack);
+    console.error('[Cargoes Flow Poller] Error details:', {
+      name: error.name,
+      message: error.message,
+      code: error.code,
+      cause: error.cause
     });
+    const syncDuration = Date.now() - startTime;
+    
+    try {
+      return await storage.createCargoesFlowSyncLog({
+        status: 'error',
+        shipmentsProcessed: 0,
+        shipmentsCreated: 0,
+        shipmentsUpdated: 0,
+        errorMessage: error.message || 'Unknown error',
+        syncDurationMs: syncDuration,
+        metadata: {
+          type: 'completed_sync',
+          error: error.message || 'Unknown error',
+          errorName: error.name,
+          timestamp: new Date().toISOString()
+        },
+      });
+    } catch (logError: any) {
+      console.error('[Cargoes Flow Poller] ❌ Failed to create error log:', logError.message);
+      // Return a minimal error object if we can't even create the log
+      throw error; // Re-throw the original error
+    }
   }
 }

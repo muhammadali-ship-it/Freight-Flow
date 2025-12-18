@@ -147,12 +147,14 @@ async function fetchShipmentsFromCargoesFlow(): Promise<CargoesFlowShipmentData[
 async function fetchCompletedShipment(shipmentReference: string): Promise<CargoesFlowShipmentData | null> {
   try {
     const timestamp = Date.now();
-    // Use search parameter with status=COMPLETED to find specific finished shipment
-    const url = `${CARGOES_FLOW_API_URL}?shipmentType=INTERMODAL_SHIPMENT&status=COMPLETED&search=${encodeURIComponent(shipmentReference)}&_t=${timestamp}`;
+    
+    // Try multiple strategies to find the completed shipment
+    
+    // Strategy 1: Search with status=COMPLETED
+    let url = `${CARGOES_FLOW_API_URL}?shipmentType=INTERMODAL_SHIPMENT&status=COMPLETED&search=${encodeURIComponent(shipmentReference)}&_t=${timestamp}`;
+    console.log(`[Cargoes Flow Poller] 🔍 Strategy 1: Fetching with status=COMPLETED: ${shipmentReference}`);
 
-    console.log(`[Cargoes Flow Poller] 🔍 Fetching completed shipment ${shipmentReference}: ${url}`);
-
-    const response = await fetch(url, {
+    let response = await fetch(url, {
       method: 'GET',
       headers: {
         'X-DPW-ApiKey': CARGOES_FLOW_API_KEY,
@@ -162,22 +164,45 @@ async function fetchCompletedShipment(shipmentReference: string): Promise<Cargoe
       },
     });
 
-    if (!response.ok) {
-      console.warn(`[Cargoes Flow Poller] Failed to fetch completed shipment ${shipmentReference}: ${response.status}`);
-      return null;
+    if (response.ok) {
+      const data: CargoesFlowApiResponse = await response.json();
+      if (Array.isArray(data) && data.length > 0) {
+        console.log(`[Cargoes Flow Poller] ✅ Found via status=COMPLETED: ${shipmentReference}, status: ${data[0]?.status}`);
+        const match = data.find(s =>
+          String(s.shipmentNumber) === shipmentReference ||
+          String(s.referenceNumber) === shipmentReference
+        );
+        return match || data[0];
+      }
     }
 
-    const data: CargoesFlowApiResponse = await response.json();
+    // Strategy 2: Search without status filter (get any status)
+    url = `${CARGOES_FLOW_API_URL}?shipmentType=INTERMODAL_SHIPMENT&search=${encodeURIComponent(shipmentReference)}&_t=${timestamp}`;
+    console.log(`[Cargoes Flow Poller] 🔍 Strategy 2: Fetching without status filter: ${shipmentReference}`);
 
-    if (Array.isArray(data) && data.length > 0) {
-      // Find exact match just in case search is fuzzy
-      const match = data.find(s =>
-        String(s.shipmentNumber) === shipmentReference ||
-        String(s.referenceNumber) === shipmentReference
-      );
-      return match || data[0]; // Fallback to first if no exact match (search is usually precise)
+    response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'X-DPW-ApiKey': CARGOES_FLOW_API_KEY,
+        'X-DPW-Org-Token': CARGOES_FLOW_ORG_TOKEN,
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache',
+      },
+    });
+
+    if (response.ok) {
+      const data: CargoesFlowApiResponse = await response.json();
+      if (Array.isArray(data) && data.length > 0) {
+        console.log(`[Cargoes Flow Poller] ✅ Found without status filter: ${shipmentReference}, status: ${data[0]?.status}`);
+        const match = data.find(s =>
+          String(s.shipmentNumber) === shipmentReference ||
+          String(s.referenceNumber) === shipmentReference
+        );
+        return match || data[0];
+      }
     }
 
+    console.log(`[Cargoes Flow Poller] ⚠️ No shipment found for ${shipmentReference} (tried both strategies)`);
     return null;
   } catch (error: any) {
     console.error(`[Cargoes Flow Poller] Error fetching completed shipment ${shipmentReference}:`, error.message);
@@ -928,22 +953,50 @@ export async function syncCompletedShipments() {
       });
     }
 
-    console.log(`[Cargoes Flow Poller] Found ${missingShipments.length} potential completed shipments. Verifying with API...`);
+    console.log(`[Cargoes Flow Poller] Found ${missingShipments.length} potential completed shipments. Fetching latest data from API...`);
 
     const completedShipments: CargoesFlowShipmentData[] = [];
     let fetchErrors = 0;
 
-    // Fetch each completed shipment from the API
-    for (const missing of missingShipments) {
-      try {
-        const completedData = await fetchCompletedShipment(missing.shipmentReference);
-        if (completedData) {
-          completedShipments.push(completedData);
+    // Process in batches with concurrency limit to avoid overwhelming the API
+    const BATCH_SIZE = 10; // Process 10 shipments concurrently
+    const MAX_SHIPMENTS = 50; // Limit to 50 shipments per sync to prevent timeouts
+    
+    const shipmentsToProcess = missingShipments.slice(0, MAX_SHIPMENTS);
+    console.log(`[Cargoes Flow Poller] Processing ${shipmentsToProcess.length} of ${missingShipments.length} missing shipments (limited to ${MAX_SHIPMENTS} per sync)`);
+
+    // Process in batches
+    for (let i = 0; i < shipmentsToProcess.length; i += BATCH_SIZE) {
+      const batch = shipmentsToProcess.slice(i, i + BATCH_SIZE);
+      console.log(`[Cargoes Flow Poller] Processing batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(shipmentsToProcess.length / BATCH_SIZE)} (${batch.length} shipments)`);
+      
+      // Fetch all shipments in this batch concurrently
+      const batchPromises = batch.map(async (missing) => {
+        try {
+          const completedData = await fetchCompletedShipment(missing.shipmentReference);
+          return completedData;
+        } catch (error: any) {
+          console.error(`[Cargoes Flow Poller] Error fetching completed shipment ${missing.shipmentReference}:`, error.message);
+          return null;
         }
-      } catch (error: any) {
-        fetchErrors++;
-        console.error(`[Cargoes Flow Poller] Error fetching completed shipment ${missing.shipmentReference}:`, error.message);
+      });
+
+      const batchResults = await Promise.all(batchPromises);
+      
+      // Add successful results to completedShipments
+      for (const result of batchResults) {
+        if (result) {
+          completedShipments.push(result);
+        } else {
+          fetchErrors++;
+        }
       }
+      
+      console.log(`[Cargoes Flow Poller] Batch complete. Total verified: ${completedShipments.length}, Not found: ${fetchErrors}`);
+    }
+    
+    if (missingShipments.length > MAX_SHIPMENTS) {
+      console.log(`[Cargoes Flow Poller] ⚠️ ${missingShipments.length - MAX_SHIPMENTS} shipments remaining. Run sync again to process more.`);
     }
 
     let newCount = 0;
@@ -951,9 +1004,30 @@ export async function syncCompletedShipments() {
 
     if (completedShipments.length > 0) {
       console.log(`[Cargoes Flow Poller] 💾 Processing ${completedShipments.length} verified completed shipments...`);
+      
+      // Log all unique status values found
+      const statusCounts = completedShipments.reduce((acc, s) => {
+        const status = s.status || 'NULL';
+        acc[status] = (acc[status] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+      console.log(`[Cargoes Flow Poller] Status distribution:`, statusCounts);
+      console.log(`[Cargoes Flow Poller] Sample shipments:`, completedShipments.slice(0, 5).map(s => ({ 
+        ref: s.shipmentNumber, 
+        status: s.status,
+        statusType: typeof s.status 
+      })));
+      
       const stats = await processAndStoreShipmentsWithStats(completedShipments);
       newCount = stats.newCount;
       updatedCount = stats.updatedCount;
+      console.log(`[Cargoes Flow Poller] 📊 Completed sync results: ${newCount} new, ${updatedCount} updated out of ${completedShipments.length} verified`);
+    } else {
+      console.log(`[Cargoes Flow Poller] ⚠️ No completed shipments were found in the API.`);
+      console.log(`[Cargoes Flow Poller] This could mean:`);
+      console.log(`[Cargoes Flow Poller]    - The API doesn't return completed shipments`);
+      console.log(`[Cargoes Flow Poller]    - The shipments are no longer in the system`);
+      console.log(`[Cargoes Flow Poller]    - There's an API limitation`);
     }
 
     const syncDuration = Date.now() - startTime;

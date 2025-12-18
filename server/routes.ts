@@ -4082,6 +4082,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log("[API] Returning sync log:", JSON.stringify(serializedSyncLog, null, 2));
 
+      // DEBUG: Check what status values are actually in the database
+      try {
+        const statusCheck = await db.execute(sql`
+          SELECT status, COUNT(*) as count 
+          FROM cargoes_flow_shipments 
+          WHERE updated_at > NOW() - INTERVAL '5 minutes'
+          GROUP BY status
+          ORDER BY count DESC
+        `);
+        console.log("[API] Recent status distribution:", statusCheck.rows);
+      } catch (debugError) {
+        console.error("[API] Debug query failed:", debugError);
+      }
+
       res.json({
         success: true,
         message: "Completed shipments sync finished",

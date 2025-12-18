@@ -204,9 +204,12 @@ export default function Shipments() {
   // Mutation for syncing completed shipments separately
   const syncCompletedMutation = useMutation({
     mutationFn: async () => {
+      console.log("[Completed Sync] Starting mutation...");
+      console.log("[Completed Sync] API URL:", buildApiUrl("/api/cargoes-flow/sync-completed"));
       const data = await apiRequest("/api/cargoes-flow/sync-completed", {
         method: "POST",
       });
+      console.log("[Completed Sync] Response:", data);
       return data;
     },
     onSuccess: async (data) => {
@@ -221,6 +224,9 @@ export default function Shipments() {
       queryClient.invalidateQueries({ queryKey: ["/api/shipments"] });
     },
     onError: (error: any) => {
+      console.error("[Completed Sync] Error:", error);
+      console.error("[Completed Sync] Error message:", error.message);
+      console.error("[Completed Sync] Error stack:", error.stack);
       toast({
         title: "Completed sync failed",
         description: error.message || "Failed to sync completed shipments",
@@ -399,7 +405,11 @@ export default function Shipments() {
                 {triggerSyncMutation.isPending ? 'Syncing...' : 'Sync Now'}
               </Button>
               <Button
-                onClick={() => syncCompletedMutation.mutate()}
+                onClick={() => {
+                  console.log("[Completed Sync] Button clicked!");
+                  console.log("[Completed Sync] isPending:", syncCompletedMutation.isPending);
+                  syncCompletedMutation.mutate();
+                }}
                 disabled={syncCompletedMutation.isPending}
                 variant="outline"
                 data-testid="button-sync-completed"

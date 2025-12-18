@@ -2,6 +2,7 @@ import { storage } from "../storage.js";
 import { createShippingLineAdapter, type ShippingLineData } from "./shipping-line-adapter.js";
 import type { IntegrationConfig } from "../shared/schema.js";
 import { riskAssessmentService } from "../services/risk-assessment-service.js";
+import { triggerManualPoll } from "../services/cargoes-flow-poller.js";
 
 export class IntegrationOrchestrator {
   private pollingIntervals: Map<string, NodeJS.Timeout> = new Map();
@@ -9,7 +10,7 @@ export class IntegrationOrchestrator {
   async startAllActiveIntegrations() {
     try {
       const activeConfigs = await storage.getActiveIntegrationConfigs();
-      
+
       for (const config of activeConfigs) {
         this.startIntegration(config);
       }
@@ -28,15 +29,15 @@ export class IntegrationOrchestrator {
     }
 
     const intervalMs = (config.pollingIntervalMinutes || 60) * 60 * 1000;
-    
+
     const interval = setInterval(async () => {
       await this.syncIntegration(config.id);
     }, intervalMs);
 
     this.pollingIntervals.set(config.id, interval);
-    
+
     this.syncIntegration(config.id);
-    
+
     console.log(`Started integration: ${config.name} (polling every ${config.pollingIntervalMinutes} minutes)`);
   }
 
@@ -72,6 +73,32 @@ export class IntegrationOrchestrator {
       }
 
       console.log(`Syncing integration: ${config.name}`);
+
+      // Special handling for Cargoes Flow
+      if (config.carrier.toUpperCase() === "CARGOES FLOW" || config.carrier.toUpperCase() === "CARGOES_FLOW") {
+        console.log(`[Integration Orchestrator] Triggering Cargoes Flow manual poll for integration ${integrationId}`);
+        const cfSyncLog = await triggerManualPoll();
+
+        if (cfSyncLog) {
+          recordsProcessed = cfSyncLog.shipmentsProcessed || 0;
+          recordsUpdated = cfSyncLog.shipmentsUpdated || 0;
+          recordsFailed = 0; // Cargoes Flow log doesn't explicitly track failed records in the same way
+
+          if (cfSyncLog.status === 'error') {
+            errorMessage = cfSyncLog.errorMessage || "Cargoes Flow sync failed";
+            throw new Error(errorMessage);
+          }
+        } else {
+          console.log(`[Integration Orchestrator] Cargoes Flow sync already running or returned no log`);
+          // If it returns null, it means it's already running. We can consider this a "success" in terms of triggering.
+        }
+
+        await storage.updateIntegrationConfig(integrationId, {
+          lastSyncAt: new Date(),
+        });
+
+        return;
+      }
 
       let adapter;
       try {
@@ -128,7 +155,7 @@ export class IntegrationOrchestrator {
 
   async processCarrierUpdate(updateId: string, expectedIntegrationId?: string) {
     const carrierUpdate = await storage.getCarrierUpdateById(updateId);
-    
+
     if (!carrierUpdate) {
       console.log(`Carrier update ${updateId} not found`);
       return;
@@ -143,7 +170,7 @@ export class IntegrationOrchestrator {
       console.log(`Carrier update ${updateId} belongs to different integration`);
       return;
     }
-    
+
     const container = await storage.getContainerByNumber(carrierUpdate.containerNumber);
     if (!container) {
       console.log(`Container ${carrierUpdate.containerNumber} not found, skipping update`);
@@ -167,7 +194,7 @@ export class IntegrationOrchestrator {
     }
 
     await storage.markCarrierUpdateProcessed(updateId);
-    
+
     // Trigger risk assessment after carrier update
     try {
       const updatedContainer = await storage.getContainerById(container.id);
@@ -191,13 +218,13 @@ export class IntegrationOrchestrator {
     } catch (error) {
       throw new Error(`Unsupported carrier: ${config.carrier}`);
     }
-    
+
     if (signature && !adapter.validateWebhook(payload, signature)) {
       throw new Error("Webhook signature validation failed");
     }
 
     const updates = adapter.parseWebhook(payload);
-    
+
     for (const update of updates) {
       const carrierUpdate = await storage.createCarrierUpdate({
         ...adapter.buildCarrierUpdate(update),

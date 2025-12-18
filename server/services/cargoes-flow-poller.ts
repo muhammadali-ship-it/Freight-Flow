@@ -53,6 +53,8 @@ type CargoesFlowApiResponse = CargoesFlowShipmentData[];
 
 let pollingInterval: NodeJS.Timeout | null = null;
 let isPolling = false; // Prevent concurrent polls
+let lastPollStartTime: number = 0;
+const POLL_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes timeout for stuck polls
 
 async function fetchShipmentsFromCargoesFlow(): Promise<CargoesFlowShipmentData[] | null> {
   try {
@@ -69,15 +71,29 @@ async function fetchShipmentsFromCargoesFlow(): Promise<CargoesFlowShipmentData[
 
       console.log(`[Cargoes Flow Poller] Fetching page ${page}: ${url}`);
 
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'X-DPW-ApiKey': CARGOES_FLOW_API_KEY,
-          'X-DPW-Org-Token': CARGOES_FLOW_ORG_TOKEN,
-          'Cache-Control': 'no-cache',
-          'Pragma': 'no-cache',
-        },
-      });
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout per page
+
+      let response;
+      try {
+        response = await fetch(url, {
+          method: 'GET',
+          headers: {
+            'X-DPW-ApiKey': CARGOES_FLOW_API_KEY,
+            'X-DPW-Org-Token': CARGOES_FLOW_ORG_TOKEN,
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache',
+          },
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+      } catch (error: any) {
+        clearTimeout(timeoutId);
+        if (error.name === 'AbortError') {
+          throw new Error(`Request timed out for page ${page}`);
+        }
+        throw error;
+      }
 
       console.log(`[Cargoes Flow Poller] Response status: ${response.status}`);
 
@@ -598,7 +614,8 @@ async function pollShipments() {
 
   console.log('[Cargoes Flow Poller] 🔒 Setting isPolling = true');
   isPolling = true;
-  const startTime = Date.now();
+  lastPollStartTime = Date.now();
+  const startTime = lastPollStartTime;
   let syncLog;
 
   try {
@@ -878,6 +895,13 @@ function extractEtaFromLegs(shipmentLegs: any): string | null {
 export async function triggerManualPoll() {
   console.log('[Cargoes Flow Poller] Manual poll triggered');
   console.log(`[Cargoes Flow Poller] Current isPolling state: ${isPolling}`);
+
+  // Check for stale lock
+  if (isPolling && (Date.now() - lastPollStartTime > POLL_TIMEOUT_MS)) {
+    console.log(`[Cargoes Flow Poller] ⚠️ Found stale lock (active for > ${(POLL_TIMEOUT_MS / 60000).toFixed(1)}m). Forcing reset.`);
+    isPolling = false;
+  }
+
   const syncLog = await pollShipments();
   return syncLog;
 }

@@ -4064,13 +4064,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log("[API] Completed shipments sync triggered");
       const syncLog = await syncCompletedShipments();
 
-      // Ensure createdAt is serialized as ISO string
+      if (!syncLog) {
+        return res.status(500).json({ error: "Sync log was not created" });
+      }
+
+      // Ensure all fields are properly serialized
       const serializedSyncLog = {
         ...syncLog,
         createdAt: syncLog.createdAt instanceof Date
           ? syncLog.createdAt.toISOString()
           : syncLog.createdAt,
+        // Ensure metadata is a plain object, not a string
+        metadata: typeof syncLog.metadata === 'string'
+          ? JSON.parse(syncLog.metadata)
+          : syncLog.metadata,
       };
+
+      console.log("[API] Returning sync log:", JSON.stringify(serializedSyncLog, null, 2));
 
       res.json({
         success: true,
@@ -4079,12 +4089,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error: any) {
       console.error("Error syncing completed shipments:", error);
+      console.error("Error stack:", error.stack);
       res.status(500).json({ error: error.message || "Failed to sync completed shipments" });
     }
   });
 
-
   integrationOrchestrator.startAllActiveIntegrations();
+
   riskScheduler.start();
   startCargoesFlowPolling();
 

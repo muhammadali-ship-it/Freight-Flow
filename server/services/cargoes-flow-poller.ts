@@ -147,9 +147,9 @@ async function fetchShipmentsFromCargoesFlow(): Promise<CargoesFlowShipmentData[
 async function fetchCompletedShipment(shipmentReference: string): Promise<CargoesFlowShipmentData | null> {
   try {
     const timestamp = Date.now();
-    
+
     // Try multiple strategies to find the completed shipment
-    
+
     // Strategy 1: Search with status=COMPLETED
     let url = `${CARGOES_FLOW_API_URL}?shipmentType=INTERMODAL_SHIPMENT&status=COMPLETED&search=${encodeURIComponent(shipmentReference)}&_t=${timestamp}`;
     console.log(`[Cargoes Flow Poller] 🔍 Strategy 1: Fetching with status=COMPLETED: ${shipmentReference}`);
@@ -527,13 +527,13 @@ async function processAndStoreShipmentsWithStats(shipments: CargoesFlowShipmentD
           rawData: mergedRawData,
           lastFetchedAt: new Date(),
         };
-        
+
         if (i < 3) {
           console.log(`[Cargoes Flow Poller] Updating ${shipmentRef} with status: ${updateData.status}`);
         }
-        
+
         await storage.updateCargoesFlowShipment(existing.id, updateData);
-        
+
         // Verify the update
         if (i < 3) {
           const verifyUpdate = await storage.getCargoesFlowShipmentById(existing.id);
@@ -921,12 +921,12 @@ export async function syncCompletedShipments() {
   try {
     // First, fetch all active shipments to know which ones are still active
     console.log('[Cargoes Flow Poller] Step 1: Fetching active shipments from API...');
-    
+
     // Add timeout to prevent hanging
     const fetchTimeout = new Promise<null>((_, reject) => {
       setTimeout(() => reject(new Error('Fetch active shipments timeout after 2 minutes')), 120000);
     });
-    
+
     const activeShipments = await Promise.race([
       fetchShipmentsFromCargoesFlow(),
       fetchTimeout
@@ -935,7 +935,7 @@ export async function syncCompletedShipments() {
     if (activeShipments === null) {
       throw new Error('Failed to fetch active shipments list');
     }
-    
+
     console.log('[Cargoes Flow Poller] Successfully fetched active shipments from API');
 
     // Collect IDs of all currently active shipments
@@ -975,7 +975,7 @@ export async function syncCompletedShipments() {
     // Process in batches with concurrency limit to avoid overwhelming the API
     const BATCH_SIZE = 10; // Process 10 shipments concurrently
     const MAX_SHIPMENTS = 50; // Limit to 50 shipments per sync to prevent timeouts
-    
+
     const shipmentsToProcess = missingShipments.slice(0, MAX_SHIPMENTS);
     console.log(`[Cargoes Flow Poller] Processing ${shipmentsToProcess.length} of ${missingShipments.length} missing shipments (limited to ${MAX_SHIPMENTS} per sync)`);
 
@@ -983,7 +983,7 @@ export async function syncCompletedShipments() {
     for (let i = 0; i < shipmentsToProcess.length; i += BATCH_SIZE) {
       const batch = shipmentsToProcess.slice(i, i + BATCH_SIZE);
       console.log(`[Cargoes Flow Poller] Processing batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(shipmentsToProcess.length / BATCH_SIZE)} (${batch.length} shipments)`);
-      
+
       // Fetch all shipments in this batch concurrently
       const batchPromises = batch.map(async (missing) => {
         try {
@@ -996,7 +996,7 @@ export async function syncCompletedShipments() {
       });
 
       const batchResults = await Promise.all(batchPromises);
-      
+
       // Add successful results to completedShipments
       for (const result of batchResults) {
         if (result) {
@@ -1005,10 +1005,10 @@ export async function syncCompletedShipments() {
           fetchErrors++;
         }
       }
-      
+
       console.log(`[Cargoes Flow Poller] Batch complete. Total verified: ${completedShipments.length}, Not found: ${fetchErrors}`);
     }
-    
+
     if (missingShipments.length > MAX_SHIPMENTS) {
       console.log(`[Cargoes Flow Poller] ⚠️ ${missingShipments.length - MAX_SHIPMENTS} shipments remaining. Run sync again to process more.`);
     }
@@ -1017,30 +1017,44 @@ export async function syncCompletedShipments() {
     let updatedCount = 0;
 
     if (completedShipments.length > 0) {
-      console.log(`[Cargoes Flow Poller] 💾 Processing ${completedShipments.length} verified completed shipments...`);
-      
+      console.log(`[Cargoes Flow Poller] 💾 Processing ${completedShipments.length} completed shipments from API...`);
+
+      // CRITICAL: Deduplicate by shipmentReference
+      // The Cargoes Flow API returns one result per container, so we get duplicates
+      // for shipments with multiple containers (same shipmentNumber, different containers)
+      const uniqueShipments = new Map<string, CargoesFlowShipmentData>();
+      for (const shipment of completedShipments) {
+        const ref = String(shipment.shipmentNumber || shipment.referenceNumber || '');
+        if (ref && !uniqueShipments.has(ref)) {
+          uniqueShipments.set(ref, shipment);
+        }
+      }
+
+      const deduplicatedShipments = Array.from(uniqueShipments.values());
+      console.log(`[Cargoes Flow Poller] 🔍 Deduplicated: ${completedShipments.length} API results -> ${deduplicatedShipments.length} unique shipments`);
+
       // Log all unique status values found
-      const statusCounts = completedShipments.reduce((acc, s) => {
+      const statusCounts = deduplicatedShipments.reduce((acc, s) => {
         const status = s.status || 'NULL';
         acc[status] = (acc[status] || 0) + 1;
         return acc;
       }, {} as Record<string, number>);
       console.log(`[Cargoes Flow Poller] Status distribution:`, statusCounts);
-      console.log(`[Cargoes Flow Poller] Sample shipments:`, completedShipments.slice(0, 5).map(s => ({ 
-        ref: s.shipmentNumber, 
+      console.log(`[Cargoes Flow Poller] Sample unique shipments:`, deduplicatedShipments.slice(0, 5).map(s => ({
+        ref: s.shipmentNumber,
         status: s.status,
-        statusType: typeof s.status 
+        statusType: typeof s.status
       })));
-      
-      const stats = await processAndStoreShipmentsWithStats(completedShipments);
+
+      const stats = await processAndStoreShipmentsWithStats(deduplicatedShipments);
       newCount = stats.newCount;
       updatedCount = stats.updatedCount;
-      console.log(`[Cargoes Flow Poller] 📊 Completed sync results: ${newCount} new, ${updatedCount} updated out of ${completedShipments.length} verified`);
-      
+      console.log(`[Cargoes Flow Poller] 📊 Completed sync results: ${newCount} new, ${updatedCount} updated out of ${deduplicatedShipments.length} unique shipments`);
+
       // CRITICAL: Verify the status was actually saved in the database
       console.log(`[Cargoes Flow Poller] 🔍 Verifying status updates in database...`);
-      for (let i = 0; i < Math.min(5, completedShipments.length); i++) {
-        const shipment = completedShipments[i];
+      for (let i = 0; i < Math.min(5, deduplicatedShipments.length); i++) {
+        const shipment = deduplicatedShipments[i];
         const shipmentRef = String(shipment.shipmentNumber || shipment.referenceNumber || '');
         const dbShipment = await storage.getCargoesFlowShipmentByReference(shipmentRef);
         if (dbShipment) {
@@ -1089,7 +1103,7 @@ export async function syncCompletedShipments() {
       cause: error.cause
     });
     const syncDuration = Date.now() - startTime;
-    
+
     try {
       return await storage.createCargoesFlowSyncLog({
         status: 'error',

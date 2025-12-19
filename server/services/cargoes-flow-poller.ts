@@ -1036,6 +1036,22 @@ export async function syncCompletedShipments() {
       newCount = stats.newCount;
       updatedCount = stats.updatedCount;
       console.log(`[Cargoes Flow Poller] 📊 Completed sync results: ${newCount} new, ${updatedCount} updated out of ${completedShipments.length} verified`);
+      
+      // CRITICAL: Verify the status was actually saved in the database
+      console.log(`[Cargoes Flow Poller] 🔍 Verifying status updates in database...`);
+      for (let i = 0; i < Math.min(5, completedShipments.length); i++) {
+        const shipment = completedShipments[i];
+        const shipmentRef = String(shipment.shipmentNumber || shipment.referenceNumber || '');
+        const dbShipment = await storage.getCargoesFlowShipmentByReference(shipmentRef);
+        if (dbShipment) {
+          console.log(`[Cargoes Flow Poller] ✅ ${shipmentRef}: DB status = "${dbShipment.status}" (expected: "COMPLETED")`);
+          if (dbShipment.status !== 'COMPLETED') {
+            console.error(`[Cargoes Flow Poller] ❌ STATUS MISMATCH! Expected COMPLETED but got "${dbShipment.status}"`);
+          }
+        } else {
+          console.error(`[Cargoes Flow Poller] ❌ ${shipmentRef}: NOT FOUND IN DATABASE!`);
+        }
+      }
     } else {
       console.log(`[Cargoes Flow Poller] ⚠️ No completed shipments were found in the API.`);
       console.log(`[Cargoes Flow Poller] This could mean:`);

@@ -169,14 +169,14 @@ export async function fetchCompletedShipment(shipmentReference: string): Promise
       if (Array.isArray(data) && data.length > 0) {
         console.log(`[Cargoes Flow Poller] ✅ Found via status=COMPLETED: ${shipmentReference}, status: ${data[0]?.status}`);
         const match = data.find(s =>
-          String(s.shipmentNumber) === shipmentReference ||
-          String(s.referenceNumber) === shipmentReference
+          String(s.shipmentNumber).trim().toUpperCase() === shipmentReference.trim().toUpperCase() ||
+          String(s.referenceNumber).trim().toUpperCase() === shipmentReference.trim().toUpperCase()
         );
-        const result = match || data[0];
+        const result = match;
         if (result) {
           (result as any).originalReference = shipmentReference; // Attach original search term
         }
-        return result;
+        return result || null;
       }
     }
 
@@ -199,14 +199,14 @@ export async function fetchCompletedShipment(shipmentReference: string): Promise
       if (Array.isArray(data) && data.length > 0) {
         console.log(`[Cargoes Flow Poller] ✅ Found without status filter: ${shipmentReference}, status: ${data[0]?.status}`);
         const match = data.find(s =>
-          String(s.shipmentNumber) === shipmentReference ||
-          String(s.referenceNumber) === shipmentReference
+          String(s.shipmentNumber).trim().toUpperCase() === shipmentReference.trim().toUpperCase() ||
+          String(s.referenceNumber).trim().toUpperCase() === shipmentReference.trim().toUpperCase()
         );
-        const result = match || data[0];
+        const result = match;
         if (result) {
           (result as any).originalReference = shipmentReference; // Attach original search term
         }
-        return result;
+        return result || null;
       }
     }
 

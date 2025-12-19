@@ -990,41 +990,59 @@ export async function syncCompletedShipments() {
 
     console.log(`[Cargoes Flow Poller] 🔍 Deduplicated missing shipments: ${missingShipments.length} containers -> ${uniqueMissingShipments.length} unique shipment references`);
 
-    const shipmentsToProcess = uniqueMissingShipments.slice(0, MAX_SHIPMENTS);
-    console.log(`[Cargoes Flow Poller] Processing ${shipmentsToProcess.length} of ${uniqueMissingShipments.length} unique missing shipments (limited to ${MAX_SHIPMENTS} per sync)`);
+    // Process ALL unique shipments in multiple rounds (50 at a time)
+    const MAX_ITERATIONS = 10; // Safety limit: max 10 rounds = 500 shipments max
+    let processedCount = 0;
+    let iteration = 0;
 
-    // Process in batches
-    for (let i = 0; i < shipmentsToProcess.length; i += BATCH_SIZE) {
-      const batch = shipmentsToProcess.slice(i, i + BATCH_SIZE);
-      console.log(`[Cargoes Flow Poller] Processing batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(shipmentsToProcess.length / BATCH_SIZE)} (${batch.length} shipments)`);
+    console.log(`[Cargoes Flow Poller] 🔄 Starting automatic batch processing for all ${uniqueMissingShipments.length} unique shipments...`);
 
-      // Fetch all shipments in this batch concurrently
-      const batchPromises = batch.map(async (missing) => {
-        try {
-          const completedData = await fetchCompletedShipment(missing.shipmentReference);
-          return completedData;
-        } catch (error: any) {
-          console.error(`[Cargoes Flow Poller] Error fetching completed shipment ${missing.shipmentReference}:`, error.message);
-          return null;
+    while (processedCount < uniqueMissingShipments.length && iteration < MAX_ITERATIONS) {
+      iteration++;
+      const startIdx = processedCount;
+      const endIdx = Math.min(startIdx + MAX_SHIPMENTS, uniqueMissingShipments.length);
+      const shipmentsToProcess = uniqueMissingShipments.slice(startIdx, endIdx);
+
+      console.log(`[Cargoes Flow Poller] 📦 Round ${iteration}: Processing ${shipmentsToProcess.length} shipments (${startIdx + 1}-${endIdx} of ${uniqueMissingShipments.length})`);
+
+      // Process this batch in sub-batches
+      for (let i = 0; i < shipmentsToProcess.length; i += BATCH_SIZE) {
+        const batch = shipmentsToProcess.slice(i, i + BATCH_SIZE);
+        console.log(`[Cargoes Flow Poller] Processing batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(shipmentsToProcess.length / BATCH_SIZE)} (${batch.length} shipments)`);
+
+        // Fetch all shipments in this batch concurrently
+        const batchPromises = batch.map(async (missing) => {
+          try {
+            const completedData = await fetchCompletedShipment(missing.shipmentReference);
+            return completedData;
+          } catch (error: any) {
+            console.error(`[Cargoes Flow Poller] Error fetching completed shipment ${missing.shipmentReference}:`, error.message);
+            return null;
+          }
+        });
+
+        const batchResults = await Promise.all(batchPromises);
+
+        // Add successful results to completedShipments
+        for (const result of batchResults) {
+          if (result) {
+            completedShipments.push(result);
+          } else {
+            fetchErrors++;
+          }
         }
-      });
 
-      const batchResults = await Promise.all(batchPromises);
-
-      // Add successful results to completedShipments
-      for (const result of batchResults) {
-        if (result) {
-          completedShipments.push(result);
-        } else {
-          fetchErrors++;
-        }
+        console.log(`[Cargoes Flow Poller] Batch complete. Total verified: ${completedShipments.length}, Not found: ${fetchErrors}`);
       }
 
-      console.log(`[Cargoes Flow Poller] Batch complete. Total verified: ${completedShipments.length}, Not found: ${fetchErrors}`);
+      processedCount = endIdx;
+      console.log(`[Cargoes Flow Poller] ✅ Round ${iteration} complete. Processed ${processedCount}/${uniqueMissingShipments.length} unique shipments so far.`);
     }
 
-    if (missingShipments.length > MAX_SHIPMENTS) {
-      console.log(`[Cargoes Flow Poller] ⚠️ ${missingShipments.length - MAX_SHIPMENTS} shipments remaining. Run sync again to process more.`);
+    if (processedCount < uniqueMissingShipments.length) {
+      console.log(`[Cargoes Flow Poller] ⚠️ Reached max iterations limit. ${uniqueMissingShipments.length - processedCount} shipments remaining.`);
+    } else {
+      console.log(`[Cargoes Flow Poller] 🎉 All ${uniqueMissingShipments.length} unique shipments processed!`);
     }
 
     let newCount = 0;

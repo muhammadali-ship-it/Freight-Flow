@@ -990,59 +990,52 @@ export async function syncCompletedShipments() {
 
     console.log(`[Cargoes Flow Poller] 🔍 Deduplicated missing shipments: ${missingShipments.length} containers -> ${uniqueMissingShipments.length} unique shipment references`);
 
-    // Process ALL unique shipments in multiple rounds (50 at a time)
-    const MAX_ITERATIONS = 3; // Safety limit: max 3 rounds = 150 shipments to prevent Vercel timeout
-    let processedCount = 0;
-    let iteration = 0;
-
-    console.log(`[Cargoes Flow Poller] 🔄 Starting automatic batch processing for all ${uniqueMissingShipments.length} unique shipments...`);
-
-    while (processedCount < uniqueMissingShipments.length && iteration < MAX_ITERATIONS) {
-      iteration++;
-      const startIdx = processedCount;
-      const endIdx = Math.min(startIdx + MAX_SHIPMENTS, uniqueMissingShipments.length);
-      const shipmentsToProcess = uniqueMissingShipments.slice(startIdx, endIdx);
-
-      console.log(`[Cargoes Flow Poller] 📦 Round ${iteration}: Processing ${shipmentsToProcess.length} shipments (${startIdx + 1}-${endIdx} of ${uniqueMissingShipments.length})`);
-
-      // Process this batch in sub-batches
-      for (let i = 0; i < shipmentsToProcess.length; i += BATCH_SIZE) {
-        const batch = shipmentsToProcess.slice(i, i + BATCH_SIZE);
-        console.log(`[Cargoes Flow Poller] Processing batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(shipmentsToProcess.length / BATCH_SIZE)} (${batch.length} shipments)`);
-
-        // Fetch all shipments in this batch concurrently
-        const batchPromises = batch.map(async (missing) => {
-          try {
-            const completedData = await fetchCompletedShipment(missing.shipmentReference);
-            return completedData;
-          } catch (error: any) {
-            console.error(`[Cargoes Flow Poller] Error fetching completed shipment ${missing.shipmentReference}:`, error.message);
-            return null;
-          }
-        });
-
-        const batchResults = await Promise.all(batchPromises);
-
-        // Add successful results to completedShipments
-        for (const result of batchResults) {
-          if (result) {
-            completedShipments.push(result);
-          } else {
-            fetchErrors++;
-          }
-        }
-
-        console.log(`[Cargoes Flow Poller] Batch complete. Total verified: ${completedShipments.length}, Not found: ${fetchErrors}`);
-      }
-
-      processedCount = endIdx;
-      console.log(`[Cargoes Flow Poller] ✅ Round ${iteration} complete. Processed ${processedCount}/${uniqueMissingShipments.length} unique shipments so far.`);
+    // RANDOMIZE the list to avoid getting stuck on the same shipments if they fail to update,
+    // and to process a variety of shipments across runs (handling the multiple-containers perception issue).
+    for (let i = uniqueMissingShipments.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [uniqueMissingShipments[i], uniqueMissingShipments[j]] = [uniqueMissingShipments[j], uniqueMissingShipments[i]];
     }
 
-    if (processedCount < uniqueMissingShipments.length) {
-      console.log(`[Cargoes Flow Poller] ⚠️ Reached max iterations limit. ${uniqueMissingShipments.length - processedCount} shipments remaining.`);
-    } else {
-      console.log(`[Cargoes Flow Poller] 🎉 All ${uniqueMissingShipments.length} unique shipments processed!`);
+    // Process top 50 from the randomized list
+    // We revert to a single batch of 50 to ensure we simply NEVER timeout on Vercel.
+    // Since the list is randomized, repeated runs will statistically cover all shipments.
+    const shipmentsToProcess = uniqueMissingShipments.slice(0, MAX_SHIPMENTS);
+
+    console.log(`[Cargoes Flow Poller] 🎲 Processing 50 RANDOM unique shipments out of ${uniqueMissingShipments.length} remaining...`);
+
+    // Process in sub-batches of 10
+    for (let i = 0; i < shipmentsToProcess.length; i += BATCH_SIZE) {
+      const batch = shipmentsToProcess.slice(i, i + BATCH_SIZE);
+      console.log(`[Cargoes Flow Poller] Processing batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(shipmentsToProcess.length / BATCH_SIZE)} (${batch.length} shipments)`);
+
+      // Fetch all shipments in this batch concurrently
+      const batchPromises = batch.map(async (missing) => {
+        try {
+          const completedData = await fetchCompletedShipment(missing.shipmentReference);
+          return completedData;
+        } catch (error: any) {
+          console.error(`[Cargoes Flow Poller] Error fetching completed shipment ${missing.shipmentReference}:`, error.message);
+          return null;
+        }
+      });
+
+      const batchResults = await Promise.all(batchPromises);
+
+      // Add successful results to completedShipments
+      for (const result of batchResults) {
+        if (result) {
+          completedShipments.push(result);
+        } else {
+          fetchErrors++;
+        }
+      }
+
+      console.log(`[Cargoes Flow Poller] Batch complete. Total verified: ${completedShipments.length}, Not found: ${fetchErrors}`);
+    }
+
+    if (uniqueMissingShipments.length > MAX_SHIPMENTS) {
+      console.log(`[Cargoes Flow Poller] ⚠️ ${uniqueMissingShipments.length - MAX_SHIPMENTS} unique shipments remaining. Run sync again to process another random batch.`);
     }
 
     let newCount = 0;

@@ -976,8 +976,22 @@ export async function syncCompletedShipments() {
     const BATCH_SIZE = 10; // Process 10 shipments concurrently
     const MAX_SHIPMENTS = 50; // Limit to 50 shipments per sync to prevent timeouts
 
-    const shipmentsToProcess = missingShipments.slice(0, MAX_SHIPMENTS);
-    console.log(`[Cargoes Flow Poller] Processing ${shipmentsToProcess.length} of ${missingShipments.length} missing shipments (limited to ${MAX_SHIPMENTS} per sync)`);
+    // CRITICAL: Deduplicate by shipmentReference BEFORE processing
+    // The database has one row per container, so multiple containers with the same
+    // shipmentReference appear as separate "missing" entries. We need to deduplicate
+    // BEFORE fetching to avoid fetching the same shipment multiple times.
+    const uniqueMissingMap = new Map<string, typeof missingShipments[0]>();
+    for (const missing of missingShipments) {
+      if (missing.shipmentReference && !uniqueMissingMap.has(missing.shipmentReference)) {
+        uniqueMissingMap.set(missing.shipmentReference, missing);
+      }
+    }
+    const uniqueMissingShipments = Array.from(uniqueMissingMap.values());
+
+    console.log(`[Cargoes Flow Poller] 🔍 Deduplicated missing shipments: ${missingShipments.length} containers -> ${uniqueMissingShipments.length} unique shipment references`);
+
+    const shipmentsToProcess = uniqueMissingShipments.slice(0, MAX_SHIPMENTS);
+    console.log(`[Cargoes Flow Poller] Processing ${shipmentsToProcess.length} of ${uniqueMissingShipments.length} unique missing shipments (limited to ${MAX_SHIPMENTS} per sync)`);
 
     // Process in batches
     for (let i = 0; i < shipmentsToProcess.length; i += BATCH_SIZE) {

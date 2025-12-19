@@ -172,7 +172,11 @@ export async function fetchCompletedShipment(shipmentReference: string): Promise
           String(s.shipmentNumber) === shipmentReference ||
           String(s.referenceNumber) === shipmentReference
         );
-        return match || data[0];
+        const result = match || data[0];
+        if (result) {
+          (result as any).originalReference = shipmentReference; // Attach original search term
+        }
+        return result;
       }
     }
 
@@ -198,7 +202,11 @@ export async function fetchCompletedShipment(shipmentReference: string): Promise
           String(s.shipmentNumber) === shipmentReference ||
           String(s.referenceNumber) === shipmentReference
         );
-        return match || data[0];
+        const result = match || data[0];
+        if (result) {
+          (result as any).originalReference = shipmentReference; // Attach original search term
+        }
+        return result;
       }
     }
 
@@ -230,7 +238,11 @@ async function processAndStoreShipmentsWithStats(shipments: CargoesFlowShipmentD
         });
       }
       // Use shipmentNumber as the primary reference (convert to string if number)
-      const shipmentRef = String(shipment.shipmentNumber || shipment.referenceNumber || '');
+      // CRITICAL FIX: Use originalReference (search term) if available to ensure we match the record we looked for
+      let shipmentRef = String(shipment.shipmentNumber || shipment.referenceNumber || '');
+      if ((shipment as any).originalReference) {
+        shipmentRef = (shipment as any).originalReference;
+      }
 
       if (!shipmentRef) {
         console.warn('[Cargoes Flow Poller] Skipping shipment without shipmentNumber or referenceNumber:', shipment);

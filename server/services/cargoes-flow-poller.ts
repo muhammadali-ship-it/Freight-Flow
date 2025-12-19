@@ -144,7 +144,7 @@ async function fetchShipmentsFromCargoesFlow(): Promise<CargoesFlowShipmentData[
   }
 }
 
-async function fetchCompletedShipment(shipmentReference: string): Promise<CargoesFlowShipmentData | null> {
+export async function fetchCompletedShipment(shipmentReference: string): Promise<CargoesFlowShipmentData | null> {
   try {
     const timestamp = Date.now();
 

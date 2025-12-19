@@ -277,6 +277,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Admin users: no filtering (userFilter remains empty)
       }
 
+      // DEBUG: Log filter details for completed shipments
+      if (filters.isCompleted === true) {
+        console.log('[API /shipments] COMPLETED SHIPMENTS QUERY');
+        console.log('[API /shipments] User:', user ? { role: user.role, name: user.name, office: user.office } : 'Not logged in');
+        console.log('[API /shipments] Filters:', { ...filters, ...userFilter });
+      }
+
       // Fetch GROUPED Cargoes Flow API shipments (1 shipment per MBL with all containers)
       const cargoesFlowResult = await storage.getGroupedCargoesFlowShipments(
         { page, pageSize },
@@ -285,6 +292,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
           ...userFilter,
         }
       );
+
+      // DEBUG: Log results count for completed shipments
+      if (filters.isCompleted === true) {
+        console.log('[API /shipments] RESULTS:', {
+          totalFound: cargoesFlowResult.pagination.total,
+          currentPage: cargoesFlowResult.data.length,
+          pagination: cargoesFlowResult.pagination
+        });
+        if (cargoesFlowResult.data.length > 0) {
+          console.log('[API /shipments] Sample shipment:', {
+            ref: cargoesFlowResult.data[0].shipmentReference,
+            status: cargoesFlowResult.data[0].status,
+            office: cargoesFlowResult.data[0].office,
+            salesRepNames: cargoesFlowResult.data[0].salesRepNames
+          });
+        }
+      }
 
       // Map grouped shipments to frontend format
       const mappedShipments = cargoesFlowResult.data.map(ship => ({
@@ -4092,7 +4116,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           ORDER BY count DESC
         `);
         console.log("[API] Recent status distribution:", statusCheck.rows);
-        
+
         // Also check for COMPLETED specifically
         const completedCheck = await db.execute(sql`
           SELECT shipment_reference, status, updated_at

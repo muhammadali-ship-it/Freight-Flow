@@ -1046,15 +1046,15 @@ export async function syncCompletedShipments() {
         statusType: typeof s.status
       })));
 
-      const stats = await processAndStoreShipmentsWithStats(deduplicatedShipments);
+      const stats = await processAndStoreShipmentsWithStats(completedShipments);
       newCount = stats.newCount;
       updatedCount = stats.updatedCount;
-      console.log(`[Cargoes Flow Poller] 📊 Completed sync results: ${newCount} new, ${updatedCount} updated out of ${deduplicatedShipments.length} unique shipments`);
+      console.log(`[Cargoes Flow Poller] 📊 Completed sync results: ${newCount} new, ${updatedCount} updated out of ${completedShipments.length} containers`);
 
-      // CRITICAL: Verify the status was actually saved in the database
-      console.log(`[Cargoes Flow Poller] 🔍 Verifying status updates in database...`);
-      for (let i = 0; i < Math.min(5, deduplicatedShipments.length); i++) {
-        const shipment = deduplicatedShipments[i];
+      // Verify first 3 updates in database
+      console.log(`[Cargoes Flow Poller] 🔍 Verifying first 3 in database...`);
+      for (let i = 0; i < Math.min(3, completedShipments.length); i++) {
+        const shipment = completedShipments[i];
         const shipmentRef = String(shipment.shipmentNumber || shipment.referenceNumber || '');
         const dbShipment = await storage.getCargoesFlowShipmentByReference(shipmentRef);
         if (dbShipment) {

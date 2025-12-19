@@ -991,7 +991,7 @@ export async function syncCompletedShipments() {
     console.log(`[Cargoes Flow Poller] 🔍 Deduplicated missing shipments: ${missingShipments.length} containers -> ${uniqueMissingShipments.length} unique shipment references`);
 
     // Process ALL unique shipments in multiple rounds (50 at a time)
-    const MAX_ITERATIONS = 10; // Safety limit: max 10 rounds = 500 shipments max
+    const MAX_ITERATIONS = 3; // Safety limit: max 3 rounds = 150 shipments to prevent Vercel timeout
     let processedCount = 0;
     let iteration = 0;
 

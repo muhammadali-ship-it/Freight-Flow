@@ -291,6 +291,7 @@ export interface IStorage {
   getGroupedCargoesFlowShipments(params?: PaginationParams, filters?: ShipmentFilters & { search?: string; userName?: string; userOffice?: string; userRole?: string }): Promise<PaginatedResult<any>>;
   getCargoesFlowShipmentById(id: string): Promise<CargoesFlowShipment | undefined>;
   getCargoesFlowShipmentByReference(shipmentReference: string): Promise<CargoesFlowShipment | undefined>;
+  getAllCargoesFlowShipmentsByReference(shipmentReference: string): Promise<CargoesFlowShipment[]>;
   getCargoesFlowShipmentByContainer(containerNumber: string): Promise<CargoesFlowShipment | undefined>;
   getCargoesFlowShipmentByContainerInRawData(containerNumber: string): Promise<CargoesFlowShipment | undefined>;
   getCargoesFlowShipmentByMbl(mblNumber: string): Promise<CargoesFlowShipment | undefined>;
@@ -2806,6 +2807,11 @@ export class DbStorage implements IStorage {
     return result[0];
   }
 
+  async getAllCargoesFlowShipmentsByReference(shipmentReference: string): Promise<CargoesFlowShipment[]> {
+    const result = await db.select().from(cargoesFlowShipments).where(eq(cargoesFlowShipments.shipmentReference, shipmentReference));
+    return result;
+  }
+
   async getCargoesFlowShipmentByContainer(containerNumber: string): Promise<CargoesFlowShipment | undefined> {
     const result = await db.select().from(cargoesFlowShipments).where(eq(cargoesFlowShipments.containerNumber, containerNumber));
     return result[0];
@@ -2841,7 +2847,7 @@ export class DbStorage implements IStorage {
   async findMissingShipmentsFromList(activeShipmentNumbers: string[]): Promise<CargoesFlowShipment[]> {
     try {
       console.log(`[Storage] Finding missing shipments from list of ${activeShipmentNumbers.length} active shipments`);
-      
+
       // Query for shipments with ACTIVE status (case-insensitive)
       const activeShipments = await db.select()
         .from(cargoesFlowShipments)
@@ -2854,12 +2860,12 @@ export class DbStorage implements IStorage {
       // Filter in-memory to avoid complex SQL NOT IN with potentially thousands of IDs
       // We want shipments that are currently ACTIVE in DB but NOT in the provided list
       const activeSet = new Set(activeShipmentNumbers);
-      const missingShipments = activeShipments.filter(shipment => 
+      const missingShipments = activeShipments.filter(shipment =>
         shipment.shipmentReference && !activeSet.has(shipment.shipmentReference)
       );
-      
+
       console.log(`[Storage] Identified ${missingShipments.length} missing shipments (ACTIVE in DB but not in API response)`);
-      
+
       return missingShipments;
     } catch (error: any) {
       console.error('[Storage] Error in findMissingShipmentsFromList:', error.message);

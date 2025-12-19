@@ -577,6 +577,28 @@ async function processAndStoreShipmentsWithStats(shipments: CargoesFlowShipmentD
         if (i < 3) {
           console.log(`[Cargoes Flow Poller] ✅ Updated shipment ${shipmentRef}`);
         }
+
+        // CRITICAL FIX: Also update ALL other shipments with the same shipmentReference
+        // This ensures if we have multiple containers/records for "TS-123", ALL get updated to COMPLETED
+        // even if they don't share MBL or are missing MBL data.
+        if (shipmentRef) {
+          const allRefShipments = await storage.getAllCargoesFlowShipmentsByReference(shipmentRef);
+          if (allRefShipments && allRefShipments.length > 0) {
+            for (const refShipment of allRefShipments) {
+              // Update if status matches but needs refreshing, or if status is different
+              if (refShipment.id !== existing.id) {
+                await storage.updateCargoesFlowShipment(refShipment.id, {
+                  status: shipment.status || null,
+                  lastFetchedAt: new Date()
+                });
+              }
+            }
+            if (i < 3 && allRefShipments.length > 1) {
+              console.log(`[Cargoes Flow Poller] 🔗 Synced status for ${allRefShipments.length - 1} linked containers for ${shipmentRef}`);
+            }
+          }
+        }
+
         updatedCount++;
       } else {
         // Create new shipment

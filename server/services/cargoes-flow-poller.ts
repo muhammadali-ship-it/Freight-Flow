@@ -502,6 +502,13 @@ async function processAndStoreShipmentsWithStats(shipments: CargoesFlowShipmentD
       // If we found an existing shipment, update it directly to preserve its ID
       // Otherwise, use upsert to create a new one
       if (existing) {
+        // Protect COMPLETED status from being overwritten by API lag (ACTIVE)
+        let newStatus = shipment.status || null;
+        if (existing.status === 'COMPLETED' && newStatus && newStatus !== 'COMPLETED') {
+          console.log(`[Cargoes Flow Poller] 🛡️ Preventing revert of COMPLETED shipment ${shipmentRef} to ${newStatus}`);
+          newStatus = 'COMPLETED';
+        }
+
         // Update the existing shipment with merged data
         const updateData = {
           shipmentReference: shipmentRef,
@@ -517,7 +524,7 @@ async function processAndStoreShipmentsWithStats(shipments: CargoesFlowShipmentD
           eta,
           atd,
           ata,
-          status: shipment.status || null,
+          status: newStatus,
           carrier: carrierName,
           vesselName: shipment.vesselName || null,
           voyageNumber: shipment.voyageNumber || null,

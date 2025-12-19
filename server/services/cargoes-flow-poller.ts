@@ -1017,33 +1017,23 @@ export async function syncCompletedShipments() {
     let updatedCount = 0;
 
     if (completedShipments.length > 0) {
-      console.log(`[Cargoes Flow Poller] 💾 Processing ${completedShipments.length} completed shipments from API...`);
+      console.log(`[Cargoes Flow Poller] 💾 Processing ${completedShipments.length} completed containers from API...`);
 
-      // CRITICAL: Deduplicate by shipmentReference
-      // The Cargoes Flow API returns one result per container, so we get duplicates
-      // for shipments with multiple containers (same shipmentNumber, different containers)
-      const uniqueShipments = new Map<string, CargoesFlowShipmentData>();
-      for (const shipment of completedShipments) {
-        const ref = String(shipment.shipmentNumber || shipment.referenceNumber || '');
-        if (ref && !uniqueShipments.has(ref)) {
-          uniqueShipments.set(ref, shipment);
-        }
-      }
+      // NOTE: We do NOT deduplicate here because each API result represents 
+      // a different CONTAINER in the database (one row per container, not per shipment)
+      // Same shipmentNumber but different containerNumber = different database records
 
-      const deduplicatedShipments = Array.from(uniqueShipments.values());
-      console.log(`[Cargoes Flow Poller] 🔍 Deduplicated: ${completedShipments.length} API results -> ${deduplicatedShipments.length} unique shipments`);
-
-      // Log all unique status values found
-      const statusCounts = deduplicatedShipments.reduce((acc, s) => {
+      // Log status distribution
+      const statusCounts = completedShipments.reduce((acc, s) => {
         const status = s.status || 'NULL';
         acc[status] = (acc[status] || 0) + 1;
         return acc;
       }, {} as Record<string, number>);
       console.log(`[Cargoes Flow Poller] Status distribution:`, statusCounts);
-      console.log(`[Cargoes Flow Poller] Sample unique shipments:`, deduplicatedShipments.slice(0, 5).map(s => ({
+      console.log(`[Cargoes Flow Poller] Sample (first 3):`, completedShipments.slice(0, 3).map(s => ({
         ref: s.shipmentNumber,
-        status: s.status,
-        statusType: typeof s.status
+        container: s.containerNumber,
+        status: s.status
       })));
 
       const stats = await processAndStoreShipmentsWithStats(completedShipments);

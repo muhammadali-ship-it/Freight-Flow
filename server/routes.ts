@@ -123,6 +123,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Register debug route
   app.get("/api/debug/manager-check", debugManagerCheck);
 
+  app.post("/api/debug/cleanup-containers/:reference", async (req, res) => {
+    try {
+      const reference = req.params.reference;
+      await storage.cleanupDuplicateContainers(reference);
+      res.json({ message: `Successfully cleaned up containers for ${reference}` });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
 
   app.post("/api/shipments", async (req, res) => {
     try {

@@ -299,6 +299,7 @@ export interface IStorage {
   updateCargoesFlowShipment(id: string, shipment: Partial<InsertCargoesFlowShipment>): Promise<CargoesFlowShipment | undefined>;
   getTaiShipmentIdByMbl(mblNumber: string): Promise<string | null>;
   deleteCargoesFlowShipment(id: string): Promise<boolean>;
+  cleanupDuplicateContainers(shipmentReference: string): Promise<void>;
 
   getCargoesFlowShipmentUsers(shipmentId: string): Promise<CargoesFlowShipmentUser[]>;
   setCargoesFlowShipmentUsers(shipmentId: string, userIds: string[]): Promise<void>;
@@ -2011,24 +2012,31 @@ export class DbStorage implements IStorage {
           aggregatedRiskReasons: riskReasons,
         });
       } else {
-        // Add container to existing group
+        // Add container to existing group if not already present
         const group = grouped.get(mbl)!;
-        const rawData = shipment.rawData as any || {};
+        const normalizedContainer = shipment.containerNumber ? String(shipment.containerNumber).trim().toUpperCase() : null;
 
-        // Extract TMS reference from rawData.containers if available
-        const containersArray = rawData.containers || [];
-        const containerInfo = containersArray.find((c: any) => c.containerNumber === shipment.containerNumber);
-        const tmsReference = containerInfo?.tmsReference || null;
+        // Skip if this container number is already in the group (deduplicate)
+        const isDuplicate = normalizedContainer && group.allContainerNumbers.some((cn: string) => cn.trim().toUpperCase() === normalizedContainer);
 
-        group.containers.push({
-          containerNumber: shipment.containerNumber,
-          shipmentReference: shipment.shipmentReference,
-          tmsReference: tmsReference,
-          id: shipment.id,
-        });
-        group.containerCount++;
-        if (shipment.containerNumber) {
-          group.allContainerNumbers.push(shipment.containerNumber);
+        if (!isDuplicate) {
+          const rawData = shipment.rawData as any || {};
+
+          // Extract TMS reference from rawData.containers if available
+          const containersArray = rawData.containers || [];
+          const containerInfo = containersArray.find((c: any) => c.containerNumber === shipment.containerNumber);
+          const tmsReference = containerInfo?.tmsReference || null;
+
+          group.containers.push({
+            containerNumber: shipment.containerNumber,
+            shipmentReference: shipment.shipmentReference,
+            tmsReference: tmsReference,
+            id: shipment.id,
+          });
+          group.containerCount++;
+          if (shipment.containerNumber) {
+            group.allContainerNumbers.push(shipment.containerNumber);
+          }
         }
 
         // Update risk level to highest
@@ -2896,6 +2904,40 @@ export class DbStorage implements IStorage {
       .where(eq(cargoesFlowShipments.id, id))
       .returning();
     return result.length > 0;
+  }
+
+  async cleanupDuplicateContainers(shipmentReference: string): Promise<void> {
+    const results = await db.select()
+      .from(cargoesFlowShipments)
+      .where(eq(cargoesFlowShipments.shipmentReference, shipmentReference));
+
+    for (const shipment of results) {
+      const rawData = (shipment.rawData as any) || {};
+      const containers = rawData.containers || [];
+
+      if (Array.isArray(containers) && containers.length > 1) {
+        const uniqueContainers = [];
+        const seen = new Set<string>();
+
+        for (const container of containers) {
+          const normalizedNum = String(container.containerNumber || '').trim().toUpperCase();
+          if (normalizedNum && !seen.has(normalizedNum)) {
+            seen.add(normalizedNum);
+            uniqueContainers.push(container);
+          }
+        }
+
+        if (uniqueContainers.length < containers.length) {
+          console.log(`[Storage] Cleaning up ${containers.length - uniqueContainers.length} duplicate containers for shipment ${shipmentReference} (Record ${shipment.id})`);
+          await db.update(cargoesFlowShipments)
+            .set({
+              rawData: { ...rawData, containers: uniqueContainers },
+              updatedAt: new Date()
+            })
+            .where(eq(cargoesFlowShipments.id, shipment.id));
+        }
+      }
+    }
   }
 
   async getCargoesFlowShipmentUsers(shipmentId: string): Promise<CargoesFlowShipmentUser[]> {

@@ -148,8 +148,6 @@ export async function fetchCompletedShipment(shipmentReference: string): Promise
   try {
     const timestamp = Date.now();
 
-    // Try multiple strategies to find the completed shipment
-
     // Strategy 1: Search with status=COMPLETED
     let url = `${CARGOES_FLOW_API_URL}?shipmentType=INTERMODAL_SHIPMENT&status=COMPLETED&search=${encodeURIComponent(shipmentReference)}&_t=${timestamp}`;
     console.log(`[Cargoes Flow Poller] 🔍 Strategy 1: Fetching with status=COMPLETED: ${shipmentReference}`);
@@ -237,8 +235,7 @@ async function processAndStoreShipmentsWithStats(shipments: CargoesFlowShipmentD
           containerNumber: shipment.containerNumber
         });
       }
-      // Use shipmentNumber as the primary reference (convert to string if number)
-      // CRITICAL FIX: Use originalReference (search term) if available to ensure we match the record we looked for
+      // Use originalReference (search term) if available to ensure we match the record we looked for
       let shipmentRef = String(shipment.shipmentNumber || shipment.referenceNumber || '');
       if ((shipment as any).originalReference) {
         shipmentRef = (shipment as any).originalReference;
@@ -249,7 +246,6 @@ async function processAndStoreShipmentsWithStats(shipments: CargoesFlowShipmentD
         skippedCount++;
         continue;
       }
-
 
       // Extract carrier name from carrierScac if carrier is null
       const carrierName = shipment.carrier || shipment.carrierScac || null;
@@ -262,7 +258,6 @@ async function processAndStoreShipmentsWithStats(shipments: CargoesFlowShipmentD
       const eta = shipment.eta || shipment.promisedEta || extractEtaFromLegs(shipment.shipmentLegs);
       const atd = extractAtdFromEvents(shipment.shipmentEvents, originPort);
       const ata = extractAtaFromEvents(shipment.shipmentEvents, destinationPort);
-      const currentLocation = shipment.currentLocationName || shipment.currentLocation || null;
 
       // Look up TAI shipment ID, office, and salesRepNames by container number first, then by MBL
       let taiShipmentId: string | null = null;
@@ -279,12 +274,9 @@ async function processAndStoreShipmentsWithStats(shipments: CargoesFlowShipmentD
           office = containerPost.office;
           salesRepNames = containerPost.salesRepNames;
 
-          // Debug log for first few containers
           if (i < 3) {
             console.log(`[Cargoes Flow Poller] Found TMS reference for container ${shipment.containerNumber}: ${containerTmsReference}`);
           }
-        } else if (i < 3) {
-          console.log(`[Cargoes Flow Poller] No TMS reference found for container ${shipment.containerNumber}`);
         }
       }
 
@@ -295,10 +287,6 @@ async function processAndStoreShipmentsWithStats(shipments: CargoesFlowShipmentD
           taiShipmentId = cargoesFlowPost.taiShipmentId;
           office = cargoesFlowPost.office;
           salesRepNames = cargoesFlowPost.salesRepNames;
-
-          if (i < 3) {
-            console.log(`[Cargoes Flow Poller] Using MBL lookup for ${mblNumber}, found TAI ID: ${taiShipmentId}`);
-          }
         }
       }
 
@@ -307,9 +295,6 @@ async function processAndStoreShipmentsWithStats(shipments: CargoesFlowShipmentD
         const manualShipment = await storage.getShipmentByMbl(mblNumber);
         if (manualShipment && manualShipment.officeName) {
           office = manualShipment.officeName;
-          if (i < 3) {
-            console.log(`[Cargoes Flow Poller] Found Office from Manual Shipment MBL ${mblNumber}: ${office}`);
-          }
         }
       }
 
@@ -320,63 +305,30 @@ async function processAndStoreShipmentsWithStats(shipments: CargoesFlowShipmentD
         else if (customer.officeName) office = customer.officeName;
       }
 
-      // Get existing shipment to preserve manually added data (rail, terminal info)
-      // Try multiple lookup strategies to find the correct shipment
+      // Try multiple lookup strategies to find the correct existing shipment
       let existing = await storage.getCargoesFlowShipmentByReference(shipmentRef);
-
-      // If not found by reference, try by container number
       if (!existing && shipment.containerNumber) {
         existing = await storage.getCargoesFlowShipmentByContainer(shipment.containerNumber);
       }
 
-
-      // Debug: Log first few shipments to see what's happening
       if (i < 3) {
         console.log(`[Cargoes Flow Poller] Shipment ${shipmentRef}: existing=${!!existing ? 'YES' : 'NO'}, container=${shipment.containerNumber}`);
       }
 
-
-      // For MBL-grouped shipments, collect ALL shipments with same MBL to merge their data
+      // Collect data from members of same MBL group for merging
       let allMblShipments: any[] = [];
       if (mblNumber) {
         allMblShipments = await storage.getAllCargoesFlowShipmentsByMbl(mblNumber);
-        // If we haven't found existing yet, use one from MBL group
-        if (!existing) {
-          // Prefer shipment with same container number, otherwise use first one
-          if (shipment.containerNumber) {
-            existing = allMblShipments.find(s => s.containerNumber === shipment.containerNumber) || allMblShipments[0];
-          } else {
-            existing = allMblShipments[0];
-          }
-        }
-
-        // Debug: Log if we found MBL shipments with manual data
-        if (allMblShipments.length > 0) {
-          const hasTerminalData = allMblShipments.some(s => {
-            const rd = (s.rawData as any) || {};
-            return rd.terminalName || rd.terminalPort || rd.terminalFullOut;
-          });
-          const hasRailData = allMblShipments.some(s => {
-            const rd = (s.rawData as any) || {};
-            return rd.containers && rd.containers.some((c: any) => c.rawData?.rail);
-          });
-          if (hasTerminalData || hasRailData) {
-            console.log(`[Poller] MBL ${mblNumber}: Found ${allMblShipments.length} shipments, terminal=${hasTerminalData}, rail=${hasRailData}`);
-          }
-        }
       }
 
       // Merge rawData: preserve manually added fields (terminal, rail) from existing, update with new API data
-      let mergedRawData: any = shipment; // Start with fresh API data
+      let mergedRawData: any = { ...shipment };
 
-      // Collect terminal and rail data from ALL shipments with same MBL (not just one)
       if (mblNumber && allMblShipments.length > 0) {
-        // Merge terminal info from all MBL shipments (terminal info is usually at shipment level)
-        // CRITICAL: Always preserve manually added terminal data (prioritize existing over API)
+        // Collect terminal and rail data from ALL shipments with same MBL
         for (const mblShipment of allMblShipments) {
           if (mblShipment.rawData) {
             const mblRawData = mblShipment.rawData as any;
-            // Preserve terminal info from any shipment that has it - ALWAYS keep manual data
             if (mblRawData.terminalName) mergedRawData.terminalName = mblRawData.terminalName;
             if (mblRawData.terminalPort) mergedRawData.terminalPort = mblRawData.terminalPort;
             if (mblRawData.terminalYardLocation) mergedRawData.terminalYardLocation = mblRawData.terminalYardLocation;
@@ -394,69 +346,60 @@ async function processAndStoreShipmentsWithStats(shipments: CargoesFlowShipmentD
           }
         }
 
-        // Collect all containers with rail data from ALL MBL shipments
+        // Aggregate containers from all related records
         const allExistingContainers: any[] = [];
         for (const mblShipment of allMblShipments) {
-          if (mblShipment.rawData) {
-            const mblRawData = mblShipment.rawData as any;
-            if (mblRawData.containers && Array.isArray(mblRawData.containers)) {
-              allExistingContainers.push(...mblRawData.containers);
-            }
+          if (mblShipment.rawData?.containers && Array.isArray(mblShipment.rawData.containers)) {
+            allExistingContainers.push(...mblShipment.rawData.containers);
           }
         }
 
         if (allExistingContainers.length > 0) {
-          // Create a map of existing containers by containerNumber (deduplicate, keep latest)
           const containersMap = new Map<string, any>();
           allExistingContainers.forEach((c: any) => {
             if (c.containerNumber) {
-              // If container already exists, merge rawData (rail) if present
-              const existing = containersMap.get(c.containerNumber);
-              if (existing) {
-                containersMap.set(c.containerNumber, {
-                  ...existing,
+              const normalizedNum = String(c.containerNumber).trim().toUpperCase();
+              const existingMapping = containersMap.get(normalizedNum);
+              if (existingMapping) {
+                containersMap.set(normalizedNum, {
+                  ...existingMapping,
                   ...c,
-                  rawData: c.rawData || existing.rawData, // Prefer rail data from current container
+                  rawData: c.rawData || existingMapping.rawData,
                 });
               } else {
-                containersMap.set(c.containerNumber, c);
+                containersMap.set(normalizedNum, c);
               }
             }
           });
 
-          // API might return containers array or just a single containerNumber
           const apiContainerNumber = shipment.containerNumber;
           const apiContainers = shipment.containers || (apiContainerNumber ? [{ containerNumber: apiContainerNumber }] : []);
-
-          // Merge: preserve existing containers with rail data, update with API data
           const mergedContainers: any[] = [];
 
-          // First, add all existing containers (preserving their rail data)
           containersMap.forEach((container) => {
             mergedContainers.push(container);
           });
 
-          // Then, update with API data if containerNumber matches
           apiContainers.forEach((apiContainer: any) => {
+            const apiNormalizedNum = apiContainer.containerNumber ? String(apiContainer.containerNumber).trim().toUpperCase() : '';
+            if (!apiNormalizedNum) return;
+
             const existingIndex = mergedContainers.findIndex((c: any) =>
-              c.containerNumber === apiContainer.containerNumber
+              (c.containerNumber ? String(c.containerNumber).trim().toUpperCase() : '') === apiNormalizedNum
             );
 
             if (existingIndex >= 0) {
-              // Container exists - update with API data but preserve rawData (rail)
               const existingRawData = mergedContainers[existingIndex].rawData;
               mergedContainers[existingIndex] = {
-                ...mergedContainers[existingIndex], // Keep existing data including rawData
-                ...apiContainer, // Update with API data
-                rawData: existingRawData || mergedContainers[existingIndex].rawData || apiContainer.rawData, // Always preserve existing rail data
+                ...mergedContainers[existingIndex],
+                ...apiContainer,
+                rawData: existingRawData || mergedContainers[existingIndex].rawData || apiContainer.rawData,
               };
-            } else if (apiContainer.containerNumber) {
-              // New container from API - add it
+            } else {
               mergedContainers.push(apiContainer);
             }
           });
 
-          // Look up TMS reference for each container in the merged list
           for (const container of mergedContainers) {
             if (container.containerNumber && !container.tmsReference) {
               const containerPost = await storage.getCargoesFlowPostByContainer(container.containerNumber);
@@ -465,44 +408,45 @@ async function processAndStoreShipmentsWithStats(shipments: CargoesFlowShipmentD
               }
             }
           }
-
           mergedRawData.containers = mergedContainers;
         } else if (shipment.containerNumber) {
-          // No existing containers array, but we have a containerNumber from API
           mergedRawData.containers = [{
             containerNumber: shipment.containerNumber,
             tmsReference: containerTmsReference
           }];
         }
       } else if (existing && existing.rawData) {
-        // No MBL grouping, just use the single existing shipment's data
         const existingRawData = existing.rawData as any;
-
-        // Preserve manually added terminal info
         if (existingRawData.terminalName) mergedRawData.terminalName = existingRawData.terminalName;
         if (existingRawData.terminalPort) mergedRawData.terminalPort = existingRawData.terminalPort;
-        if (existingRawData.terminalYardLocation) mergedRawData.terminalYardLocation = existingRawData.terminalYardLocation;
-        if (existingRawData.terminalPickupChassis) mergedRawData.terminalPickupChassis = existingRawData.terminalPickupChassis;
-        if (existingRawData.terminalFullOut) mergedRawData.terminalFullOut = existingRawData.terminalFullOut;
-        if (existingRawData.terminalOnRail) mergedRawData.terminalOnRail = existingRawData.terminalOnRail;
-        if (existingRawData.terminalPickupAppointment) mergedRawData.terminalPickupAppointment = existingRawData.terminalPickupAppointment;
-        if (existingRawData.terminalEmptyReturned) mergedRawData.terminalEmptyReturned = existingRawData.terminalEmptyReturned;
         if (existingRawData.terminalAvailableForPickup !== undefined) mergedRawData.terminalAvailableForPickup = existingRawData.terminalAvailableForPickup;
-        if (existingRawData.demurrage) mergedRawData.demurrage = existingRawData.demurrage;
-        if (existingRawData.detention) mergedRawData.detention = existingRawData.detention;
-        if (existingRawData.lastFreeDay) mergedRawData.lastFreeDay = existingRawData.lastFreeDay;
-        if (existingRawData.terminalLastFreeDay) mergedRawData.terminalLastFreeDay = existingRawData.terminalLastFreeDay;
-        if (existingRawData.terminalDemurrage) mergedRawData.terminalDemurrage = existingRawData.terminalDemurrage;
 
-        // Preserve manually added containers array with rail data, but update TMS reference
         if (existingRawData.containers && Array.isArray(existingRawData.containers)) {
-          mergedRawData.containers = existingRawData.containers.map((c: any) => {
-            // If this is the current container, update its TMS reference
-            if (c.containerNumber === shipment.containerNumber && containerTmsReference) {
+          const containersMap = new Map<string, any>();
+          existingRawData.containers.forEach((c: any) => {
+            if (c.containerNumber) {
+              const normalizedNum = String(c.containerNumber).trim().toUpperCase();
+              if (!containersMap.has(normalizedNum)) containersMap.set(normalizedNum, c);
+            }
+          });
+
+          const apiContainerNumber = shipment.containerNumber;
+          const apiNormalizedNum = apiContainerNumber ? String(apiContainerNumber).trim().toUpperCase() : null;
+
+          mergedRawData.containers = Array.from(containersMap.values()).map((c: any) => {
+            const cNormalizedNum = String(c.containerNumber || '').trim().toUpperCase();
+            if (apiNormalizedNum && cNormalizedNum === apiNormalizedNum && containerTmsReference) {
               return { ...c, tmsReference: containerTmsReference };
             }
             return c;
           });
+
+          if (apiNormalizedNum && !containersMap.has(apiNormalizedNum)) {
+            mergedRawData.containers.push({
+              containerNumber: apiContainerNumber,
+              tmsReference: containerTmsReference
+            });
+          }
         } else if (shipment.containerNumber) {
           mergedRawData.containers = [{
             containerNumber: shipment.containerNumber,
@@ -511,17 +455,13 @@ async function processAndStoreShipmentsWithStats(shipments: CargoesFlowShipmentD
         }
       }
 
-      // If we found an existing shipment, update it directly to preserve its ID
-      // Otherwise, use upsert to create a new one
       if (existing) {
-        // Protect COMPLETED status from being overwritten by API lag (ACTIVE)
         let newStatus = shipment.status || null;
         if (existing.status === 'COMPLETED' && newStatus && newStatus !== 'COMPLETED') {
           console.log(`[Cargoes Flow Poller] 🛡️ Preventing revert of COMPLETED shipment ${shipmentRef} to ${newStatus}`);
           newStatus = 'COMPLETED';
         }
 
-        // Update the existing shipment with merged data
         const updateData = {
           shipmentReference: shipmentRef,
           taiShipmentId,
@@ -547,45 +487,23 @@ async function processAndStoreShipmentsWithStats(shipments: CargoesFlowShipmentD
           lastFetchedAt: new Date(),
         };
 
-        if (i < 3) {
-          console.log(`[Cargoes Flow Poller] Updating ${shipmentRef} with status: ${updateData.status}`);
-        }
-
         await storage.updateCargoesFlowShipment(existing.id, updateData);
 
-        // Verify the update
-        if (i < 3) {
-          const verifyUpdate = await storage.getCargoesFlowShipmentById(existing.id);
-          console.log(`[Cargoes Flow Poller] Verified ${shipmentRef} status after update: ${verifyUpdate?.status}`);
-        }
-
-        // For MBL-grouped shipments, also update all other shipments with same MBL
-        // to ensure terminal and rail data is consistent across all records
+        // Sync other MBL shipments for data consistency
         if (mblNumber && allMblShipments.length > 1) {
           for (const mblShipment of allMblShipments) {
             if (mblShipment.id !== existing.id) {
-              // Update terminal info and containers in other MBL shipments
               const otherMblRawData = (mblShipment.rawData as any) || {};
               const otherMblMergedRawData = {
                 ...otherMblRawData,
-                // Update terminal info from merged data (terminal is shared across MBL)
                 terminalName: mergedRawData.terminalName || otherMblRawData.terminalName,
                 terminalPort: mergedRawData.terminalPort || otherMblRawData.terminalPort,
-                terminalYardLocation: mergedRawData.terminalYardLocation || otherMblRawData.terminalYardLocation,
-                terminalPickupChassis: mergedRawData.terminalPickupChassis || otherMblRawData.terminalPickupChassis,
-                terminalFullOut: mergedRawData.terminalFullOut || otherMblRawData.terminalFullOut,
-                terminalPickupAppointment: mergedRawData.terminalPickupAppointment || otherMblRawData.terminalPickupAppointment,
-                terminalEmptyReturned: mergedRawData.terminalEmptyReturned || otherMblRawData.terminalEmptyReturned,
                 terminalAvailableForPickup: mergedRawData.terminalAvailableForPickup !== undefined ? mergedRawData.terminalAvailableForPickup : otherMblRawData.terminalAvailableForPickup,
-                demurrage: mergedRawData.demurrage || otherMblRawData.demurrage,
-                detention: mergedRawData.detention || otherMblRawData.detention,
-                lastFreeDay: mergedRawData.lastFreeDay || otherMblRawData.lastFreeDay,
-                // Use merged containers array (includes all containers with rail data from all MBL shipments)
                 containers: mergedRawData.containers || otherMblRawData.containers,
               };
 
               await storage.updateCargoesFlowShipment(mblShipment.id, {
-                status: shipment.status || null, // Also update status for all MBL shipments
+                status: shipment.status || null,
                 rawData: otherMblMergedRawData,
                 lastFetchedAt: new Date(),
               });
@@ -593,18 +511,11 @@ async function processAndStoreShipmentsWithStats(shipments: CargoesFlowShipmentD
           }
         }
 
-        if (i < 3) {
-          console.log(`[Cargoes Flow Poller] ✅ Updated shipment ${shipmentRef}`);
-        }
-
-        // CRITICAL FIX: Also update ALL other shipments with the same shipmentReference
-        // This ensures if we have multiple containers/records for "TS-123", ALL get updated to COMPLETED
-        // even if they don't share MBL or are missing MBL data.
+        // Sync linked containers by reference
         if (shipmentRef) {
           const allRefShipments = await storage.getAllCargoesFlowShipmentsByReference(shipmentRef);
           if (allRefShipments && allRefShipments.length > 0) {
             for (const refShipment of allRefShipments) {
-              // Update if status matches but needs refreshing, or if status is different
               if (refShipment.id !== existing.id) {
                 await storage.updateCargoesFlowShipment(refShipment.id, {
                   status: shipment.status || null,
@@ -612,18 +523,11 @@ async function processAndStoreShipmentsWithStats(shipments: CargoesFlowShipmentD
                 });
               }
             }
-            if (i < 3 && allRefShipments.length > 1) {
-              console.log(`[Cargoes Flow Poller] 🔗 Synced status for ${allRefShipments.length - 1} linked containers for ${shipmentRef}`);
-            }
           }
         }
-
         updatedCount++;
       } else {
-        // Create new shipment
-        if (i < 3) {
-          console.log(`[Cargoes Flow Poller] ➕ Creating new shipment ${shipmentRef}`);
-        }
+        // Create new
         await storage.upsertCargoesFlowShipment({
           shipmentReference: shipmentRef,
           taiShipmentId,
@@ -647,13 +551,10 @@ async function processAndStoreShipmentsWithStats(shipments: CargoesFlowShipmentD
           salesRepNames,
           rawData: mergedRawData,
         });
-        if (i < 3) {
-          console.log(`[Cargoes Flow Poller] ✅ Created new shipment ${shipmentRef}`);
-        }
         newCount++;
       }
 
-      // Extract and store vessel information
+      // Vessel info extraction
       try {
         const vesselInfo = extractLastVesselForDestination(shipment, destinationPort);
         if (vesselInfo) {
@@ -664,68 +565,39 @@ async function processAndStoreShipmentsWithStats(shipments: CargoesFlowShipmentD
             eta: vesselInfo.eta,
             atd: vesselInfo.atd,
           });
-          if (i < 3) {
-            console.log(`[Cargoes Flow Poller] 🚢 Upserted vessel: ${vesselInfo.vesselName}`);
-          }
         }
       } catch (vesselError: any) {
-        console.error(`[Cargoes Flow Poller] ⚠️ Error upserting vessel for shipment ${shipmentRef}:`, vesselError.message);
+        // Error extracting vessel is non-fatal
       }
     } catch (error: any) {
-      console.error(`[Cargoes Flow Poller] ❌ Error processing shipment ${shipment.shipmentNumber || shipment.referenceNumber}:`, error.message);
-      if (i < 3) {
-        console.error(`[Cargoes Flow Poller] Error details:`, error);
-      }
+      console.error(`[Cargoes Flow Poller] ❌ Error processing shipment:`, error.message);
       errorCount++;
     }
   }
 
   console.log(`[Cargoes Flow Poller] 📈 Final stats: ${newCount} new, ${updatedCount} updated, ${errorCount} errors, ${skippedCount} skipped`);
-  console.log(`[Cargoes Flow Poller] 📊 Total processed: ${newCount + updatedCount} out of ${shipments.length} shipments`);
   return { newCount, updatedCount, errorCount };
 }
 
 async function pollShipments() {
-  // Prevent concurrent polls
-  if (isPolling) {
-    console.log('[Cargoes Flow Poller] ⏭️ Skipping - previous poll still running');
-    return null;
-  }
-
-  console.log('[Cargoes Flow Poller] 🔒 Setting isPolling = true');
+  if (isPolling) return null;
   isPolling = true;
   lastPollStartTime = Date.now();
   const startTime = lastPollStartTime;
   let syncLog;
 
   try {
-    console.log('[Cargoes Flow Poller] 🚀 Starting sync...');
     const shipments = await fetchShipmentsFromCargoesFlow();
-
-    // If fetch failed (returned null), abort sync to prevent data corruption
-    if (shipments === null) {
-      throw new Error('Failed to fetch active shipments from Cargoes Flow');
-    }
-
-    console.log(`[Cargoes Flow Poller] 📦 Fetched ${shipments.length} shipments from API`);
+    if (shipments === null) throw new Error('Failed to fetch shipments');
 
     let newCount = 0;
     let updatedCount = 0;
 
     if (shipments.length > 0) {
-      console.log('[Cargoes Flow Poller] 💾 Processing and storing shipments...');
       const stats = await processAndStoreShipmentsWithStats(shipments);
       newCount = stats.newCount;
       updatedCount = stats.updatedCount;
-      console.log(`[Cargoes Flow Poller] 📊 Processing complete: ${newCount} new, ${updatedCount} updated`);
-    } else {
-      console.log('[Cargoes Flow Poller] ⚠️ No shipments received from API');
     }
-
-    // --- Completed shipments check is now in a separate function ---
-    // See syncCompletedShipments() function below
-    // This keeps the main sync fast and prevents timeouts
-    // -------------------------------------
 
     const syncDuration = Date.now() - startTime;
     syncLog = await storage.createCargoesFlowSyncLog({
@@ -734,25 +606,15 @@ async function pollShipments() {
       shipmentsCreated: newCount,
       shipmentsUpdated: updatedCount,
       syncDurationMs: syncDuration,
-      metadata: {
-        totalFetched: shipments.length,
-        timestamp: new Date().toISOString()
-      },
+      metadata: { totalFetched: shipments.length, timestamp: new Date().toISOString() },
     });
 
-    console.log(`[Cargoes Flow Poller] ✅ Sync: ${newCount} new, ${updatedCount} updated`);
-
-    // Run risk assessment after successful sync
     try {
       const riskService = new CargoesFlowRiskAssessmentService(storage);
       await riskService.assessAllShipments();
-    } catch (riskError: any) {
-      console.error('[Cargoes Flow Poller] Risk assessment failed:', riskError.message);
-      // Don't fail the entire sync if risk assessment fails
-    }
+    } catch (e) { }
   } catch (error: any) {
-    console.error('[Cargoes Flow Poller] Poll cycle failed:', error.message);
-
+    console.error('[Cargoes Flow Poller] Poll failed:', error.message);
     const syncDuration = Date.now() - startTime;
     syncLog = await storage.createCargoesFlowSyncLog({
       status: 'error',
@@ -761,32 +623,17 @@ async function pollShipments() {
       shipmentsUpdated: 0,
       errorMessage: error.message,
       syncDurationMs: syncDuration,
-      metadata: {
-        error: error.message,
-        timestamp: new Date().toISOString()
-      },
+      metadata: { error: error.message, timestamp: new Date().toISOString() },
     });
   } finally {
-    console.log('[Cargoes Flow Poller] 🔓 Setting isPolling = false');
-    isPolling = false; // Release the lock
+    isPolling = false;
   }
-
-  console.log('[Cargoes Flow Poller] Poll cycle complete');
   return syncLog;
 }
 
 export function startPolling() {
-  // Stop any existing interval first (important for HMR in development)
-  if (pollingInterval) {
-    console.log('[Cargoes Flow Poller] Stopping existing poller before restart');
-    clearInterval(pollingInterval);
-    pollingInterval = null;
-  }
-
-  // Run immediately on startup
+  if (pollingInterval) clearInterval(pollingInterval);
   pollShipments();
-
-  // Then poll every 5 minutes
   pollingInterval = setInterval(pollShipments, POLL_INTERVAL_MS);
 }
 
@@ -797,173 +644,91 @@ export function stopPolling() {
   }
 }
 
-// Helper function to extract vessel information for the last segment matching destination
 function extractLastVesselForDestination(shipment: any, destination: string | null): { vesselName: string; tripNumber: string | null; eta: string | null; atd: string | null } | null {
-  if (!shipment.shipmentLegs?.portToPort?.segments || !destination) {
-    return null;
-  }
-
+  if (!shipment.shipmentLegs?.portToPort?.segments || !destination) return null;
   const segments = shipment.shipmentLegs.portToPort.segments;
-
-  // Find the last vessel segment that goes to the destination
   for (let i = segments.length - 1; i >= 0; i--) {
     const segment = segments[i];
-    if (segment.transportMode === 'VESSEL' &&
-      segment.destinationPortCode &&
-      segment.transportName) {
-      // Check if this segment's destination matches the shipment destination
+    if (segment.transportMode === 'VESSEL' && segment.transportName) {
       const segmentDest = segment.destination || segment.destinationPortCode;
       if (segmentDest && segmentDest.toLowerCase().includes(destination.toLowerCase())) {
-        return {
-          vesselName: segment.transportName,
-          tripNumber: segment.tripNumber || null,
-          eta: segment.eta || null,
-          atd: segment.atd || null,
-        };
+        return { vesselName: segment.transportName, tripNumber: segment.tripNumber || null, eta: segment.eta || null, atd: segment.atd || null };
       }
     }
   }
-
   return null;
 }
 
-// Helper functions to extract actual times from shipment events
 function extractAtdFromEvents(shipmentEvents: any[], originPort: string | null): string | null {
   if (!shipmentEvents || !Array.isArray(shipmentEvents)) return null;
-
-  // Look for vessel departure events with actual time at origin port
   for (const event of shipmentEvents) {
     if ((event.code === 'vesselDeparture' || event.code === 'vesselDepartureWithContainer') && event.actualTime) {
-      // Check if this is at the origin port
       if (originPort && event.location) {
-        const isAtOrigin =
-          event.location.toLowerCase().includes(originPort.toLowerCase()) ||
-          originPort.toLowerCase().includes(event.location.toLowerCase()) ||
-          event.locationRole === 'originPort';
-
-        if (isAtOrigin) {
-          return event.actualTime;
-        }
-      } else {
-        // If no origin port specified, return first vessel departure actual time
-        return event.actualTime;
-      }
+        if (event.location.toLowerCase().includes(originPort.toLowerCase()) || originPort.toLowerCase().includes(event.location.toLowerCase()) || event.locationRole === 'originPort') return event.actualTime;
+      } else return event.actualTime;
     }
   }
-
   return null;
 }
 
 function extractAtaFromEvents(shipmentEvents: any[], destinationPort: string | null): string | null {
   if (!shipmentEvents || !Array.isArray(shipmentEvents)) return null;
-
-  // Look for vessel arrival events with actual time at destination port
   for (const event of shipmentEvents) {
     if ((event.code === 'vesselArrival' || event.code === 'vesselArrivalWithContainer' || event.code === 'dischargeFromVessel') && event.actualTime) {
-      // Check if this is at the destination port
       if (destinationPort && event.location) {
-        const isAtDestination =
-          event.location.toLowerCase().includes(destinationPort.toLowerCase()) ||
-          destinationPort.toLowerCase().includes(event.location.toLowerCase()) ||
-          event.locationRole === 'destinationPort';
-
-        if (isAtDestination) {
-          return event.actualTime;
-        }
+        if (event.location.toLowerCase().includes(destinationPort.toLowerCase()) || destinationPort.toLowerCase().includes(event.location.toLowerCase()) || event.locationRole === 'destinationPort') return event.actualTime;
       }
     }
   }
-
   return null;
 }
 
-// Helper functions to extract data from shipmentLegs
 function extractOriginFromLegs(shipmentLegs: any): string | null {
   if (!shipmentLegs) return null;
-
-  // Check portToPort legs (INTERMODAL)
   if (shipmentLegs.portToPort?.firstPort) return shipmentLegs.portToPort.firstPort;
   if (shipmentLegs.portToPort?.loadingPort) return shipmentLegs.portToPort.loadingPort;
-
-  // Check road legs (LTL/ROAD)
   if (shipmentLegs.road?.origin) return shipmentLegs.road.origin;
-
   return null;
 }
 
 function extractDestinationFromLegs(shipmentLegs: any): string | null {
   if (!shipmentLegs) return null;
-
-  // Check portToPort legs (INTERMODAL)
   if (shipmentLegs.portToPort?.lastPort) return shipmentLegs.portToPort.lastPort;
   if (shipmentLegs.portToPort?.dischargePort) return shipmentLegs.portToPort.dischargePort;
-
-  // Check road legs (LTL/ROAD)
   if (shipmentLegs.road?.destination) return shipmentLegs.road.destination;
-
   return null;
 }
 
 function extractEtdFromLegs(shipmentLegs: any): string | null {
   if (!shipmentLegs) return null;
-
-  // Check portToPort legs (INTERMODAL)
   if (shipmentLegs.portToPort?.firstPortEtd) return shipmentLegs.portToPort.firstPortEtd;
   if (shipmentLegs.portToPort?.firstPortAtd) return shipmentLegs.portToPort.firstPortAtd;
-
-  // Check road legs (LTL/ROAD)
   if (shipmentLegs.road?.etd) return shipmentLegs.road.etd;
-  if (shipmentLegs.road?.atd) return shipmentLegs.road.atd;
-
   return null;
 }
 
 function extractEtaFromLegs(shipmentLegs: any): string | null {
   if (!shipmentLegs) return null;
-
-  // Check portToPort legs (INTERMODAL)
   if (shipmentLegs.portToPort?.lastPortEta) return shipmentLegs.portToPort.lastPortEta;
   if (shipmentLegs.portToPort?.lastPortAta) return shipmentLegs.portToPort.lastPortAta;
-
-  // Check road legs (LTL/ROAD)
   if (shipmentLegs.road?.eta) return shipmentLegs.road.eta;
-  if (shipmentLegs.road?.ata) return shipmentLegs.road.ata;
-
   return null;
 }
 
-// Manual trigger for testing
 export async function triggerManualPoll() {
-  console.log('[Cargoes Flow Poller] Manual poll triggered');
-  console.log(`[Cargoes Flow Poller] Current isPolling state: ${isPolling}`);
-
-  // Check for stale lock
-  if (isPolling && (Date.now() - lastPollStartTime > POLL_TIMEOUT_MS)) {
-    console.log(`[Cargoes Flow Poller] ⚠️ Found stale lock (active for > ${(POLL_TIMEOUT_MS / 60000).toFixed(1)}m). Forcing reset.`);
-    isPolling = false;
-  }
-
-  const syncLog = await pollShipments();
-  return syncLog;
+  if (isPolling && (Date.now() - lastPollStartTime > POLL_TIMEOUT_MS)) isPolling = false;
+  return await pollShipments();
 }
 
-// Debug function to reset polling state
 export function resetPollingState() {
-  console.log('[Cargoes Flow Poller] 🔄 Manually resetting isPolling to false');
   isPolling = false;
 }
 
-// Separate function to sync completed shipments
-// This runs independently from the main active shipments sync to avoid timeouts
 export async function syncCompletedShipments() {
   console.log('[Cargoes Flow Poller] 🔍 Starting completed shipments sync...');
   const startTime = Date.now();
 
   try {
-    // First, fetch all active shipments to know which ones are still active
-    console.log('[Cargoes Flow Poller] Step 1: Fetching active shipments from API...');
-
-    // Add timeout to prevent hanging
     const fetchTimeout = new Promise<null>((_, reject) => {
       setTimeout(() => reject(new Error('Fetch active shipments timeout after 2 minutes')), 120000);
     });
@@ -973,212 +738,76 @@ export async function syncCompletedShipments() {
       fetchTimeout
     ]);
 
-    if (activeShipments === null) {
-      throw new Error('Failed to fetch active shipments list');
-    }
+    if (activeShipments === null) throw new Error('Failed to fetch active shipments list');
 
-    console.log('[Cargoes Flow Poller] Successfully fetched active shipments from API');
-
-    // Collect IDs of all currently active shipments
     const activeShipmentRefs = activeShipments
       .map(s => String(s.shipmentNumber || s.referenceNumber || ''))
       .filter(id => id !== '');
 
-    console.log(`[Cargoes Flow Poller] Found ${activeShipmentRefs.length} active shipments`);
-
-    // Find shipments in our DB that are NOT in the active list
-    console.log('[Cargoes Flow Poller] Step 2: Querying database for missing shipments...');
     const missingShipments = await storage.findMissingShipmentsFromList(activeShipmentRefs);
-    console.log(`[Cargoes Flow Poller] Database query completed. Found ${missingShipments.length} potential completed shipments.`);
+    if (missingShipments.length === 0) return await storage.createCargoesFlowSyncLog({ status: 'success', shipmentsProcessed: 0, shipmentsCreated: 0, shipmentsUpdated: 0, syncDurationMs: Date.now() - startTime, metadata: { type: 'completed_sync', message: 'No completed shipments found', timestamp: new Date().toISOString() } });
 
-    if (missingShipments.length === 0) {
-      console.log('[Cargoes Flow Poller] ✅ No missing shipments found. All shipments are accounted for.');
-      const syncDuration = Date.now() - startTime;
-      return await storage.createCargoesFlowSyncLog({
-        status: 'success',
-        shipmentsProcessed: 0,
-        shipmentsCreated: 0,
-        shipmentsUpdated: 0,
-        syncDurationMs: syncDuration,
-        metadata: {
-          type: 'completed_sync',
-          message: 'No completed shipments found',
-          timestamp: new Date().toISOString()
-        },
-      });
-    }
-
-    console.log(`[Cargoes Flow Poller] Found ${missingShipments.length} potential completed shipments. Fetching latest data from API...`);
-
-    const completedShipments: CargoesFlowShipmentData[] = [];
-    let fetchErrors = 0;
-
-    // Process in batches with concurrency limit to avoid overwhelming the API
-    const BATCH_SIZE = 10; // Process 10 shipments concurrently
-    const MAX_SHIPMENTS = 50; // Limit to 50 shipments per sync to prevent timeouts
-
-    // CRITICAL: Deduplicate by shipmentReference BEFORE processing
-    // The database has one row per container, so multiple containers with the same
-    // shipmentReference appear as separate "missing" entries. We need to deduplicate
-    // BEFORE fetching to avoid fetching the same shipment multiple times.
     const uniqueMissingMap = new Map<string, typeof missingShipments[0]>();
     for (const missing of missingShipments) {
-      if (missing.shipmentReference && !uniqueMissingMap.has(missing.shipmentReference)) {
-        uniqueMissingMap.set(missing.shipmentReference, missing);
-      }
+      if (missing.shipmentReference && !uniqueMissingMap.has(missing.shipmentReference)) uniqueMissingMap.set(missing.shipmentReference, missing);
     }
     const uniqueMissingShipments = Array.from(uniqueMissingMap.values());
 
-    console.log(`[Cargoes Flow Poller] 🔍 Deduplicated missing shipments: ${missingShipments.length} containers -> ${uniqueMissingShipments.length} unique shipment references`);
-
-    // RANDOMIZE the list to avoid getting stuck on the same shipments if they fail to update,
-    // and to process a variety of shipments across runs (handling the multiple-containers perception issue).
     for (let i = uniqueMissingShipments.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [uniqueMissingShipments[i], uniqueMissingShipments[j]] = [uniqueMissingShipments[j], uniqueMissingShipments[i]];
     }
 
-    // Process top 50 from the randomized list
-    // We revert to a single batch of 50 to ensure we simply NEVER timeout on Vercel.
-    // Since the list is randomized, repeated runs will statistically cover all shipments.
+    const MAX_SHIPMENTS = 50;
     const shipmentsToProcess = uniqueMissingShipments.slice(0, MAX_SHIPMENTS);
+    const BATCH_SIZE = 10;
+    const completedShipments: CargoesFlowShipmentData[] = [];
+    let fetchErrors = 0;
 
-    console.log(`[Cargoes Flow Poller] 🎲 Processing 50 RANDOM unique shipments out of ${uniqueMissingShipments.length} remaining...`);
-
-    // Process in sub-batches of 10
     for (let i = 0; i < shipmentsToProcess.length; i += BATCH_SIZE) {
       const batch = shipmentsToProcess.slice(i, i + BATCH_SIZE);
-      console.log(`[Cargoes Flow Poller] Processing batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(shipmentsToProcess.length / BATCH_SIZE)} (${batch.length} shipments)`);
-
-      // Fetch all shipments in this batch concurrently
       const batchPromises = batch.map(async (missing) => {
         try {
-          const completedData = await fetchCompletedShipment(missing.shipmentReference);
-          return completedData;
+          return await fetchCompletedShipment(missing.shipmentReference);
         } catch (error: any) {
-          console.error(`[Cargoes Flow Poller] Error fetching completed shipment ${missing.shipmentReference}:`, error.message);
           return null;
         }
       });
 
       const batchResults = await Promise.all(batchPromises);
-
-      // Add successful results to completedShipments
       for (const result of batchResults) {
-        if (result) {
-          completedShipments.push(result);
-        } else {
-          fetchErrors++;
-        }
+        if (result) completedShipments.push(result);
+        else fetchErrors++;
       }
-
-      console.log(`[Cargoes Flow Poller] Batch complete. Total verified: ${completedShipments.length}, Not found: ${fetchErrors}`);
-    }
-
-    if (uniqueMissingShipments.length > MAX_SHIPMENTS) {
-      console.log(`[Cargoes Flow Poller] ⚠️ ${uniqueMissingShipments.length - MAX_SHIPMENTS} unique shipments remaining. Run sync again to process another random batch.`);
     }
 
     let newCount = 0;
     let updatedCount = 0;
 
     if (completedShipments.length > 0) {
-      console.log(`[Cargoes Flow Poller] 💾 Processing ${completedShipments.length} completed containers from API...`);
-
-      // NOTE: We do NOT deduplicate here because each API result represents 
-      // a different CONTAINER in the database (one row per container, not per shipment)
-      // Same shipmentNumber but different containerNumber = different database records
-
-      // Log status distribution
-      const statusCounts = completedShipments.reduce((acc, s) => {
-        const status = s.status || 'NULL';
-        acc[status] = (acc[status] || 0) + 1;
-        return acc;
-      }, {} as Record<string, number>);
-      console.log(`[Cargoes Flow Poller] Status distribution:`, statusCounts);
-      console.log(`[Cargoes Flow Poller] Sample (first 3):`, completedShipments.slice(0, 3).map(s => ({
-        ref: s.shipmentNumber,
-        container: s.containerNumber,
-        status: s.status
-      })));
-
       const stats = await processAndStoreShipmentsWithStats(completedShipments);
       newCount = stats.newCount;
       updatedCount = stats.updatedCount;
-      console.log(`[Cargoes Flow Poller] 📊 Completed sync results: ${newCount} new, ${updatedCount} updated out of ${completedShipments.length} containers`);
-
-      // Verify first 3 updates in database
-      console.log(`[Cargoes Flow Poller] 🔍 Verifying first 3 in database...`);
-      for (let i = 0; i < Math.min(3, completedShipments.length); i++) {
-        const shipment = completedShipments[i];
-        const shipmentRef = String(shipment.shipmentNumber || shipment.referenceNumber || '');
-        const dbShipment = await storage.getCargoesFlowShipmentByReference(shipmentRef);
-        if (dbShipment) {
-          console.log(`[Cargoes Flow Poller] ✅ ${shipmentRef}: DB status = "${dbShipment.status}" (expected: "COMPLETED")`);
-          if (dbShipment.status !== 'COMPLETED') {
-            console.error(`[Cargoes Flow Poller] ❌ STATUS MISMATCH! Expected COMPLETED but got "${dbShipment.status}"`);
-          }
-        } else {
-          console.error(`[Cargoes Flow Poller] ❌ ${shipmentRef}: NOT FOUND IN DATABASE!`);
-        }
-      }
-    } else {
-      console.log(`[Cargoes Flow Poller] ⚠️ No completed shipments were found in the API.`);
-      console.log(`[Cargoes Flow Poller] This could mean:`);
-      console.log(`[Cargoes Flow Poller]    - The API doesn't return completed shipments`);
-      console.log(`[Cargoes Flow Poller]    - The shipments are no longer in the system`);
-      console.log(`[Cargoes Flow Poller]    - There's an API limitation`);
     }
 
-    const syncDuration = Date.now() - startTime;
-    const syncLog = await storage.createCargoesFlowSyncLog({
+    return await storage.createCargoesFlowSyncLog({
       status: 'success',
       shipmentsProcessed: completedShipments.length,
       shipmentsCreated: newCount,
       shipmentsUpdated: updatedCount,
-      syncDurationMs: syncDuration,
-      metadata: {
-        type: 'completed_sync',
-        totalMissing: missingShipments.length,
-        verified: completedShipments.length,
-        fetchErrors,
-        timestamp: new Date().toISOString()
-      },
+      syncDurationMs: Date.now() - startTime,
+      metadata: { type: 'completed_sync', totalMissing: missingShipments.length, verified: completedShipments.length, fetchErrors, timestamp: new Date().toISOString() },
     });
-
-    console.log(`[Cargoes Flow Poller] ✅ Completed sync finished: ${newCount} new, ${updatedCount} updated`);
-    return syncLog;
-
   } catch (error: any) {
     console.error('[Cargoes Flow Poller] ❌ Completed shipments sync failed:', error.message);
-    console.error('[Cargoes Flow Poller] Error stack:', error.stack);
-    console.error('[Cargoes Flow Poller] Error details:', {
-      name: error.name,
-      message: error.message,
-      code: error.code,
-      cause: error.cause
+    return await storage.createCargoesFlowSyncLog({
+      status: 'error',
+      shipmentsProcessed: 0,
+      shipmentsCreated: 0,
+      shipmentsUpdated: 0,
+      errorMessage: error.message || 'Unknown error',
+      syncDurationMs: Date.now() - startTime,
+      metadata: { type: 'completed_sync', error: error.message || 'Unknown error', timestamp: new Date().toISOString() },
     });
-    const syncDuration = Date.now() - startTime;
-
-    try {
-      return await storage.createCargoesFlowSyncLog({
-        status: 'error',
-        shipmentsProcessed: 0,
-        shipmentsCreated: 0,
-        shipmentsUpdated: 0,
-        errorMessage: error.message || 'Unknown error',
-        syncDurationMs: syncDuration,
-        metadata: {
-          type: 'completed_sync',
-          error: error.message || 'Unknown error',
-          errorName: error.name,
-          timestamp: new Date().toISOString()
-        },
-      });
-    } catch (logError: any) {
-      console.error('[Cargoes Flow Poller] ❌ Failed to create error log:', logError.message);
-      // Return a minimal error object if we can't even create the log
-      throw error; // Re-throw the original error
-    }
   }
 }

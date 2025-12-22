@@ -144,13 +144,13 @@ async function fetchShipmentsFromCargoesFlow(): Promise<CargoesFlowShipmentData[
   }
 }
 
-export async function fetchCompletedShipment(shipmentReference: string): Promise<CargoesFlowShipmentData | null> {
+export async function fetchCompletedShipment(shipmentReference: string, mblNumber?: string): Promise<CargoesFlowShipmentData | null> {
   try {
     const timestamp = Date.now();
 
-    // Strategy 1: Search with status=COMPLETED
-    let url = `${CARGOES_FLOW_API_URL}?shipmentType=INTERMODAL_SHIPMENT&status=COMPLETED&search=${encodeURIComponent(shipmentReference)}&_t=${timestamp}`;
-    console.log(`[Cargoes Flow Poller] 🔍 Strategy 1: Fetching with status=COMPLETED: ${shipmentReference}`);
+    // Strategy 1: Search by shipmentNumber (Highest Precision)
+    let url = `${CARGOES_FLOW_API_URL}?shipmentType=INTERMODAL_SHIPMENT&shipmentNumber=${encodeURIComponent(shipmentReference)}&_t=${timestamp}`;
+    console.log(`[Cargoes Flow Poller] 🔍 Strategy 1: Fetching by shipmentNumber: ${shipmentReference}`);
 
     let response = await fetch(url, {
       method: 'GET',
@@ -165,22 +165,56 @@ export async function fetchCompletedShipment(shipmentReference: string): Promise
     if (response.ok) {
       const data: CargoesFlowApiResponse = await response.json();
       if (Array.isArray(data) && data.length > 0) {
-        console.log(`[Cargoes Flow Poller] ✅ Found via status=COMPLETED: ${shipmentReference}, status: ${data[0]?.status}`);
         const match = data.find(s =>
-          String(s.shipmentNumber).trim().toUpperCase() === shipmentReference.trim().toUpperCase() ||
-          String(s.referenceNumber).trim().toUpperCase() === shipmentReference.trim().toUpperCase()
+          String(s.shipmentNumber || '').trim().toUpperCase() === shipmentReference.trim().toUpperCase() ||
+          String(s.referenceNumber || '').trim().toUpperCase() === shipmentReference.trim().toUpperCase()
         );
-        const result = match;
-        if (result) {
-          (result as any).originalReference = shipmentReference; // Attach original search term
+        if (match) {
+          console.log(`[Cargoes Flow Poller] ✅ Found via shipmentNumber: ${shipmentReference}, status: ${match.status}`);
+          (match as any).originalReference = shipmentReference;
+          return match;
         }
-        return result || null;
       }
     }
 
-    // Strategy 2: Search without status filter (get any status)
-    url = `${CARGOES_FLOW_API_URL}?shipmentType=INTERMODAL_SHIPMENT&search=${encodeURIComponent(shipmentReference)}&_t=${timestamp}`;
-    console.log(`[Cargoes Flow Poller] 🔍 Strategy 2: Fetching without status filter: ${shipmentReference}`);
+    // Strategy 2: Search by mblNumber (If provided - Exact Match)
+    if (mblNumber) {
+      url = `${CARGOES_FLOW_API_URL}?shipmentType=INTERMODAL_SHIPMENT&mblNumber=${encodeURIComponent(mblNumber)}&_t=${timestamp}`;
+      console.log(`[Cargoes Flow Poller] 🔍 Strategy 2: Fetching by mblNumber: ${mblNumber}`);
+
+      response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'X-DPW-ApiKey': CARGOES_FLOW_API_KEY,
+          'X-DPW-Org-Token': CARGOES_FLOW_ORG_TOKEN,
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache',
+        },
+      });
+
+      if (response.ok) {
+        const data: CargoesFlowApiResponse = await response.json();
+        if (Array.isArray(data) && data.length > 0) {
+          const match = data.find(s => {
+            const sMbl = String(s.mblNumber || '').trim().toUpperCase();
+            const targetMbl = mblNumber.trim().toUpperCase();
+            const sRef = String(s.shipmentNumber || s.referenceNumber || '').trim().toUpperCase();
+            const targetRef = shipmentReference.trim().toUpperCase();
+            return sMbl === targetMbl || sRef === targetRef;
+          });
+
+          if (match) {
+            console.log(`[Cargoes Flow Poller] ✅ Found via mblNumber fallback: ${mblNumber}, status: ${match.status}`);
+            (match as any).originalReference = shipmentReference;
+            return match;
+          }
+        }
+      }
+    }
+
+    // Strategy 3: Fallback to fuzzy search (Last Resort)
+    url = `${CARGOES_FLOW_API_URL}?shipmentType=INTERMODAL_SHIPMENT&search=${encodeURIComponent(shipmentReference)}&_limit=100&_t=${timestamp}`;
+    console.log(`[Cargoes Flow Poller] 🔍 Strategy 3: Falling back to fuzzy search for: ${shipmentReference}`);
 
     response = await fetch(url, {
       method: 'GET',
@@ -195,20 +229,24 @@ export async function fetchCompletedShipment(shipmentReference: string): Promise
     if (response.ok) {
       const data: CargoesFlowApiResponse = await response.json();
       if (Array.isArray(data) && data.length > 0) {
-        console.log(`[Cargoes Flow Poller] ✅ Found without status filter: ${shipmentReference}, status: ${data[0]?.status}`);
-        const match = data.find(s =>
-          String(s.shipmentNumber).trim().toUpperCase() === shipmentReference.trim().toUpperCase() ||
-          String(s.referenceNumber).trim().toUpperCase() === shipmentReference.trim().toUpperCase()
-        );
-        const result = match;
-        if (result) {
-          (result as any).originalReference = shipmentReference; // Attach original search term
+        const match = data.find(s => {
+          const sRef = String(s.shipmentNumber || s.referenceNumber || '').trim().toUpperCase();
+          const targetRef = shipmentReference.trim().toUpperCase();
+          const sMbl = String(s.mblNumber || '').trim().toUpperCase();
+          const targetMbl = mblNumber ? mblNumber.trim().toUpperCase() : '';
+          return sRef === targetRef || (targetMbl && sMbl === targetMbl) ||
+            (s.containers && s.containers.some((c: any) => String(c.containerNumber).toUpperCase() === shipmentReference.trim().toUpperCase()));
+        });
+
+        if (match) {
+          console.log(`[Cargoes Flow Poller] ✅ Found via fuzzy search fallback: ${shipmentReference}, status: ${match.status}`);
+          (match as any).originalReference = shipmentReference;
+          return match;
         }
-        return result || null;
       }
     }
 
-    console.log(`[Cargoes Flow Poller] ⚠️ No shipment found for ${shipmentReference} (tried both strategies)`);
+    console.log(`[Cargoes Flow Poller] ⚠️ No shipment found for ${shipmentReference} after all strategies`);
     return null;
   } catch (error: any) {
     console.error(`[Cargoes Flow Poller] Error fetching completed shipment ${shipmentReference}:`, error.message);
@@ -758,9 +796,9 @@ export async function syncCompletedShipments() {
       [uniqueMissingShipments[i], uniqueMissingShipments[j]] = [uniqueMissingShipments[j], uniqueMissingShipments[i]];
     }
 
-    const MAX_SHIPMENTS = 50;
+    const MAX_SHIPMENTS = 300; // Increased to clear backlog
     const shipmentsToProcess = uniqueMissingShipments.slice(0, MAX_SHIPMENTS);
-    const BATCH_SIZE = 10;
+    const BATCH_SIZE = 20; // Increased concurrency
     const completedShipments: CargoesFlowShipmentData[] = [];
     let fetchErrors = 0;
 
@@ -768,7 +806,7 @@ export async function syncCompletedShipments() {
       const batch = shipmentsToProcess.slice(i, i + BATCH_SIZE);
       const batchPromises = batch.map(async (missing) => {
         try {
-          return await fetchCompletedShipment(missing.shipmentReference);
+          return await fetchCompletedShipment(missing.shipmentReference, missing.mblNumber || undefined);
         } catch (error: any) {
           return null;
         }

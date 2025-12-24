@@ -4,7 +4,7 @@ import path from "path";
 
 export default defineConfig(({ mode }) => {
   // Default API URL - can be overridden by environment variables
-  const defaultApiUrl = mode === 'production' 
+  const defaultApiUrl = mode === 'production'
     ? 'https://freight-flow-steel.vercel.app'
     : 'http://localhost:5000';
 
@@ -16,6 +16,9 @@ export default defineConfig(({ mode }) => {
       alias: {
         "@": path.resolve(import.meta.dirname, "src"),
         "@shared": path.resolve(import.meta.dirname, "..", "server", "shared"),
+        "drizzle-orm": path.resolve(import.meta.dirname, "node_modules", "drizzle-orm"),
+        "drizzle-zod": path.resolve(import.meta.dirname, "node_modules", "drizzle-zod"),
+        "zod": path.resolve(import.meta.dirname, "node_modules", "zod"),
       },
     },
     build: {
@@ -30,12 +33,6 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true,
         },
       },
-    },
-    optimizeDeps: {
-      exclude: ['drizzle-orm'],
-    },
-    ssr: {
-      noExternal: ['drizzle-orm', 'drizzle-zod'],
     },
   };
 });

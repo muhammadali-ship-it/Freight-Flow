@@ -6,17 +6,28 @@ import { log } from "../vite.js";
 
 const app = express();
 // CORS configuration
-const corsOptions = {
-  origin: [
-    'http://localhost:5173', // Vite dev server
-    'http://localhost:3000', // Alternative dev server
-    'https://freight-flow-steel.vercel.app', // Production frontend (if deployed)
-    // Add your production frontend URL here when deployed
-  ],
-  credentials: true, // Allow cookies and credentials
+const corsOptions: cors.CorsOptions = {
+  origin: (origin, callback) => {
+    const allowedOrigins = [
+      'http://localhost:5173',
+      'http://localhost:3000',
+      'https://freight-flow-steel.vercel.app',
+      // Add your production frontend URL here when deployed
+    ];
+
+    // Allow requests with no origin (like mobile apps or curl)
+    if (!origin) return callback(null, true);
+
+    if (allowedOrigins.indexOf(origin) !== -1 || origin.endsWith('.vercel.app')) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Cookie'],
-  exposedHeaders: ['Set-Cookie'], // Expose Set-Cookie header
+  allowedHeaders: ['Content-Type', 'Authorization', 'Cookie', 'X-Requested-With'],
+  exposedHeaders: ['Set-Cookie'],
 };
 
 app.use(cors(corsOptions));

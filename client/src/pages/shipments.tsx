@@ -99,19 +99,16 @@ export default function Shipments() {
     queryKey: ["/api/ports"],
   });
 
-  const OFFICE_OPTIONS = [
-    "Logistics Sales-Domestic Operations",
-    "Logistics Sales-Jake",
-    "Logistics Sales-Mark",
-    "Logistics Sales-Sarah",
-    "Logistics-Sales-Alan",
-    "LDP Logistics, Inc.",
-  ] as const;
-
-  // Reduced office query since we are hardcoding the options
-  const offices = OFFICE_OPTIONS;
-  const isLoadingOffices = false;
-  const officesError = null;
+  const { data: offices = [], isLoading: isLoadingOffices, error: officesError } = useQuery<string[]>({
+    queryKey: ["offices-list"],
+    queryFn: async () => {
+      const response = await fetch(buildApiUrl("/api/offices"), {
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("Failed to fetch offices");
+      return response.json();
+    }
+  });
 
   const { data: syncStatus } = useQuery<{
     id: string;
@@ -496,15 +493,21 @@ export default function Shipments() {
             <div>
               <Select value={officeFilter} onValueChange={setOfficeFilter}>
                 <SelectTrigger data-testid="select-office-filter">
-                  <SelectValue placeholder="Office" />
+                  <SelectValue placeholder={isLoadingOffices ? "Loading Offices..." : officesError ? "Error loading offices" : "Office"} />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Offices</SelectItem>
-                  {OFFICE_OPTIONS.map((office) => (
-                    <SelectItem key={office} value={office}>
-                      {office}
-                    </SelectItem>
-                  ))}
+                  {isLoadingOffices ? (
+                    <SelectItem value="loading" disabled>Loading...</SelectItem>
+                  ) : offices.length === 0 ? (
+                    <SelectItem value="empty" disabled>No offices found</SelectItem>
+                  ) : (
+                    [...offices].sort().map((office) => (
+                      <SelectItem key={office} value={office}>
+                        {office}
+                      </SelectItem>
+                    ))
+                  )}
                 </SelectContent>
               </Select>
             </div>

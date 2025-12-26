@@ -962,7 +962,7 @@ export default function CargoesFlowShipmentDetail() {
             )}
             {shipment.salesRepNames && shipment.salesRepNames.length > 0 && (
               <div>
-                <p className="text-xs text-muted-foreground mb-2">Sales Representatives</p>
+                <p className="text-xs text-muted-foreground mb-2">Shipment Representatives</p>
                 <div className="flex flex-wrap gap-1.5" data-testid="container-sales-reps">
                   {shipment.salesRepNames.map((repName, index) => (
                     <Badge

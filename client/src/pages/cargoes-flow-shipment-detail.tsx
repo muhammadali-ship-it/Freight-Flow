@@ -920,6 +920,12 @@ export default function CargoesFlowShipmentDetail() {
                 <p className="font-mono text-sm">{shipment.bookingNumber}</p>
               </div>
             )}
+            {(shipment.taiShipmentId || shipment.shipmentReference) && (
+              <div>
+                <p className="text-xs text-muted-foreground">Reference</p>
+                <p className="font-mono text-sm" data-testid="text-reference">{shipment.taiShipmentId || shipment.shipmentReference}</p>
+              </div>
+            )}
             {(shipment.mblNumber || rawData.blNumber) && (
               <div>
                 <p className="text-xs text-muted-foreground">BL Number</p>

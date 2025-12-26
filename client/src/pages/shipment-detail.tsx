@@ -263,7 +263,7 @@ export default function ShipmentDetail() {
       console.log("User assignment successful, invalidating queries for shipmentId:", shipmentId);
       queryClient.invalidateQueries({ queryKey: ["/api/shipments", shipmentId] });
       queryClient.invalidateQueries({ queryKey: ["/api/shipments"] });
-      
+
       toast({
         title: "Users assigned",
         description: "The users have been successfully assigned to this shipment.",
@@ -393,9 +393,9 @@ export default function ShipmentDetail() {
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3 sm:gap-4">
-          <Button 
-            variant="ghost" 
-            size="icon" 
+          <Button
+            variant="ghost"
+            size="icon"
             onClick={() => window.history.back()}
             data-testid="button-back"
           >
@@ -581,7 +581,7 @@ export default function ShipmentDetail() {
       {(() => {
         const rawData = (shipment as any).rawData;
         const portToPort = rawData?.shipmentLegs?.portToPort;
-        
+
         if (portToPort?.loadingPortCoordinates && portToPort?.dischargePortCoordinates) {
           return (
             <Card data-testid="card-route-map">
@@ -638,6 +638,10 @@ export default function ShipmentDetail() {
               <p className="font-semibold font-mono" data-testid="text-booking">{shipment.bookingNumber}</p>
             </div>
             <div>
+              <p className="text-xs text-muted-foreground mb-1">Reference Number</p>
+              <p className="font-semibold font-mono" data-testid="text-reference">{shipment.referenceNumber}</p>
+            </div>
+            <div>
               <p className="text-xs text-muted-foreground mb-1">Master Bill of Lading</p>
               <p className="font-semibold font-mono" data-testid="text-bol">{shipment.masterBillOfLading}</p>
             </div>
@@ -665,7 +669,7 @@ export default function ShipmentDetail() {
             )}
             {shipment.salesRepNames && shipment.salesRepNames.length > 0 && (
               <div className="col-span-1 xs:col-span-2 md:col-span-3">
-                <p className="text-xs text-muted-foreground mb-2">Sales Representatives</p>
+                <p className="text-xs text-muted-foreground mb-2">Shipment Representatives</p>
                 <div className="flex flex-wrap gap-2" data-testid="container-sales-reps">
                   {shipment.salesRepNames.map((repName, index) => (
                     <Badge
@@ -787,11 +791,11 @@ export default function ShipmentDetail() {
                         {container.riskLevel ? (
                           <Badge
                             variant={
-                              container.riskLevel === "high" || container.riskLevel === "critical" 
-                                ? "destructive" 
+                              container.riskLevel === "high" || container.riskLevel === "critical"
+                                ? "destructive"
                                 : container.riskLevel === "medium"
-                                ? "default"
-                                : "secondary"
+                                  ? "default"
+                                  : "secondary"
                             }
                             className={
                               container.riskLevel === "medium"
@@ -845,9 +849,8 @@ export default function ShipmentDetail() {
                   <div key={milestone.id} className="relative" data-testid={`milestone-${milestone.id}`}>
                     {!isLast && (
                       <div
-                        className={`absolute left-4 top-10 w-0.5 h-full ${
-                          milestone.status === "completed" ? "bg-green-500" : "bg-muted"
-                        }`}
+                        className={`absolute left-4 top-10 w-0.5 h-full ${milestone.status === "completed" ? "bg-green-500" : "bg-muted"
+                          }`}
                       />
                     )}
                     <div className="flex gap-4">

@@ -259,6 +259,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         carrier: (req.query.carrier && req.query.carrier !== 'undefined' && req.query.carrier !== 'all') ? req.query.carrier as string : undefined,
         originPort: (req.query.originPort && req.query.originPort !== 'undefined' && req.query.originPort !== 'all') ? req.query.originPort as string : undefined,
         destinationPort: (req.query.destinationPort && req.query.destinationPort !== 'undefined' && req.query.destinationPort !== 'all') ? req.query.destinationPort as string : undefined,
+        office: (req.query.office && req.query.office !== 'undefined' && req.query.office !== 'all') ? req.query.office as string : undefined,
         dateRange: req.query.dateFrom && req.query.dateTo
           ? { start: req.query.dateFrom as string, end: req.query.dateTo as string }
           : undefined,
@@ -4150,6 +4151,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Error syncing completed shipments:", error);
       console.error("Error stack:", error.stack);
       res.status(500).json({ error: error.message || "Failed to sync completed shipments" });
+    }
+  });
+
+  app.get("/api/offices", async (req, res) => {
+    try {
+      const offices = await storage.getDistinctOffices();
+      console.log(`[API] Fetched ${offices.length} offices:`, offices);
+      res.json(offices);
+    } catch (error) {
+      console.error("Error fetching offices:", error);
+      res.status(500).json({ error: "Failed to fetch offices" });
     }
   });
 

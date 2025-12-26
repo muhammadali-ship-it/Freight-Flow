@@ -77,7 +77,7 @@ const formatDateOnly = (dateString: string | undefined | null): string => {
 export default function Shipments() {
   const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [officeFilter, setOfficeFilter] = useState("all");
   const [carrierFilter, setCarrierFilter] = useState("all");
   const [originPortFilter, setOriginPortFilter] = useState("all");
   const [destinationPortFilter, setDestinationPortFilter] = useState("all");
@@ -98,6 +98,20 @@ export default function Shipments() {
   const { data: ports = [], isLoading: isLoadingPorts } = useQuery<string[]>({
     queryKey: ["/api/ports"],
   });
+
+  const OFFICE_OPTIONS = [
+    "Logistics Sales-Domestic Operations",
+    "Logistics Sales-Jake",
+    "Logistics Sales-Mark",
+    "Logistics Sales-Sarah",
+    "Logistics-Sales-Alan",
+    "LDP Logistics, Inc.",
+  ] as const;
+
+  // Reduced office query since we are hardcoding the options
+  const offices = OFFICE_OPTIONS;
+  const isLoadingOffices = false;
+  const officesError = null;
 
   const { data: syncStatus } = useQuery<{
     id: string;
@@ -243,7 +257,7 @@ export default function Shipments() {
         page,
         pageSize,
         search: searchQuery,
-        status: statusFilter,
+        office: officeFilter,
         carrier: carrierFilter,
         originPort: originPortFilter,
         destinationPort: destinationPortFilter,
@@ -260,7 +274,7 @@ export default function Shipments() {
       });
 
       if (searchQuery) params.append("search", searchQuery);
-      if (statusFilter && statusFilter !== "all") params.append("status", statusFilter);
+      if (officeFilter && officeFilter !== "all") params.append("office", officeFilter);
       if (carrierFilter && carrierFilter !== "all") params.append("carrier", carrierFilter);
       if (originPortFilter && originPortFilter !== "all") params.append("originPort", originPortFilter);
       if (destinationPortFilter && destinationPortFilter !== "all") params.append("destinationPort", destinationPortFilter);
@@ -281,7 +295,7 @@ export default function Shipments() {
 
   useEffect(() => {
     setPage(1);
-  }, [searchQuery, statusFilter, carrierFilter, originPortFilter, destinationPortFilter, dateFrom, dateTo]);
+  }, [searchQuery, officeFilter, carrierFilter, originPortFilter, destinationPortFilter, dateFrom, dateTo]);
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
@@ -303,7 +317,7 @@ export default function Shipments() {
 
   const handleClearFilters = () => {
     setSearchQuery("");
-    setStatusFilter("all");
+    setOfficeFilter("all");
     setCarrierFilter("all");
     setOriginPortFilter("all");
     setDestinationPortFilter("all");
@@ -313,7 +327,7 @@ export default function Shipments() {
 
   const hasActiveFilters =
     searchQuery ||
-    (statusFilter && statusFilter !== "all") ||
+    (officeFilter && officeFilter !== "all") ||
     (carrierFilter && carrierFilter !== "all") ||
     (originPortFilter && originPortFilter !== "all") ||
     (destinationPortFilter && destinationPortFilter !== "all") ||
@@ -480,13 +494,17 @@ export default function Shipments() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
             <div>
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger data-testid="select-status-filter">
-                  <SelectValue placeholder="Status" />
+              <Select value={officeFilter} onValueChange={setOfficeFilter}>
+                <SelectTrigger data-testid="select-office-filter">
+                  <SelectValue placeholder="Office" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Statuses</SelectItem>
-                  <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="all">All Offices</SelectItem>
+                  {OFFICE_OPTIONS.map((office) => (
+                    <SelectItem key={office} value={office}>
+                      {office}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>

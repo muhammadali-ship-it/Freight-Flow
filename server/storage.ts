@@ -114,6 +114,7 @@ export interface ShipmentFilters {
   carrier?: string;
   originPort?: string;
   destinationPort?: string;
+  office?: string;
   dateRange?: { start: string; end: string };
   kpiFilter?: string;
 }
@@ -341,6 +342,7 @@ export interface IStorage {
   // Cargoes Flow Filters - Distinct values for dropdowns
   getDistinctPorts(): Promise<string[]>;
   getDistinctCarriers(): Promise<string[]>;
+  getDistinctOffices(): Promise<string[]>;
 
   // Vessels
   upsertVessel(vessel: InsertVessel): Promise<Vessel>;
@@ -1709,6 +1711,28 @@ export class DbStorage implements IStorage {
       conditions.push(like(sql`LOWER(${cargoesFlowShipments.destinationPort})`, `%${filters.destinationPort.toLowerCase()}%`));
     }
 
+    if (filters?.office) {
+      const officeLower = `%${filters.office.toLowerCase()}%`;
+      conditions.push(or(
+        like(sql`LOWER(${cargoesFlowShipments.office})`, officeLower),
+        like(sql`LOWER(${cargoesFlowShipments.rawData}->>'office')`, officeLower),
+        like(sql`LOWER(${cargoesFlowShipments.rawData}->>'officeName')`, officeLower),
+        like(sql`LOWER(${cargoesFlowShipments.rawData}->'customer'->>'office')`, officeLower),
+        like(sql`LOWER(${cargoesFlowShipments.rawData}->'customer'->>'officeName')`, officeLower),
+        exists(
+          db.select({ one: sql`1` })
+            .from(shipments)
+            .where(and(
+              or(
+                and(isNotNull(cargoesFlowShipments.mblNumber), eq(shipments.masterBillOfLading, cargoesFlowShipments.mblNumber)),
+                and(isNotNull(cargoesFlowShipments.shipmentReference), eq(shipments.referenceNumber, cargoesFlowShipments.shipmentReference))
+              ),
+              like(sql`LOWER(${shipments.officeName})`, officeLower)
+            ))
+        )
+      )!);
+    }
+
     // Role-based filtering
     if (filters?.userRole === 'User' && filters?.userName) {
       // User role: filter by name matching salesRepNames array
@@ -1854,6 +1878,28 @@ export class DbStorage implements IStorage {
 
     if (filters?.destinationPort) {
       conditions.push(like(sql`LOWER(${cargoesFlowShipments.destinationPort})`, `%${filters.destinationPort.toLowerCase()}%`));
+    }
+
+    if (filters?.office) {
+      const officeLower = `%${filters.office.toLowerCase()}%`;
+      conditions.push(or(
+        like(sql`LOWER(${cargoesFlowShipments.office})`, officeLower),
+        like(sql`LOWER(${cargoesFlowShipments.rawData}->>'office')`, officeLower),
+        like(sql`LOWER(${cargoesFlowShipments.rawData}->>'officeName')`, officeLower),
+        like(sql`LOWER(${cargoesFlowShipments.rawData}->'customer'->>'office')`, officeLower),
+        like(sql`LOWER(${cargoesFlowShipments.rawData}->'customer'->>'officeName')`, officeLower),
+        exists(
+          db.select({ one: sql`1` })
+            .from(shipments)
+            .where(and(
+              or(
+                and(isNotNull(cargoesFlowShipments.mblNumber), eq(shipments.masterBillOfLading, cargoesFlowShipments.mblNumber)),
+                and(isNotNull(cargoesFlowShipments.shipmentReference), eq(shipments.referenceNumber, cargoesFlowShipments.shipmentReference))
+              ),
+              like(sql`LOWER(${shipments.officeName})`, officeLower)
+            ))
+        )
+      )!);
     }
 
     // ETA Date Range filtering
@@ -3278,6 +3324,58 @@ export class DbStorage implements IStorage {
       .filter((carrier): carrier is string => carrier !== null && carrier !== undefined);
 
     return Array.from(new Set(uniqueCarriers)).sort();
+  }
+
+  async getDistinctOffices(): Promise<string[]> {
+    // offices can be in 'office' column or in 'rawData.office' or 'rawData.officeName'
+    // or nested in 'rawData.customer' or in the manual 'shipments' table
+    const columnOffices = await db
+      .selectDistinct({ office: cargoesFlowShipments.office })
+      .from(cargoesFlowShipments)
+      .where(sql`${cargoesFlowShipments.office} IS NOT NULL AND ${cargoesFlowShipments.office} != ''`);
+
+    const rawDataOffices = await db
+      .selectDistinct({ office: sql<string>`${cargoesFlowShipments.rawData}->>'office'` })
+      .from(cargoesFlowShipments)
+      .where(sql`${cargoesFlowShipments.rawData}->>'office' IS NOT NULL AND ${cargoesFlowShipments.rawData}->>'office' != ''`);
+
+    const rawDataOfficeNames = await db
+      .selectDistinct({ office: sql<string>`${cargoesFlowShipments.rawData}->>'officeName'` })
+      .from(cargoesFlowShipments)
+      .where(sql`${cargoesFlowShipments.rawData}->>'officeName' IS NOT NULL AND ${cargoesFlowShipments.rawData}->>'officeName' != ''`);
+
+    const rawDataCustomerOffices = await db
+      .selectDistinct({ office: sql<string>`${cargoesFlowShipments.rawData}->'customer'->>'office'` })
+      .from(cargoesFlowShipments)
+      .where(sql`${cargoesFlowShipments.rawData}->'customer'->>'office' IS NOT NULL AND ${cargoesFlowShipments.rawData}->'customer'->>'office' != ''`);
+
+    const rawDataCustomerOfficeNames = await db
+      .selectDistinct({ office: sql<string>`${cargoesFlowShipments.rawData}->'customer'->>'officeName'` })
+      .from(cargoesFlowShipments)
+      .where(sql`${cargoesFlowShipments.rawData}->'customer'->>'officeName' IS NOT NULL AND ${cargoesFlowShipments.rawData}->'customer'->>'officeName' != ''`);
+
+    const manualShipmentOffices = await db
+      .selectDistinct({ office: shipments.officeName })
+      .from(shipments)
+      .where(sql`${shipments.officeName} IS NOT NULL AND ${shipments.officeName} != ''`);
+
+    const userOffices = await db
+      .selectDistinct({ office: users.office })
+      .from(users)
+      .where(sql`${users.office} IS NOT NULL AND ${users.office} != ''`);
+
+    const allOffices = [
+      ...columnOffices.map(row => row.office),
+      ...rawDataOffices.map(row => row.office),
+      ...rawDataOfficeNames.map(row => row.office),
+      ...rawDataCustomerOffices.map(row => row.office),
+      ...rawDataCustomerOfficeNames.map(row => row.office),
+      ...manualShipmentOffices.map(row => row.office),
+      ...userOffices.map(row => row.office)
+    ].filter((office): office is string => office !== null && office !== undefined && office.trim() !== '');
+
+    // Deduplicate and sort
+    return Array.from(new Set(allOffices.map(o => o.trim()))).sort();
   }
 
   // Helper function to normalize port names and remove duplicates

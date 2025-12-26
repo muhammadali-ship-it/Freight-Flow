@@ -9,7 +9,7 @@ import { User as SelectUser } from "./shared/schema.js";
 
 declare global {
   namespace Express {
-    interface User extends SelectUser {}
+    interface User extends SelectUser { }
   }
 }
 
@@ -29,10 +29,9 @@ export async function comparePasswords(supplied: string, stored: string) {
 }
 
 export function setupAuth(app: Express) {
-  // Debug session configuration
   console.log('[Auth] Environment:', process.env.NODE_ENV);
   console.log('[Auth] Session secret exists:', !!process.env.SESSION_SECRET);
-  
+
   const sessionSettings: session.SessionOptions = {
     secret: process.env.SESSION_SECRET!,
     resave: false,
@@ -47,7 +46,7 @@ export function setupAuth(app: Express) {
     },
     name: 'freight-flow-session', // Custom session name
   };
-  
+
   console.log('[Auth] Cookie settings:', {
     secure: sessionSettings.cookie?.secure,
     sameSite: sessionSettings.cookie?.sameSite,

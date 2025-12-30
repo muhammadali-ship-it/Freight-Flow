@@ -6,6 +6,7 @@ const CARGOES_FLOW_API_KEY = "dL6SngaHRXZfvzGA716lioRD7ZsRC9hs";
 const CARGOES_FLOW_ORG_TOKEN = "V904eqatVp49P7FZuwEtoFg72TJDyFnb";
 
 const POLL_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
+const COMPLETED_POLL_INTERVAL_MS = 2 * 60 * 60 * 1000; // 2 hours
 
 interface CargoesFlowShipmentData {
   shipmentNumber?: string | number;
@@ -52,6 +53,7 @@ interface CargoesFlowShipmentData {
 type CargoesFlowApiResponse = CargoesFlowShipmentData[];
 
 let pollingInterval: NodeJS.Timeout | null = null;
+let completedPollingInterval: NodeJS.Timeout | null = null;
 let isPolling = false; // Prevent concurrent polls
 let lastPollStartTime: number = 0;
 const POLL_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes timeout for stuck polls
@@ -673,12 +675,19 @@ export function startPolling() {
   if (pollingInterval) clearInterval(pollingInterval);
   pollShipments();
   pollingInterval = setInterval(pollShipments, POLL_INTERVAL_MS);
+
+  if (completedPollingInterval) clearInterval(completedPollingInterval);
+  completedPollingInterval = setInterval(syncCompletedShipments, COMPLETED_POLL_INTERVAL_MS);
 }
 
 export function stopPolling() {
   if (pollingInterval) {
     clearInterval(pollingInterval);
     pollingInterval = null;
+  }
+  if (completedPollingInterval) {
+    clearInterval(completedPollingInterval);
+    completedPollingInterval = null;
   }
 }
 

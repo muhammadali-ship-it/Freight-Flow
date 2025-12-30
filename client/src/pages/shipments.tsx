@@ -397,7 +397,7 @@ export default function Shipments() {
             <div>
               <CardTitle className="text-lg">Cargoes Flow Sync Status</CardTitle>
               <CardDescription>
-                Data is automatically synced every 30 minutes
+                Active data synced every 30m, completed every 2h
               </CardDescription>
             </div>
             <div className="flex gap-2">

@@ -5,7 +5,7 @@ const CARGOES_FLOW_API_URL = "https://connect.cargoes.com/flow/api/public_tracki
 const CARGOES_FLOW_API_KEY = "dL6SngaHRXZfvzGA716lioRD7ZsRC9hs";
 const CARGOES_FLOW_ORG_TOKEN = "V904eqatVp49P7FZuwEtoFg72TJDyFnb";
 
-const POLL_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+const POLL_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
 
 interface CargoesFlowShipmentData {
   shipmentNumber?: string | number;
